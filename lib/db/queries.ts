@@ -33,6 +33,7 @@ export async function ensureUserProfile(authUser: User) {
 
   const invitedRole = authUser.user_metadata?.invited_role as Role | undefined;
   const invitedVenueName = authUser.user_metadata?.venue_name as string | undefined;
+  const invitedClubId = authUser.user_metadata?.club_id as string | undefined;
 
   const { profile, createdProfile } = await db.transaction(async (tx) => {
     const [created] = await tx
@@ -42,7 +43,8 @@ export async function ensureUserProfile(authUser: User) {
         email,
         fullName: authUser.user_metadata?.full_name ?? authUser.user_metadata?.name ?? null,
         role: invitedRole ?? null,
-        venueName: invitedVenueName ?? null
+        venueName: invitedVenueName ?? null,
+        clubId: invitedClubId ?? null,
       })
       .onConflictDoNothing({ target: users.authUserId })
       .returning();
