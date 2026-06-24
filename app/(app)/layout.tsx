@@ -31,9 +31,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+    <div className="app-layout" style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
       <Sidebar clubName={clubName} courtCount={courtCount} initials={initials} />
-      <div style={{ flex: 1, minWidth: 0, height: "100vh", overflowY: "auto", background: "#F4F1EA" }}>
+      <div className="main-content" style={{ flex: 1, minWidth: 0, height: "100vh", overflowY: "auto", background: "#F4F1EA" }}>
         {children}
       </div>
     </div>

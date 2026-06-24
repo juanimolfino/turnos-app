@@ -51,3 +51,26 @@ body {
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: #dcd6ca; border-radius: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* Responsive layout helpers */
+@media (max-width: 768px) {
+  .app-layout {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .main-content {
+    height: auto !important;
+    overflow-y: visible !important;
+    padding-top: 56px !important;
+    padding-bottom: 58px !important;
+    min-height: 100svh;
+  }
+  /* Superadmin page responsive */
+  .sa-page { padding: 12px 14px 40px !important; }
+  .sa-kpis { grid-template-columns: 1fr !important; }
+  .sa-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .sa-table-wrap table { min-width: 480px; }
+  .sa-header { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; }
+  .sa-title { font-size: 22px !important; }
+}

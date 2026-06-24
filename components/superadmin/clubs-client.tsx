@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { CreateClubForm } from "./create-club-form";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 interface Club {
   id: string;
@@ -14,13 +15,14 @@ interface Club {
 
 export function ClubsClient({ clubs }: { clubs: Club[] }) {
   const [showForm, setShowForm] = useState(false);
+  const isMobile = useIsMobile();
 
   return (
-    <div style={{ padding: "24px 28px 48px", display: "flex", flexDirection: "column", gap: 20 }}>
+    <div style={{ padding: isMobile ? "12px 14px 40px" : "24px 28px 48px", display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: isMobile ? "flex-start" : "flex-end", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", gap: 10 }}>
         <div>
-          <div style={{ fontFamily: "'Instrument Serif',Georgia,serif", fontSize: 28, color: "#221F1B" }}>Clubs</div>
+          <div style={{ fontFamily: "'Instrument Serif',Georgia,serif", fontSize: isMobile ? 24 : 28, color: "#221F1B" }}>Clubs</div>
           <div style={{ fontSize: 14, color: "#6B6660", marginTop: 4 }}>
             {clubs.length} club{clubs.length !== 1 ? "s" : ""} registrado{clubs.length !== 1 ? "s" : ""}
           </div>
@@ -30,7 +32,8 @@ export function ClubsClient({ clubs }: { clubs: Club[] }) {
           style={{
             background: "#C96442", color: "#fff", border: "none",
             borderRadius: 10, padding: "10px 18px", fontWeight: 600, fontSize: 14,
-            cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px -2px rgba(201,100,66,.5)"
+            cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px -2px rgba(201,100,66,.5)",
+            width: isMobile ? "100%" : "auto"
           }}
         >
           + Nuevo club

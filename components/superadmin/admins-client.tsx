@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 interface Admin {
   id: string;
@@ -25,14 +26,15 @@ const ROLE_STYLE: Record<string, { bg: string; color: string }> = {
 
 export function AdminsClient({ admins, clubs }: { admins: Admin[]; clubs: Club[] }) {
   const [showForm, setShowForm] = useState(false);
+  const isMobile = useIsMobile();
   const router = useRouter();
 
   return (
-    <div style={{ padding: "24px 28px 48px", display: "flex", flexDirection: "column", gap: 20 }}>
+    <div style={{ padding: isMobile ? "12px 14px 40px" : "24px 28px 48px", display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: isMobile ? "flex-start" : "flex-end", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", gap: 10 }}>
         <div>
-          <div style={{ fontFamily: "'Instrument Serif',Georgia,serif", fontSize: 28, color: "#221F1B" }}>Admins</div>
+          <div style={{ fontFamily: "'Instrument Serif',Georgia,serif", fontSize: isMobile ? 24 : 28, color: "#221F1B" }}>Admins</div>
           <div style={{ fontSize: 14, color: "#6B6660", marginTop: 4 }}>
             {admins.length} usuario{admins.length !== 1 ? "s" : ""} en el sistema
           </div>
@@ -42,7 +44,8 @@ export function AdminsClient({ admins, clubs }: { admins: Admin[]; clubs: Club[]
           style={{
             background: "#C96442", color: "#fff", border: "none",
             borderRadius: 10, padding: "10px 18px", fontWeight: 600, fontSize: 14,
-            cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px -2px rgba(201,100,66,.5)"
+            cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px -2px rgba(201,100,66,.5)",
+            width: isMobile ? "100%" : "auto"
           }}
         >
           + Invitar admin
@@ -56,50 +59,52 @@ export function AdminsClient({ admins, clubs }: { admins: Admin[]; clubs: Club[]
 
       {/* Tabla */}
       <div style={{ background: "#FCFBF8", border: "1px solid #E7E1D6", borderRadius: 16, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: "#F7F4EE" }}>
-              {["Usuario", "Rol", "Club / Cancha", "Registrado"].map((h) => (
-                <th key={h} style={{ padding: "11px 20px", textAlign: "left", fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "#A39C8F" }}>
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {admins.map((admin) => {
-              const st = ROLE_STYLE[admin.role ?? "admin"];
-              const initial = admin.email[0].toUpperCase();
-              return (
-                <tr key={admin.id} style={{ borderTop: "1px solid #EFEAE0" }}>
-                  <td style={{ padding: "13px 20px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{
-                        width: 32, height: 32, borderRadius: "50%", background: "#EDE7DB",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontWeight: 700, color: "#6B6660", fontSize: 13, flexShrink: 0
-                      }}>
-                        {initial}
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" as React.CSSProperties["WebkitOverflowScrolling"] }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: isMobile ? 480 : "auto" }}>
+            <thead>
+              <tr style={{ background: "#F7F4EE" }}>
+                {["Usuario", "Rol", "Club / Cancha", "Registrado"].map((h) => (
+                  <th key={h} style={{ padding: "11px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "#A39C8F", whiteSpace: "nowrap" }}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {admins.map((admin) => {
+                const st = ROLE_STYLE[admin.role ?? "admin"];
+                const initial = admin.email[0].toUpperCase();
+                return (
+                  <tr key={admin.id} style={{ borderTop: "1px solid #EFEAE0" }}>
+                    <td style={{ padding: "12px 16px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{
+                          width: 30, height: 30, borderRadius: "50%", background: "#EDE7DB",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontWeight: 700, color: "#6B6660", fontSize: 12, flexShrink: 0
+                        }}>
+                          {initial}
+                        </div>
+                        <span style={{ fontSize: 13.5, color: "#221F1B", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}>{admin.email}</span>
                       </div>
-                      <span style={{ fontSize: 14, color: "#221F1B", fontWeight: 500 }}>{admin.email}</span>
-                    </div>
-                  </td>
-                  <td style={{ padding: "13px 20px" }}>
-                    <span style={{ background: st.bg, color: st.color, borderRadius: 999, padding: "4px 11px", fontSize: 12, fontWeight: 700 }}>
-                      {ROLE_LABEL[admin.role ?? "admin"]}
-                    </span>
-                  </td>
-                  <td style={{ padding: "13px 20px", fontSize: 13.5, color: "#6B6660" }}>
-                    {admin.venueName ?? "—"}
-                  </td>
-                  <td style={{ padding: "13px 20px", fontSize: 13, color: "#928B7E" }}>
-                    {new Date(admin.createdAt).toLocaleDateString("es-AR")}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    </td>
+                    <td style={{ padding: "12px 16px" }}>
+                      <span style={{ background: st.bg, color: st.color, borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
+                        {ROLE_LABEL[admin.role ?? "admin"]}
+                      </span>
+                    </td>
+                    <td style={{ padding: "12px 16px", fontSize: 13.5, color: "#6B6660", whiteSpace: "nowrap" }}>
+                      {admin.venueName ?? "—"}
+                    </td>
+                    <td style={{ padding: "12px 16px", fontSize: 13, color: "#928B7E", whiteSpace: "nowrap" }}>
+                      {new Date(admin.createdAt).toLocaleDateString("es-AR")}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -111,6 +116,7 @@ function InviteForm({ clubs, onSuccess }: { clubs: Club[]; onSuccess: () => void
   const [venueName, setVenueName] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const isMobile = useIsMobile();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -135,11 +141,11 @@ function InviteForm({ clubs, onSuccess }: { clubs: Club[]; onSuccess: () => void
   return (
     <form onSubmit={handleSubmit} style={{
       background: "#FCFBF8", border: "1px solid #E7E1D6", borderRadius: 16,
-      padding: 22, display: "flex", flexDirection: "column", gap: 16
+      padding: isMobile ? 16 : 22, display: "flex", flexDirection: "column", gap: 14
     }}>
       <div style={{ fontSize: 15, fontWeight: 700, color: "#221F1B" }}>Invitar nuevo usuario</div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
         <div>
           <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#54504A", marginBottom: 7 }}>Email</label>
           <input
@@ -154,7 +160,7 @@ function InviteForm({ clubs, onSuccess }: { clubs: Club[]; onSuccess: () => void
         </div>
         <div>
           <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#54504A", marginBottom: 7 }}>Rol</label>
-          <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
+          <div style={{ display: "flex", gap: 16, paddingTop: 4 }}>
             {(["admin", "superadmin"] as const).map((r) => (
               <label key={r} style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", fontSize: 14, color: "#221F1B" }}>
                 <input type="radio" name="role" value={r} checked={role === r} onChange={() => setRole(r)} />
@@ -182,8 +188,8 @@ function InviteForm({ clubs, onSuccess }: { clubs: Club[]; onSuccess: () => void
         </div>
       )}
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#F4F1EA", borderRadius: 10, padding: "10px 14px", flex: 1, marginRight: 14 }}>
+      <div style={{ display: "flex", alignItems: isMobile ? "stretch" : "center", justifyContent: "space-between", flexDirection: isMobile ? "column" : "row", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#F4F1EA", borderRadius: 10, padding: "10px 14px", flex: 1 }}>
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#3E9B63", flexShrink: 0 }} />
           <span style={{ fontSize: 12.5, color: "#6B6660" }}>El usuario recibirá un email para crear su contraseña.</span>
         </div>

@@ -10,17 +10,29 @@ type CookieToSet = {
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
-  const code = requestUrl.searchParams.get("code");
-  const error = requestUrl.searchParams.get("error_description") ?? requestUrl.searchParams.get("error");
-  const loginUrl = new URL("/login", request.url);
+  const code      = requestUrl.searchParams.get("code");
+  const tokenHash = requestUrl.searchParams.get("token_hash");
+  const type      = requestUrl.searchParams.get("type");
+  const errorParam = requestUrl.searchParams.get("error_description")
+    ?? requestUrl.searchParams.get("error");
+
+  const loginUrl       = new URL("/login", request.url);
   const setPasswordUrl = new URL("/set-password", request.url);
 
-  if (error || !code) {
-    loginUrl.searchParams.set("error", error ?? "Enlace de invitación inválido");
+  // Supabase sometimes returns error info as query params
+  if (errorParam) {
+    loginUrl.searchParams.set("error", errorParam);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  // Need either a PKCE code or an OTP token_hash
+  if (!code && !tokenHash) {
+    loginUrl.searchParams.set("error", "Enlace de invitación inválido o expirado");
     return NextResponse.redirect(loginUrl);
   }
 
   let response = NextResponse.redirect(setPasswordUrl);
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -38,10 +50,25 @@ export async function GET(request: NextRequest) {
     }
   );
 
-  const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-  if (exchangeError) {
-    loginUrl.searchParams.set("error", exchangeError.message);
-    return NextResponse.redirect(loginUrl);
+  // PKCE flow (code parameter)
+  if (code) {
+    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+    if (exchangeError) {
+      loginUrl.searchParams.set("error", exchangeError.message);
+      return NextResponse.redirect(loginUrl);
+    }
+  }
+
+  // OTP flow — what Supabase sends for server-created invites (inviteUserByEmail)
+  if (tokenHash) {
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: (type ?? "invite") as "invite" | "email" | "signup" | "recovery" | "email_change" | "magiclink",
+    });
+    if (verifyError) {
+      loginUrl.searchParams.set("error", verifyError.message);
+      return NextResponse.redirect(loginUrl);
+    }
   }
 
   const { data: { user } } = await supabase.auth.getUser();

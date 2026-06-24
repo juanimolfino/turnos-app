@@ -20,11 +20,11 @@ export default async function SuperadminPage() {
   });
 
   return (
-    <div style={{ padding: "24px 28px 48px", display: "flex", flexDirection: "column", gap: 24 }}>
+    <div className="sa-page" style={{ padding: "24px 28px 48px", display: "flex", flexDirection: "column", gap: 24 }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+      <div className="sa-header" style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
         <div>
-          <div style={{ fontFamily: "'Instrument Serif',Georgia,serif", fontSize: 28, color: "#221F1B", lineHeight: 1.1 }}>
+          <div className="sa-title" style={{ fontFamily: "'Instrument Serif',Georgia,serif", fontSize: 28, color: "#221F1B", lineHeight: 1.1 }}>
             Panel de control
           </div>
           <div style={{ fontSize: 14, color: "#928B7E", marginTop: 4, textTransform: "capitalize" }}>{today}</div>
@@ -32,7 +32,7 @@ export default async function SuperadminPage() {
       </div>
 
       {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+      <div className="sa-kpis" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
         {[
           { label: "Clubs registrados", value: stats.clubs, sub: "en la plataforma" },
           { label: "Canchas totales", value: stats.courts, sub: "entre todos los clubs" },
@@ -63,7 +63,7 @@ export default async function SuperadminPage() {
             No hay clubs registrados aún.
           </div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <div className="sa-table-wrap"><table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: "#F7F4EE" }}>
                 {["Club", "Canchas", "Admins asignados", "Plan"].map((h) => (
@@ -102,7 +102,7 @@ export default async function SuperadminPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
 
@@ -114,7 +114,7 @@ export default async function SuperadminPage() {
             Invitar admin →
           </a>
         </div>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div className="sa-table-wrap"><table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "#F7F4EE" }}>
               {["Email", "Rol", "Club", "Registrado"].map((h) => (
@@ -145,7 +145,7 @@ export default async function SuperadminPage() {
               );
             })}
           </tbody>
-        </table>
+        </table></div>
       </div>
     </div>
   );

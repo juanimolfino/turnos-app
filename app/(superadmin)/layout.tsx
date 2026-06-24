@@ -12,9 +12,9 @@ export default async function SuperadminLayout({ children }: { children: React.R
   if (!profile || profile.role !== "superadmin") redirect("/dashboard");
 
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+    <div className="app-layout" style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
       <SuperadminSidebar adminEmail={profile.email} />
-      <div style={{ flex: 1, minWidth: 0, height: "100vh", overflowY: "auto", background: "#F4F1EA" }}>
+      <div className="main-content" style={{ flex: 1, minWidth: 0, height: "100vh", overflowY: "auto", background: "#F4F1EA" }}>
         {children}
       </div>
     </div>
