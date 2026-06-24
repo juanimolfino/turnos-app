@@ -34,15 +34,199 @@ const PLANTILLA = [
   ]},
 ];
 
-type Tab = "plantilla" | "clases" | "fijos" | "eventos";
+type Tab = "plantilla" | "clases" | "fijos" | "eventos" | "miclub";
+
+interface ClubSettings {
+  address?: string | null;
+  city?: string | null;
+  neighborhood?: string | null;
+  phone?: string | null;
+  requiresPayment?: boolean;
+  paymentDeadlineHours?: number;
+  mercadopagoAccessToken?: string | null;
+  apiKey?: string | null;
+}
 
 interface AjustesClientProps {
   clases: { id: string; prof: string; day: string; time: string; court: string }[];
   fijos: { id: string; who: string; day: string; time: string; court: string }[];
   eventos: { id: string; name: string; date: string; time: string; courts: string; cupos: string; state: string }[];
+  club?: ClubSettings;
 }
 
-export function AjustesClient({ clases, fijos, eventos }: AjustesClientProps) {
+function Field({ label, value, onChange, placeholder, type = "text", mono }: {
+  label: string; value: string; onChange?: (v: string) => void; placeholder?: string; type?: string; mono?: boolean;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+      <label style={{ fontSize: 12, fontWeight: 700, color: "#6B6660", letterSpacing: ".04em" }}>{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={onChange ? e => onChange(e.target.value) : undefined}
+        readOnly={!onChange}
+        placeholder={placeholder}
+        style={{
+          padding: "10px 12px", borderRadius: 9, border: "1px solid #E0DACE",
+          fontSize: 13.5, fontFamily: mono ? "monospace" : "inherit",
+          background: onChange ? "#FCFBF8" : "#F4F1EA", color: "#221F1B", outline: "none",
+        }}
+      />
+    </div>
+  );
+}
+
+function MiClubTab({ initial }: { initial: ClubSettings }) {
+  const [address, setAddress] = useState(initial.address ?? "");
+  const [city, setCity] = useState(initial.city ?? "");
+  const [neighborhood, setNeighborhood] = useState(initial.neighborhood ?? "");
+  const [phone, setPhone] = useState(initial.phone ?? "");
+  const [requiresPayment, setRequiresPayment] = useState(initial.requiresPayment ?? false);
+  const [deadlineHours, setDeadlineHours] = useState(String(initial.paymentDeadlineHours ?? 24));
+  const [mpToken, setMpToken] = useState(initial.mercadopagoAccessToken ?? "");
+  const [apiKey, setApiKey] = useState(initial.apiKey ?? "");
+  const [saving, setSaving] = useState(false);
+  const [genning, setGenning] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    setSaving(true); setError(""); setSaved(false);
+    try {
+      const res = await fetch("/api/clubs/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          address: address || null,
+          city: city || null,
+          neighborhood: neighborhood || null,
+          phone: phone || null,
+          requiresPayment,
+          paymentDeadlineHours: parseInt(deadlineHours) || 24,
+          mercadopagoAccessToken: mpToken || null,
+        }),
+      });
+      if (!res.ok) { const d = await res.json(); setError(d.error ?? "Error al guardar"); return; }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch { setError("Error de conexión"); }
+    finally { setSaving(false); }
+  }
+
+  async function generateKey() {
+    setGenning(true); setError("");
+    try {
+      const res = await fetch("/api/clubs/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ generateApiKey: true }),
+      });
+      if (!res.ok) { const d = await res.json(); setError(d.error ?? "Error"); return; }
+      const { club } = await res.json();
+      setApiKey(club.apiKey ?? "");
+    } catch { setError("Error de conexión"); }
+    finally { setGenning(false); }
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {error && (
+        <div style={{ background: "#FCEEE9", border: "1px solid #F1D3CB", borderRadius: 10, padding: "10px 14px", fontSize: 13.5, color: "#B23A28" }}>{error}</div>
+      )}
+      {saved && (
+        <div style={{ background: "#E9F3EA", border: "1px solid #CFE6D2", borderRadius: 10, padding: "10px 14px", fontSize: 13.5, color: "#2F7D4E", fontWeight: 600 }}>✓ Cambios guardados</div>
+      )}
+
+      {/* Información del club */}
+      <div style={{ background: "#FCFBF8", border: "1px solid #E7E1D6", borderRadius: 16, padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#221F1B", letterSpacing: ".04em", textTransform: "uppercase" }}>Información del club</div>
+        <Field label="Dirección" value={address} onChange={setAddress} placeholder="Av. Corrientes 1234" />
+        <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ flex: 1 }}><Field label="Ciudad" value={city} onChange={setCity} placeholder="Buenos Aires" /></div>
+          <div style={{ flex: 1 }}><Field label="Barrio" value={neighborhood} onChange={setNeighborhood} placeholder="Palermo" /></div>
+        </div>
+        <Field label="Teléfono de contacto" value={phone} onChange={setPhone} placeholder="+54 11 4567-8901" type="tel" />
+      </div>
+
+      {/* Pagos */}
+      <div style={{ background: "#FCFBF8", border: "1px solid #E7E1D6", borderRadius: 16, padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#221F1B", letterSpacing: ".04em", textTransform: "uppercase" }}>Pagos y MercadoPago</div>
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#221F1B" }}>Requerir pago para confirmar reservas</div>
+            <div style={{ fontSize: 12.5, color: "#928B7E", marginTop: 2 }}>El bot enviará un link de MercadoPago y confirmará al pagar</div>
+          </div>
+          <button onClick={() => setRequiresPayment(!requiresPayment)} style={{
+            width: 44, height: 26, borderRadius: 999,
+            background: requiresPayment ? "#C96442" : "#D0C9BF",
+            border: "none", cursor: "pointer", position: "relative", transition: "background .2s", flexShrink: 0,
+          }}>
+            <span style={{
+              position: "absolute", top: 3, left: requiresPayment ? 21 : 3, width: 20, height: 20,
+              borderRadius: "50%", background: "#fff", transition: "left .2s", display: "block"
+            }} />
+          </button>
+        </div>
+
+        {requiresPayment && (
+          <Field
+            label="Horas límite para pagar"
+            value={deadlineHours}
+            onChange={setDeadlineHours}
+            placeholder="24"
+            type="number"
+          />
+        )}
+
+        <Field
+          label="Access Token de MercadoPago"
+          value={mpToken}
+          onChange={setMpToken}
+          placeholder="APP_USR-..."
+          type="password"
+        />
+      </div>
+
+      {/* API Key */}
+      <div style={{ background: "#FCFBF8", border: "1px solid #E7E1D6", borderRadius: 16, padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#221F1B", letterSpacing: ".04em", textTransform: "uppercase" }}>API Key del bot</div>
+        <div style={{ fontSize: 13, color: "#6B6660" }}>Esta clave permite que el bot de WhatsApp consulte y cree reservas en tu club. Tratala como una contraseña.</div>
+
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+          <div style={{ flex: 1 }}>
+            <Field label="Clave actual" value={apiKey || "(sin clave generada)"} mono />
+          </div>
+          <button onClick={generateKey} disabled={genning} style={{
+            background: "#221F1B", color: "#fff", border: "none", borderRadius: 9,
+            padding: "10px 16px", fontWeight: 600, fontSize: 13, cursor: genning ? "not-allowed" : "pointer",
+            fontFamily: "inherit", whiteSpace: "nowrap", opacity: genning ? 0.6 : 1,
+          }}>
+            {genning ? "Generando…" : apiKey ? "Regenerar clave" : "Generar clave"}
+          </button>
+        </div>
+        {apiKey && (
+          <button onClick={() => navigator.clipboard.writeText(apiKey)} style={{
+            background: "#fff", border: "1px solid #E0DACE", borderRadius: 9, padding: "9px 14px",
+            fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", alignSelf: "flex-start",
+          }}>
+            Copiar clave
+          </button>
+        )}
+      </div>
+
+      <button onClick={save} disabled={saving} style={{
+        background: "#C96442", color: "#fff", border: "none", borderRadius: 11, padding: "13px 20px",
+        fontWeight: 700, fontSize: 14.5, cursor: saving ? "not-allowed" : "pointer",
+        fontFamily: "inherit", opacity: saving ? 0.7 : 1,
+      }}>
+        {saving ? "Guardando…" : "Guardar cambios"}
+      </button>
+    </div>
+  );
+}
+
+export function AjustesClient({ clases, fijos, eventos, club = {} }: AjustesClientProps) {
   const [tab, setTab] = useState<Tab>("plantilla");
 
   const tabs: { key: Tab; label: string }[] = [
@@ -50,6 +234,7 @@ export function AjustesClient({ clases, fijos, eventos }: AjustesClientProps) {
     { key: "clases", label: "Clases" },
     { key: "fijos", label: "Turnos fijos" },
     { key: "eventos", label: "Eventos" },
+    { key: "miclub", label: "Mi Club" },
   ];
 
   return (
@@ -64,13 +249,10 @@ export function AjustesClient({ clases, fijos, eventos }: AjustesClientProps) {
             Configurás una vez y se repite cada semana. Después editás los días puntuales desde la agenda.
           </div>
         </div>
-        <button style={{ background: "#C96442", color: "#fff", border: "none", borderRadius: 10, padding: "11px 18px", fontWeight: 600, fontSize: 14, cursor: "pointer", boxShadow: "0 2px 8px -3px rgba(201,100,66,.5)", fontFamily: "inherit" }}>
-          Guardar cambios
-        </button>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "inline-flex", gap: 4, background: "#EAE4D8", borderRadius: 12, padding: 4, width: "max-content" }}>
+      <div style={{ display: "inline-flex", gap: 4, background: "#EAE4D8", borderRadius: 12, padding: 4, width: "max-content", flexWrap: "wrap" }}>
         {tabs.map(({ key, label }) => (
           <button key={key} onClick={() => setTab(key)} style={{
             background: tab === key ? "#FFFFFF" : "transparent",
@@ -179,6 +361,9 @@ export function AjustesClient({ clases, fijos, eventos }: AjustesClientProps) {
           </button>
         </div>
       )}
+
+      {/* Mi Club */}
+      {tab === "miclub" && <MiClubTab initial={club} />}
     </div>
   );
 }

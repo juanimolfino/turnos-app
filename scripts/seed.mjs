@@ -15,8 +15,9 @@ const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 async function run() {
   // 1. Club
   const [club] = await sql`
-    INSERT INTO clubs (name, timezone, plan)
-    VALUES ('Pádel Central', 'America/Argentina/Buenos_Aires', 'club')
+    INSERT INTO clubs (name, timezone, plan, address, city, neighborhood, phone)
+    VALUES ('Pádel Central', 'America/Argentina/Buenos_Aires', 'club',
+      'Av. Cabildo 2180', 'Buenos Aires', 'Belgrano', '+54 11 4789-0123')
     ON CONFLICT DO NOTHING
     RETURNING id
   `;
@@ -113,12 +114,12 @@ async function run() {
   }
   console.log("Professors seeded");
 
-  // 7. Event
-  await sql`DELETE FROM bookings WHERE club_id = ${clubId} AND date = '2026-06-23' AND type = 'evento'`;
-  await sql`DELETE FROM events WHERE club_id = ${clubId} AND name = 'Americano abierto' AND date = '2026-06-23'`;
+  // 7. Event (for 2026-06-24, Wednesday)
+  await sql`DELETE FROM bookings WHERE club_id = ${clubId} AND date IN ('2026-06-23','2026-06-24') AND type = 'evento'`;
+  await sql`DELETE FROM events WHERE club_id = ${clubId} AND name = 'Americano abierto'`;
   const [americano] = await sql`
     INSERT INTO events (club_id, name, kind, date, start_time, end_time, court_ids, category, price_per_player, capacity, registered_count, status)
-    VALUES (${clubId}, 'Americano abierto', 'americano', '2026-06-23', '20:30', '22:00',
+    VALUES (${clubId}, 'Americano abierto', 'americano', '2026-06-24', '20:30', '22:00',
       ${sql.array([c1Id, c2Id, c3Id])},
       '5ª / 6ª', 6000, 16, 12, 'inscripcion_abierta')
     RETURNING id
@@ -164,53 +165,58 @@ async function run() {
   `;
   console.log("Recurring rules seeded");
 
-  // 10. Bookings for 2026-06-23 (Tuesday, weekday=1)
-  await sql`DELETE FROM bookings WHERE club_id = ${clubId} AND date = '2026-06-23'`;
+  // 10. Bookings for 2026-06-24 (Wednesday, weekday=2)
+  await sql`DELETE FROM bookings WHERE club_id = ${clubId} AND date IN ('2026-06-23','2026-06-24')`;
 
   // Classes 08:00-16:00 all 3 courts
   for (const cid of [c1Id, c2Id, c3Id]) {
     await sql`
       INSERT INTO bookings (club_id, court_id, date, start_time, end_time, type, status, professor_id, notes)
-      VALUES (${clubId}, ${cid}, '2026-06-23', '08:00', '16:00', 'clase', 'confirmado',
+      VALUES (${clubId}, ${cid}, '2026-06-24', '08:00', '16:00', 'clase', 'confirmado',
         ${professorIds["Lucía Fernández"]}, 'Escuela de pádel')
     `;
   }
   // 16:00-17:30 C2: Martín G. simple pagado
   await sql`
     INSERT INTO bookings (club_id, court_id, date, start_time, end_time, type, status, customer_id, price, payment_status)
-    VALUES (${clubId}, ${c2Id}, '2026-06-23', '16:00', '17:30', 'simple', 'confirmado',
+    VALUES (${clubId}, ${c2Id}, '2026-06-24', '16:00', '17:30', 'simple', 'confirmado',
       ${customerIds["Martín G."]}, 13000, 'pagado')
   `;
   // 16:00-17:30 C3: clase Lucía 4 alumnos
   await sql`
     INSERT INTO bookings (club_id, court_id, date, start_time, end_time, type, status, professor_id, notes)
-    VALUES (${clubId}, ${c3Id}, '2026-06-23', '16:00', '17:30', 'clase', 'confirmado',
+    VALUES (${clubId}, ${c3Id}, '2026-06-24', '16:00', '17:30', 'clase', 'confirmado',
       ${professorIds["Lucía Fernández"]}, '4 alumnos')
   `;
-  // 19:00-20:30 C1: Carlos M. fijo
+  // 17:30-19:00 C1: bloqueo mantenimiento
+  await sql`
+    INSERT INTO bookings (club_id, court_id, date, start_time, end_time, type, status, notes)
+    VALUES (${clubId}, ${c1Id}, '2026-06-24', '17:30', '19:00', 'bloqueo', 'confirmado', 'Mantenimiento de red')
+  `;
+  // 19:00-20:30 C1: Sofía R. simple impago
+  await sql`
+    INSERT INTO bookings (club_id, court_id, date, start_time, end_time, type, status, customer_id, price, payment_status)
+    VALUES (${clubId}, ${c1Id}, '2026-06-24', '19:00', '20:30', 'simple', 'confirmado',
+      ${customerIds["Sofía R."]}, 12000, 'impago')
+  `;
+  // 19:00-20:30 C3: Diego P. fijo
   await sql`
     INSERT INTO bookings (club_id, court_id, date, start_time, end_time, type, status, customer_id)
-    VALUES (${clubId}, ${c1Id}, '2026-06-23', '19:00', '20:30', 'fijo', 'confirmado',
-      ${customerIds["Carlos M."]})
-  `;
-  // 19:00-20:30 C3: Sofía R. simple seña
-  await sql`
-    INSERT INTO bookings (club_id, court_id, date, start_time, end_time, type, status, customer_id, payment_status)
-    VALUES (${clubId}, ${c3Id}, '2026-06-23', '19:00', '20:30', 'simple', 'confirmado',
-      ${customerIds["Sofía R."]}, 'senado')
+    VALUES (${clubId}, ${c3Id}, '2026-06-24', '19:00', '20:30', 'fijo', 'confirmado',
+      ${customerIds["Diego P."]})
   `;
   // 20:30-22:00 C1, C2, C3: evento americano
   for (const cid of [c1Id, c2Id, c3Id]) {
     await sql`
       INSERT INTO bookings (club_id, court_id, date, start_time, end_time, type, status, event_id)
-      VALUES (${clubId}, ${cid}, '2026-06-23', '20:30', '22:00', 'evento', 'confirmado', ${americanoId})
+      VALUES (${clubId}, ${cid}, '2026-06-24', '20:30', '22:00', 'evento', 'confirmado', ${americanoId})
     `;
   }
-  // 22:00-23:30 C1: Diego P.
+  // 22:00-23:30 C2: Carlos M. seña
   await sql`
-    INSERT INTO bookings (club_id, court_id, date, start_time, end_time, type, status, customer_id)
-    VALUES (${clubId}, ${c1Id}, '2026-06-23', '22:00', '23:30', 'simple', 'confirmado',
-      ${customerIds["Diego P."]})
+    INSERT INTO bookings (club_id, court_id, date, start_time, end_time, type, status, customer_id, price, payment_status)
+    VALUES (${clubId}, ${c2Id}, '2026-06-24', '22:00', '23:30', 'simple', 'confirmado',
+      ${customerIds["Carlos M."]}, 13000, 'senado')
   `;
   console.log("Bookings seeded");
 

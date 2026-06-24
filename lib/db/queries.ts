@@ -1,8 +1,9 @@
-import { and, count, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, sql, lt, gt } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { clubs, courts, credits, jobs, subscriptions, transactions, users, type JobType, type Role } from "@/lib/db/schema";
+import { clubs, courts, credits, jobs, subscriptions, transactions, users, bookings, customers, type JobType, type Role } from "@/lib/db/schema";
 import { sendPurchaseConfirmationEmail, sendWelcomeEmail } from "@/lib/email/send";
 import type { User } from "@supabase/supabase-js";
+import { randomBytes } from "crypto";
 
 export async function getUserByAuthId(authUserId: string) {
   return getDb().query.users.findFirst({ where: eq(users.authUserId, authUserId) });
@@ -236,4 +237,152 @@ export async function createClub(name: string) {
   const db = getDb();
   const [club] = await db.insert(clubs).values({ name }).returning();
   return club;
+}
+
+export async function getClubById(id: string) {
+  return getDb().query.clubs.findFirst({ where: eq(clubs.id, id) });
+}
+
+export async function updateClub(id: string, data: {
+  address?: string | null;
+  city?: string | null;
+  neighborhood?: string | null;
+  phone?: string | null;
+  requiresPayment?: boolean;
+  paymentDeadlineHours?: number;
+  mercadopagoAccessToken?: string | null;
+}) {
+  const db = getDb();
+  const [updated] = await db.update(clubs).set(data).where(eq(clubs.id, id)).returning();
+  return updated;
+}
+
+export async function generateApiKey(clubId: string) {
+  const key = "ck_" + randomBytes(24).toString("hex");
+  const db = getDb();
+  const [updated] = await db.update(clubs).set({ apiKey: key }).where(eq(clubs.id, clubId)).returning();
+  return updated.apiKey;
+}
+
+export async function findOrCreateCustomer(clubId: string, name: string, phone: string) {
+  const db = getDb();
+  const existing = await db.query.customers.findFirst({
+    where: and(eq(customers.clubId, clubId), eq(customers.phone, phone))
+  });
+  if (existing) return existing;
+  const [created] = await db.insert(customers).values({ clubId, name, phone }).returning();
+  return created;
+}
+
+export async function createBooking(data: {
+  clubId: string;
+  courtId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  type: "simple" | "clase" | "fijo" | "evento" | "bloqueo";
+  status?: "confirmado" | "pendiente" | "cancelado";
+  customerId?: string | null;
+  professorId?: string | null;
+  eventId?: string | null;
+  price?: number | null;
+  paymentStatus?: "pagado" | "senado" | "impago" | null;
+  notes?: string | null;
+}) {
+  const db = getDb();
+  const [booking] = await db.insert(bookings).values({
+    clubId: data.clubId,
+    courtId: data.courtId,
+    date: data.date,
+    startTime: data.startTime,
+    endTime: data.endTime,
+    type: data.type,
+    status: data.status ?? "confirmado",
+    customerId: data.customerId ?? null,
+    professorId: data.professorId ?? null,
+    eventId: data.eventId ?? null,
+    price: data.price ?? null,
+    paymentStatus: data.paymentStatus ?? null,
+    notes: data.notes ?? null,
+  }).returning();
+  return booking;
+}
+
+export async function cancelBooking(bookingId: string, clubId: string) {
+  const db = getDb();
+  const [updated] = await db
+    .update(bookings)
+    .set({ status: "cancelado" })
+    .where(and(eq(bookings.id, bookingId), eq(bookings.clubId, clubId)))
+    .returning();
+  return updated;
+}
+
+export async function getBookingById(bookingId: string) {
+  return getDb().query.bookings.findFirst({
+    where: eq(bookings.id, bookingId),
+    with: { customer: true, professor: true, court: true, event: true }
+  });
+}
+
+export async function confirmBookingPayment(bookingId: string) {
+  const db = getDb();
+  const [updated] = await db
+    .update(bookings)
+    .set({ status: "confirmado", paymentStatus: "pagado" })
+    .where(eq(bookings.id, bookingId))
+    .returning();
+  return updated;
+}
+
+export async function getAvailableSlots(clubId: string, date: string, requestedStart?: string, requestedEnd?: string) {
+  const db = getDb();
+  const [club] = await db.select().from(clubs).where(eq(clubs.id, clubId));
+  if (!club) return [];
+
+  const { openingHours } = await import("@/lib/db/schema");
+  const dateObj = new Date(date + "T12:00:00");
+  const weekday = (dateObj.getDay() + 6) % 7; // Mon=0..Sun=6
+
+  const [hours] = await db.select().from(openingHours).where(
+    and(eq(openingHours.clubId, clubId), eq(openingHours.weekday, weekday))
+  );
+  if (!hours) return [];
+
+  const allCourts = await db.select().from(courts).where(and(eq(courts.clubId, clubId), eq(courts.active, true)));
+  const dayBookings = await db.select().from(bookings).where(
+    and(eq(bookings.clubId, clubId), eq(bookings.date, date), eq(bookings.status, "confirmado"))
+  );
+
+  const [openH, openM] = hours.openTime.split(":").map(Number);
+  const [closeH, closeM] = hours.closeTime.split(":").map(Number);
+  const slotMin = hours.slotMinutes;
+
+  const slots = [];
+  let cur = openH * 60 + openM;
+  const end = closeH * 60 + closeM;
+
+  while (cur + slotMin <= end) {
+    const slotStart = `${String(Math.floor(cur / 60)).padStart(2, "0")}:${String(cur % 60).padStart(2, "0")}`;
+    const slotEnd = `${String(Math.floor((cur + slotMin) / 60)).padStart(2, "0")}:${String((cur + slotMin) % 60).padStart(2, "0")}`;
+
+    if (requestedStart && requestedEnd) {
+      if (slotStart !== requestedStart) { cur += slotMin; continue; }
+    }
+
+    const freeCourts = allCourts.filter(c => {
+      return !dayBookings.some(b =>
+        b.courtId === c.id && b.startTime < slotEnd && b.endTime > slotStart
+      );
+    });
+
+    slots.push({ start: slotStart, end: slotEnd, freeCourts: freeCourts.map(c => ({ id: c.id, name: c.name })) });
+    cur += slotMin;
+  }
+
+  return slots;
+}
+
+export async function getClubByApiKey(apiKey: string) {
+  return getDb().query.clubs.findFirst({ where: eq(clubs.apiKey, apiKey) });
 }

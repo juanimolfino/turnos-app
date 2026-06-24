@@ -39,6 +39,14 @@ export const clubs = pgTable("clubs", {
   name: text("name").notNull(),
   timezone: text("timezone").default("America/Argentina/Buenos_Aires").notNull(),
   plan: text("plan").default("club").notNull(),
+  address: text("address"),
+  city: text("city"),
+  neighborhood: text("neighborhood"),
+  phone: text("phone"),
+  requiresPayment: boolean("requires_payment").default(false).notNull(),
+  paymentDeadlineHours: integer("payment_deadline_hours").default(24).notNull(),
+  mercadopagoAccessToken: text("mercadopago_access_token"),
+  apiKey: text("api_key").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

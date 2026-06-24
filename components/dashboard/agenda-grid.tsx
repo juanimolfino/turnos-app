@@ -70,6 +70,8 @@ export function AgendaGrid({ courts, slots, hasMorningClasses, date, clubName }:
   const [courtFilter, setCourtFilter] = useState<string>("all");
   const [selectedSlot, setSelectedSlot] = useState<{ start: string; end: string; cell: AgendaCell; date: string } | null>(null);
 
+  function refresh() { router.refresh(); }
+
   function navigate(newDate: string) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("date", newDate);
@@ -112,11 +114,20 @@ export function AgendaGrid({ courts, slots, hasMorningClasses, date, clubName }:
               );
             })}
           </div>
-          <button style={{
-            background: "#C96442", color: "#fff", border: "none", borderRadius: 10,
-            padding: "9px 15px", fontWeight: 600, fontSize: 13.5, cursor: "pointer",
-            whiteSpace: "nowrap", fontFamily: "inherit"
-          }}>+ Nuevo turno</button>
+          <button
+            onClick={() => {
+              if (courts.length > 0 && slots.length > 0) {
+                const firstFreeCell = slots.flatMap(s => s.cells.map(c => ({ ...s, cell: c }))).find(x => x.cell.status === "libre");
+                if (firstFreeCell) {
+                  setSelectedSlot({ start: firstFreeCell.start, end: firstFreeCell.end, cell: firstFreeCell.cell, date });
+                }
+              }
+            }}
+            style={{
+              background: "#C96442", color: "#fff", border: "none", borderRadius: 10,
+              padding: "9px 15px", fontWeight: 600, fontSize: 13.5, cursor: "pointer",
+              whiteSpace: "nowrap", fontFamily: "inherit"
+            }}>+ Nuevo turno</button>
         </div>
       </div>
 
@@ -223,7 +234,7 @@ export function AgendaGrid({ courts, slots, hasMorningClasses, date, clubName }:
         })}
       </div>
 
-      <SlotDrawer slot={selectedSlot} onClose={() => setSelectedSlot(null)} />
+      <SlotDrawer slot={selectedSlot} onClose={() => setSelectedSlot(null)} onSuccess={refresh} />
     </div>
   );
 }
