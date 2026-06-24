@@ -13,6 +13,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const profile = await getUserByAuthId(user.id);
   if (!profile) redirect("/login");
+  if (profile.role === "superadmin") redirect("/superadmin");
 
   const db = getDb();
   let clubName = "Mi Club";

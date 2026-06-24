@@ -16,12 +16,15 @@ export function LoginForm({ initialMessage }: { initialMessage?: string }) {
     const supabase = createSupabaseBrowserClient();
     setLoading(true);
     setMessage(null);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error, data } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
       setMessage("Email o contraseña incorrectos.");
     } else {
-      router.push("/dashboard");
+      // Check role from user metadata to redirect appropriately
+      const role = data.user?.app_metadata?.role ?? data.user?.user_metadata?.invited_role;
+      // We rely on the /api/auth/redirect endpoint to avoid reading role client-side
+      router.push("/api/auth/redirect");
       router.refresh();
     }
   }

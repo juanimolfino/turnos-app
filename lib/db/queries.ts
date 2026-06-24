@@ -1,6 +1,6 @@
-import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { credits, jobs, subscriptions, transactions, users, type JobType, type Role } from "@/lib/db/schema";
+import { clubs, courts, credits, jobs, subscriptions, transactions, users, type JobType, type Role } from "@/lib/db/schema";
 import { sendPurchaseConfirmationEmail, sendWelcomeEmail } from "@/lib/email/send";
 import type { User } from "@supabase/supabase-js";
 
@@ -19,7 +19,7 @@ export async function setUserRole(authUserId: string, role: Role, venueName?: st
 export async function getAllAdmins() {
   return getDb().query.users.findMany({
     where: isNotNull(users.role),
-    columns: { id: true, email: true, role: true, venueName: true, createdAt: true }
+    columns: { id: true, email: true, role: true, venueName: true, clubId: true, createdAt: true }
   });
 }
 
@@ -196,4 +196,42 @@ export async function addCredits(userId: string, amount: number, metadata: Recor
     return true;
   });
   if (applied && profile?.email && amount > 0) await sendPurchaseConfirmationEmail(profile.email, amount);
+}
+
+// ── Superadmin queries ─────────────────────────────────────────────────────────
+
+export async function getSuperadminStats() {
+  const db = getDb();
+  const [clubCount, courtCount, adminCount] = await Promise.all([
+    db.select({ n: count() }).from(clubs),
+    db.select({ n: count() }).from(courts),
+    db.select({ n: count() }).from(users).where(isNotNull(users.role)),
+  ]);
+  return {
+    clubs: clubCount[0]?.n ?? 0,
+    courts: courtCount[0]?.n ?? 0,
+    admins: adminCount[0]?.n ?? 0,
+  };
+}
+
+export async function getAllClubs() {
+  const db = getDb();
+  const allClubs = await db.select().from(clubs).orderBy(clubs.createdAt);
+  const allCourts = await db.select({ clubId: courts.clubId, id: courts.id }).from(courts);
+  const allAdmins = await db
+    .select({ clubId: users.clubId, email: users.email, role: users.role })
+    .from(users)
+    .where(isNotNull(users.clubId));
+
+  return allClubs.map((club) => ({
+    ...club,
+    courtCount: allCourts.filter((c) => c.clubId === club.id).length,
+    admins: allAdmins.filter((a) => a.clubId === club.id),
+  }));
+}
+
+export async function createClub(name: string) {
+  const db = getDb();
+  const [club] = await db.insert(clubs).values({ name }).returning();
+  return club;
 }
