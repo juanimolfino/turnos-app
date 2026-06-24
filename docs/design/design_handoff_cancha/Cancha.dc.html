@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Hanken+Grotesk:wght@400;500;600;700;800&family=Space+Mono&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;}
+  button{font-family:inherit;}
+  input{font-family:inherit;}
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-thumb{background:#dcd6ca;border-radius:8px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+</style>
+</helmet>
+
+<div style="--accent:{{ accent }}; width:100%; min-height:100vh; background:#F4F1EA; font-family:'Hanken Grotesk',system-ui,sans-serif; color:#221F1B; -webkit-font-smoothing:antialiased;">
+
+<!-- ================= LANDING ================= -->
+<sc-if value="{{ isLanding }}" hint-placeholder-val="{{ true }}">
+<div style="min-height:100vh; background:radial-gradient(120% 80% at 80% -10%, #FBF0E9 0%, #F4F1EA 55%);">
+
+  <div style="max-width:1180px; margin:0 auto; padding:22px 32px; display:flex; align-items:center; justify-content:space-between;">
+    <div style="display:flex; align-items:center; gap:9px;">
+      <div style="width:30px; height:30px; border-radius:9px; background:var(--accent,#C96442); display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(0,0,0,.18);">
+        <div style="width:11px; height:11px; border-radius:50%; background:#fff;"></div>
+      </div>
+      <span style="font-family:'Instrument Serif',Georgia,serif; font-size:24px; letter-spacing:.2px;">Cancha</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:26px;">
+      <span style="font-size:14.5px; color:#6B6660; cursor:pointer;">Producto</span>
+      <span style="font-size:14.5px; color:#6B6660; cursor:pointer;">Cómo funciona</span>
+      <span style="font-size:14.5px; color:#6B6660; cursor:pointer;">Deportes</span>
+      <button onClick="{{ goLogin }}" style="background:var(--accent,#C96442); color:#fff; border:none; border-radius:10px; padding:10px 18px; font-weight:600; font-size:14.5px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.14);">Ingresar</button>
+    </div>
+  </div>
+
+  <div style="max-width:1180px; margin:0 auto; padding:44px 32px 60px; display:grid; grid-template-columns:1.05fr .95fr; gap:54px; align-items:center;">
+    <div>
+      <div style="display:inline-flex; align-items:center; gap:8px; background:#fff; border:1px solid #E7E1D6; border-radius:999px; padding:6px 13px; font-size:13px; color:#6B6660;">
+        <span style="width:7px; height:7px; border-radius:50%; background:#3E9B63;"></span>
+        Empezamos con pádel · pronto más deportes
+      </div>
+      <h1 style="font-family:'Instrument Serif',Georgia,serif; font-weight:400; font-size:58px; line-height:1.04; letter-spacing:-.5px; margin:20px 0 0;">La agenda de tu club,<br>en una sola pantalla.</h1>
+      <p style="font-size:18px; line-height:1.55; color:#5C574F; max-width:450px; margin:20px 0 0; text-wrap:pretty;">Gestioná turnos, clases, fijos y torneos de todas tus canchas. Sin planillas ni WhatsApp cruzado: mirás el día y sabés al instante qué está libre.</p>
+      <div style="display:flex; gap:12px; margin-top:30px;">
+        <button onClick="{{ goLogin }}" style="background:var(--accent,#C96442); color:#fff; border:none; border-radius:11px; padding:13px 22px; font-weight:600; font-size:15px; cursor:pointer; box-shadow:0 2px 8px -2px rgba(201,100,66,.5);">Ingresar al panel</button>
+        <button onClick="{{ goDash }}" style="background:#fff; color:#221F1B; border:1px solid #E0DACE; border-radius:11px; padding:13px 22px; font-weight:600; font-size:15px; cursor:pointer;">Ver demo en vivo →</button>
+      </div>
+      <div style="margin-top:18px; font-size:13px; color:#928B7E;">Sin tarjeta · Configurás tu semana en minutos</div>
+    </div>
+
+    <div style="position:relative; aspect-ratio:4/3; border-radius:18px; overflow:hidden; background:linear-gradient(160deg,#2F7D4E,#214f36); box-shadow:0 24px 56px -22px rgba(33,79,54,.6); border:1px solid rgba(255,255,255,.12);">
+      <div style="position:absolute; top:13%; bottom:13%; left:18%; right:18%; border:3px solid rgba(255,255,255,.82); border-radius:3px;"></div>
+      <div style="position:absolute; top:13%; bottom:13%; left:50%; width:3px; background:rgba(255,255,255,.82); transform:translateX(-50%);"></div>
+      <div style="position:absolute; left:18%; right:18%; top:34%; height:2px; background:rgba(255,255,255,.55);"></div>
+      <div style="position:absolute; left:18%; right:18%; bottom:34%; height:2px; background:rgba(255,255,255,.55);"></div>
+      <div style="position:absolute; top:13%; bottom:13%; left:33.5%; width:2px; background:rgba(255,255,255,.4);"></div>
+      <div style="position:absolute; top:13%; bottom:13%; right:33.5%; width:2px; background:rgba(255,255,255,.4);"></div>
+      <div style="position:absolute; left:14px; bottom:14px; background:rgba(0,0,0,.4); color:rgba(255,255,255,.92); font-family:'Space Mono',monospace; font-size:11px; padding:5px 10px; border-radius:7px;">// reemplazá con foto real de la cancha</div>
+    </div>
+  </div>
+
+  <div style="max-width:1180px; margin:0 auto; padding:0 32px 72px; display:grid; grid-template-columns:repeat(3,1fr); gap:18px;">
+    <div style="background:#FCFBF8; border:1px solid #E7E1D6; border-radius:16px; padding:24px;">
+      <div style="width:38px; height:38px; border-radius:10px; background:#E9F3EA; display:flex; align-items:center; justify-content:center; margin-bottom:14px;">
+        <span style="width:11px; height:11px; border-radius:50%; background:#3E9B63;"></span>
+      </div>
+      <div style="font-size:17px; font-weight:700; margin-bottom:6px;">Vista del día en vivo</div>
+      <div style="font-size:14.5px; line-height:1.5; color:#6B6660;">Ves todas las canchas juntas y un semáforo te dice de un vistazo dónde hay lugar.</div>
+    </div>
+    <div style="background:#FCFBF8; border:1px solid #E7E1D6; border-radius:16px; padding:24px;">
+      <div style="width:38px; height:38px; border-radius:10px; background:#F1EAF7; display:flex; align-items:center; justify-content:center; margin-bottom:14px;">
+        <span style="width:11px; height:11px; border-radius:50%; background:#8A6BC4;"></span>
+      </div>
+      <div style="font-size:17px; font-weight:700; margin-bottom:6px;">Configurás tu semana</div>
+      <div style="font-size:14.5px; line-height:1.5; color:#6B6660;">Clases, turnos fijos y torneos se cargan una vez y se repiten solos.</div>
+    </div>
+    <div style="background:#FCFBF8; border:1px solid #E7E1D6; border-radius:16px; padding:24px;">
+      <div style="width:38px; height:38px; border-radius:10px; background:#FBEBE2; display:flex; align-items:center; justify-content:center; margin-bottom:14px;">
+        <span style="width:11px; height:11px; border-radius:50%; background:var(--accent,#C96442);"></span>
+      </div>
+      <div style="font-size:17px; font-weight:700; margin-bottom:6px;">Eventos que llenan canchas</div>
+      <div style="font-size:14.5px; line-height:1.5; color:#6B6660;">Armá americanos y torneos abiertos en dos clics y atraé más clientes.</div>
+    </div>
+  </div>
+
+  <div style="border-top:1px solid #E7E1D6;">
+    <div style="max-width:1180px; margin:0 auto; padding:22px 32px; display:flex; justify-content:space-between; align-items:center; font-size:13px; color:#928B7E;">
+      <span>Cancha · plataforma de turnos para clubes deportivos</span>
+      <span>Buenos Aires, Argentina</span>
+    </div>
+  </div>
+
+</div>
+</sc-if>
+
+<!-- ================= LOGIN ================= -->
+<sc-if value="{{ isLogin }}" hint-placeholder-val="{{ false }}">
+<div style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; background:radial-gradient(120% 90% at 50% -20%, #FBF0E9 0%, #F4F1EA 60%);">
+  <div style="width:100%; max-width:392px;">
+    <div style="display:flex; align-items:center; gap:9px; justify-content:center; margin-bottom:26px;">
+      <div style="width:30px; height:30px; border-radius:9px; background:var(--accent,#C96442); display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(0,0,0,.18);">
+        <div style="width:11px; height:11px; border-radius:50%; background:#fff;"></div>
+      </div>
+      <span style="font-family:'Instrument Serif',Georgia,serif; font-size:24px;">Cancha</span>
+    </div>
+    <div style="background:#FCFBF8; border:1px solid #E7E1D6; border-radius:18px; padding:30px; box-shadow:0 18px 44px -28px rgba(0,0,0,.3);">
+      <div style="font-family:'Instrument Serif',Georgia,serif; font-size:26px; line-height:1.1;">Ingresá a tu panel</div>
+      <div style="font-size:14px; color:#6B6660; margin:6px 0 24px;">Gestioná los turnos de {{ club }}.</div>
+
+      <label style="display:block; font-size:13px; font-weight:600; color:#54504A; margin-bottom:7px;">Usuario</label>
+      <input type="text" value="admin@padelcentral.ar" style="width:100%; border:1px solid #E0DACE; background:#fff; border-radius:10px; padding:12px 14px; font-size:14.5px; color:#221F1B; margin-bottom:16px;" />
+
+      <label style="display:block; font-size:13px; font-weight:600; color:#54504A; margin-bottom:7px;">Contraseña</label>
+      <input type="password" value="123456789" style="width:100%; border:1px solid #E0DACE; background:#fff; border-radius:10px; padding:12px 14px; font-size:14.5px; color:#221F1B; margin-bottom:8px;" />
+
+      <div style="text-align:right; margin-bottom:18px;"><span style="font-size:13px; color:var(--accent,#C96442); cursor:pointer;">¿Olvidaste tu contraseña?</span></div>
+
+      <button onClick="{{ goDash }}" style="width:100%; background:var(--accent,#C96442); color:#fff; border:none; border-radius:11px; padding:13px; font-weight:600; font-size:15px; cursor:pointer; box-shadow:0 2px 8px -2px rgba(201,100,66,.5);">Ingresar</button>
+    </div>
+    <div style="text-align:center; margin-top:18px;"><span onClick="{{ goLanding }}" style="font-size:13.5px; color:#6B6660; cursor:pointer;">← Volver al inicio</span></div>
+  </div>
+</div>
+</sc-if>
+
+<!-- ================= APP ================= -->
+<sc-if value="{{ isApp }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex; height:100vh; overflow:hidden;">
+
+  <!-- Sidebar -->
+  <div style="width:248px; flex:none; background:#FCFBF8; border-right:1px solid #E7E1D6; display:flex; flex-direction:column; padding:20px 16px;">
+    <div style="display:flex; align-items:center; gap:9px; padding:4px 8px 22px;">
+      <div style="width:28px; height:28px; border-radius:8px; background:var(--accent,#C96442); display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(0,0,0,.18);">
+        <div style="width:10px; height:10px; border-radius:50%; background:#fff;"></div>
+      </div>
+      <span style="font-family:'Instrument Serif',Georgia,serif; font-size:22px;">Cancha</span>
+    </div>
+
+    <div style="font-size:11px; font-weight:700; letter-spacing:.08em; color:#A39C8F; text-transform:uppercase; padding:0 8px 8px;">Panel</div>
+    <div style="display:flex; flex-direction:column; gap:4px;">
+      <button onClick="{{ goDash }}" style="display:flex; align-items:center; gap:11px; width:100%; text-align:left; border:1px solid {{ navDashBd }}; background:{{ navDashBg }}; color:{{ navDashFg }}; border-radius:10px; padding:10px 12px; font-size:14px; font-weight:600; cursor:pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg>
+        Agenda del día
+      </button>
+      <button onClick="{{ goAjustes }}" style="display:flex; align-items:center; gap:11px; width:100%; text-align:left; border:1px solid {{ navAjBd }}; background:{{ navAjBg }}; color:{{ navAjFg }}; border-radius:10px; padding:10px 12px; font-size:14px; font-weight:600; cursor:pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2.4"/><circle cx="8" cy="17" r="2.4"/></svg>
+        Ajustes
+      </button>
+      <button onClick="{{ goStats }}" style="display:flex; align-items:center; gap:11px; width:100%; text-align:left; border:1px solid {{ navStBd }}; background:{{ navStBg }}; color:{{ navStFg }}; border-radius:10px; padding:10px 12px; font-size:14px; font-weight:600; cursor:pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 21V11M12 21V4M19 21v-7"/></svg>
+        Estadísticas
+      </button>
+    </div>
+
+    <div style="flex:1;"></div>
+
+    <div style="border-top:1px solid #EEE9DF; padding-top:14px;">
+      <div style="display:flex; align-items:center; gap:10px; padding:0 4px 12px;">
+        <div style="width:34px; height:34px; border-radius:9px; background:#EDE7DB; display:flex; align-items:center; justify-content:center; font-weight:700; color:#6B6660; font-size:14px;">PC</div>
+        <div style="min-width:0;">
+          <div style="font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ club }}</div>
+          <div style="font-size:12px; color:#928B7E;">Plan club · 3 canchas</div>
+        </div>
+      </div>
+      <button onClick="{{ goLanding }}" style="display:flex; align-items:center; gap:9px; width:100%; border:1px solid #E7E1D6; background:#fff; color:#6B6660; border-radius:10px; padding:9px 12px; font-size:13.5px; font-weight:600; cursor:pointer;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9M18 16l4-4-4-4M22 12H9"/></svg>
+        Cerrar sesión
+      </button>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div style="flex:1; min-width:0; height:100vh; overflow-y:auto; background:#F4F1EA; position:relative;">
+
+    <!-- ===== DASHBOARD ===== -->
+    <sc-if value="{{ isDash }}" hint-placeholder-val="{{ true }}">
+    <div style="padding:24px 28px 40px; display:flex; flex-direction:column; gap:18px;">
+
+      <div style="display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:14px;">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <button style="background:#fff; border:1px solid #E0DACE; border-radius:10px; padding:8px 14px; font-weight:600; font-size:13.5px; cursor:pointer;">Hoy</button>
+          <div style="display:flex; gap:4px;">
+            <button style="width:34px; height:34px; background:#fff; border:1px solid #E0DACE; border-radius:9px; cursor:pointer; color:#54504A; font-size:15px;">‹</button>
+            <button style="width:34px; height:34px; background:#fff; border:1px solid #E0DACE; border-radius:9px; cursor:pointer; color:#54504A; font-size:15px;">›</button>
+          </div>
+          <div>
+            <div style="font-family:'Instrument Serif',Georgia,serif; font-size:25px; line-height:1.1;">Martes 23 de junio</div>
+            <div style="font-size:13px; color:#928B7E;">{{ club }} · 3 canchas de pádel</div>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <sc-for list="{{ chips }}" as="ch" hint-placeholder-count="4">
+              <button onClick="{{ ch.onClick }}" style="background:{{ ch.bg }}; color:{{ ch.fg }}; border:1px solid {{ ch.bd }}; border-radius:999px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer;">{{ ch.label }}</button>
+            </sc-for>
+          </div>
+          <button style="background:var(--accent,#C96442); color:#fff; border:none; border-radius:10px; padding:9px 15px; font-weight:600; font-size:13.5px; cursor:pointer; white-space:nowrap;">+ Nuevo turno</button>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:18px; flex-wrap:wrap; font-size:12.5px; color:#6B6660;">
+        <div style="display:flex; align-items:center; gap:7px;"><span style="width:9px; height:9px; border-radius:50%; background:#3E9B63;"></span>Libre</div>
+        <div style="display:flex; align-items:center; gap:7px;"><span style="width:9px; height:9px; border-radius:50%; background:#B8B0A2;"></span>Reservado</div>
+        <div style="display:flex; align-items:center; gap:7px;"><span style="width:9px; height:9px; border-radius:50%; background:#5B7FBE;"></span>Clase</div>
+        <div style="display:flex; align-items:center; gap:7px;"><span style="width:9px; height:9px; border-radius:50%; background:#8A6BC4;"></span>Turno fijo</div>
+        <div style="display:flex; align-items:center; gap:7px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--accent,#C96442);"></span>Americano / torneo</div>
+      </div>
+
+      <div style="background:#FCFBF8; border:1px solid #E7E1D6; border-radius:16px; padding:14px;">
+        <!-- header -->
+        <div style="display:flex; gap:8px; padding:2px 2px 12px; border-bottom:1px solid #EFEAE0; margin-bottom:10px;">
+          <div style="width:74px; flex:none; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#A39C8F; padding-top:2px;">Hora</div>
+          <div style="width:132px; flex:none; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#A39C8F; padding-top:2px;">Disponibilidad</div>
+          <div style="flex:1; display:flex; gap:8px;">
+            <sc-for list="{{ headers }}" as="h" hint-placeholder-count="3">
+              <div style="flex:1; padding-left:2px;">
+                <div style="font-size:13.5px; font-weight:700;">{{ h.name }}</div>
+                <div style="font-size:11px; color:#A39C8F;">{{ h.tag }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- morning band -->
+        <div style="display:flex; gap:8px; margin-bottom:8px;">
+          <div style="width:74px; flex:none; text-align:right; padding-right:4px; padding-top:8px;">
+            <div style="font-size:14px; font-weight:700; font-variant-numeric:tabular-nums;">08:00</div>
+            <div style="font-size:11px; color:#A39C8F;">16:00</div>
+          </div>
+          <div style="width:132px; flex:none; display:flex; flex-direction:column; gap:4px; justify-content:center; background:#F3E7E2; border-radius:10px; padding:8px 11px;">
+            <div style="display:flex; align-items:center; gap:7px;"><span style="width:8px; height:8px; border-radius:50%; background:#C2887A;"></span><span style="font-size:12.5px; font-weight:700; color:#9A5E4C;">Completo</span></div>
+          </div>
+          <div style="flex:1; display:flex; align-items:center; padding:12px 16px; border-radius:10px; color:#3D5C93; font-weight:600; font-size:13.5px; background:repeating-linear-gradient(45deg,#EAF0F8,#EAF0F8 11px,#E1E9F6 11px,#E1E9F6 22px); border:1px solid #D3DEF0;">
+            Escuela de pádel · clases de 08 a 16 h · las 3 canchas ocupadas
+          </div>
+        </div>
+
+        <!-- evening rows -->
+        <sc-for list="{{ rows }}" as="row" hint-placeholder-count="5">
+          <div style="display:flex; gap:8px; margin-bottom:8px;">
+            <div style="width:74px; flex:none; text-align:right; padding-right:4px; padding-top:8px;">
+              <div style="font-size:14px; font-weight:700; font-variant-numeric:tabular-nums;">{{ row.start }}</div>
+              <div style="font-size:11px; color:#A39C8F;">{{ row.end }}</div>
+            </div>
+            <div style="width:132px; flex:none; display:flex; flex-direction:column; gap:5px; justify-content:center; background:{{ row.sum.bg }}; border-radius:10px; padding:9px 11px;">
+              <div style="display:flex; align-items:center; gap:7px;"><span style="width:8px; height:8px; border-radius:50%; background:{{ row.sum.dot }};"></span><span style="font-size:12.5px; font-weight:700; color:{{ row.sum.fg }};">{{ row.sum.txt }}</span></div>
+              <sc-if value="{{ row.hasEvent }}" hint-placeholder-val="{{ false }}">
+                <span style="font-size:11px; font-weight:700; color:#B0572C;">{{ row.event }}</span>
+              </sc-if>
+            </div>
+            <div style="flex:1; display:flex; gap:8px;">
+              <sc-for list="{{ row.cells }}" as="cell" hint-placeholder-count="3">
+                <div onClick="{{ cell.onClick }}" style="flex:1; min-width:0; cursor:pointer; background:{{ cell.bg }}; border:1px solid {{ cell.bd }}; border-radius:10px; padding:10px 12px; min-height:74px; display:flex; flex-direction:column; gap:4px; justify-content:center; transition:transform .08s ease, box-shadow .12s ease;" style-hover="box-shadow:0 4px 14px -6px rgba(0,0,0,.2); transform:translateY(-1px);">
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="width:7px; height:7px; border-radius:50%; background:{{ cell.dot }};"></span>
+                    <span style="font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:{{ cell.fg }};">{{ cell.statusLabel }}</span>
+                  </div>
+                  <sc-if value="{{ cell.who }}" hint-placeholder-val="{{ false }}">
+                    <div style="font-size:14px; font-weight:600; color:#221F1B; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ cell.who }}</div>
+                  </sc-if>
+                  <div style="font-size:12px; color:#8B857A;">{{ cell.sub }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- drawer -->
+    <sc-if value="{{ hasSel }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ sel.close }}" style="position:fixed; inset:0; background:rgba(34,31,27,.18); z-index:30;"></div>
+      <div style="position:fixed; top:0; right:0; height:100vh; width:392px; max-width:92vw; background:#FCFBF8; border-left:1px solid #E7E1D6; box-shadow:-14px 0 44px -22px rgba(0,0,0,.4); z-index:31; display:flex; flex-direction:column;">
+        <div style="padding:22px 22px 18px; border-bottom:1px solid #EFEAE0; display:flex; justify-content:space-between; align-items:flex-start;">
+          <div>
+            <div style="font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#A39C8F;">Turno seleccionado</div>
+            <div style="font-family:'Instrument Serif',Georgia,serif; font-size:24px; line-height:1.15; margin-top:3px;">{{ sel.range }}</div>
+            <div style="font-size:14px; color:#6B6660;">{{ sel.court }} · Martes 23 jun</div>
+          </div>
+          <button onClick="{{ sel.close }}" style="width:32px; height:32px; border:1px solid #E0DACE; background:#fff; border-radius:9px; cursor:pointer; color:#6B6660; font-size:16px;">✕</button>
+        </div>
+
+        <div style="flex:1; overflow-y:auto; padding:20px 22px; display:flex; flex-direction:column; gap:18px;">
+          <div>
+            <div style="display:inline-flex; align-items:center; gap:8px; background:{{ sel.bg }}; border:1px solid {{ sel.bd }}; border-radius:999px; padding:6px 13px;">
+              <span style="width:8px; height:8px; border-radius:50%; background:{{ sel.dot }};"></span>
+              <span style="font-size:13px; font-weight:700; color:{{ sel.fg }};">{{ sel.statusLabel }}</span>
+            </div>
+            <div style="font-size:13.5px; color:#6B6660; margin-top:8px;">{{ sel.sub }}</div>
+          </div>
+
+          <sc-if value="{{ sel.hasClient }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff; border:1px solid #E7E1D6; border-radius:12px; padding:15px;">
+              <div style="display:flex; align-items:center; gap:12px;">
+                <div style="width:42px; height:42px; border-radius:50%; background:#EDE7DB; display:flex; align-items:center; justify-content:center; font-weight:700; color:#6B6660; font-size:16px;">{{ sel.initial }}</div>
+                <div>
+                  <div style="font-size:15px; font-weight:700;">{{ sel.who }}</div>
+                  <div style="font-size:13px; color:#6B6660;">{{ sel.tel }}</div>
+                </div>
+              </div>
+              <div style="margin-top:12px; padding-top:12px; border-top:1px solid #EFEAE0; font-size:12.5px; color:#928B7E;">{{ sel.freq }}</div>
+            </div>
+          </sc-if>
+
+          <div>
+            <div style="font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#A39C8F; margin-bottom:10px;">Acciones</div>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <sc-for list="{{ sel.actions }}" as="a" hint-placeholder-count="4">
+                <button style="width:100%; text-align:left; background:{{ a.bg }}; color:{{ a.fg }}; border:1px solid {{ a.bd }}; border-radius:11px; padding:13px 15px; font-size:14px; font-weight:600; cursor:pointer;">{{ a.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:9px; align-items:flex-start; background:#F4F1EA; border-radius:11px; padding:12px 14px;">
+            <span style="width:7px; height:7px; border-radius:50%; background:#3E9B63; margin-top:5px; flex:none;"></span>
+            <div style="font-size:12.5px; color:#6B6660; line-height:1.45;">Al dar de baja un turno, el cliente recibe el aviso automáticamente por WhatsApp y mail.</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+    </sc-if>
+
+    <!-- ===== AJUSTES ===== -->
+    <sc-if value="{{ isAjustes }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:24px 28px 40px; display:flex; flex-direction:column; gap:20px;">
+      <div style="display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:14px;">
+        <div>
+          <div style="font-family:'Instrument Serif',Georgia,serif; font-size:28px; line-height:1.1;">Ajustes de la agenda</div>
+          <div style="font-size:14px; color:#6B6660; margin-top:4px;">Configurás una vez y se repite cada semana. Después editás los días puntuales desde la agenda.</div>
+        </div>
+        <button style="background:var(--accent,#C96442); color:#fff; border:none; border-radius:10px; padding:11px 18px; font-weight:600; font-size:14px; cursor:pointer; box-shadow:0 2px 8px -3px rgba(201,100,66,.5);">Guardar cambios</button>
+      </div>
+
+      <div style="display:inline-flex; gap:4px; background:#EAE4D8; border-radius:12px; padding:4px; width:max-content;">
+        <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+          <button onClick="{{ t.onClick }}" style="background:{{ t.bg }}; color:{{ t.fg }}; box-shadow:{{ t.sh }}; border:none; border-radius:9px; padding:9px 16px; font-weight:600; font-size:13.5px; cursor:pointer;">{{ t.label }}</button>
+        </sc-for>
+      </div>
+
+      <!-- plantilla -->
+      <sc-if value="{{ tabPlantilla }}" hint-placeholder-val="{{ true }}">
+        <div style="background:#FCFBF8; border:1px solid #E7E1D6; border-radius:16px; padding:18px; overflow-x:auto;">
+          <div style="display:flex; gap:8px; margin-bottom:10px; min-width:760px;">
+            <div style="width:96px; flex:none;"></div>
+            <div style="flex:1; display:flex; gap:8px;">
+              <sc-for list="{{ weekDays }}" as="d" hint-placeholder-count="7">
+                <div style="flex:1; text-align:center; font-size:12.5px; font-weight:700; color:#6B6660;">{{ d }}</div>
+              </sc-for>
+            </div>
+          </div>
+          <sc-for list="{{ plantilla }}" as="band" hint-placeholder-count="3">
+            <div style="display:flex; gap:8px; margin-bottom:8px; min-width:760px;">
+              <div style="width:96px; flex:none; padding-top:8px;">
+                <div style="font-size:13.5px; font-weight:700;">{{ band.band }}</div>
+                <div style="font-size:11px; color:#A39C8F;">{{ band.time }}</div>
+              </div>
+              <div style="flex:1; display:flex; gap:8px;">
+                <sc-for list="{{ band.cells }}" as="c" hint-placeholder-count="7">
+                  <div style="flex:1; min-width:0; background:{{ c.bg }}; border:1px solid {{ c.bd }}; border-radius:9px; padding:11px 8px; min-height:52px; display:flex; align-items:center; justify-content:center; text-align:center; font-size:12px; font-weight:600; color:{{ c.fg }};">{{ c.label }}</div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+          <div style="margin-top:10px; font-size:12.5px; color:#928B7E;">Tocá cualquier bloque para editar profesores, cupos u horarios de ese día.</div>
+        </div>
+      </sc-if>
+
+      <!-- clases -->
+      <sc-if value="{{ tabClases }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; gap:9px;">
+          <sc-for list="{{ clases }}" as="c" hint-placeholder-count="4">
+            <div style="display:flex; align-items:center; gap:14px; background:#FCFBF8; border:1px solid #E7E1D6; border-radius:12px; padding:14px 16px;">
+              <div style="width:4px; height:38px; border-radius:4px; background:#5B7FBE; flex:none;"></div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-size:15px; font-weight:700;">{{ c.prof }}</div>
+                <div style="font-size:13px; color:#6B6660;">{{ c.day }} · {{ c.time }}</div>
+              </div>
+              <div style="background:#EAF0F8; color:#3D5C93; border-radius:999px; padding:5px 12px; font-size:12.5px; font-weight:600; white-space:nowrap;">{{ c.court }}</div>
+              <span style="font-size:13px; color:var(--accent,#C96442); font-weight:600; cursor:pointer;">Editar</span>
+            </div>
+          </sc-for>
+          <button style="background:#fff; border:1px dashed #CFC8B9; border-radius:12px; padding:13px; font-size:14px; font-weight:600; color:#6B6660; cursor:pointer;">+ Agregar clase de profesor</button>
+        </div>
+      </sc-if>
+
+      <!-- fijos -->
+      <sc-if value="{{ tabFijos }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; gap:9px;">
+          <sc-for list="{{ fijos }}" as="f" hint-placeholder-count="3">
+            <div style="display:flex; align-items:center; gap:14px; background:#FCFBF8; border:1px solid #E7E1D6; border-radius:12px; padding:14px 16px;">
+              <div style="width:4px; height:38px; border-radius:4px; background:#8A6BC4; flex:none;"></div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-size:15px; font-weight:700;">{{ f.who }}</div>
+                <div style="font-size:13px; color:#6B6660;">Todos los {{ f.day }} · {{ f.time }}</div>
+              </div>
+              <div style="background:#F1EAF7; color:#6B4E9E; border-radius:999px; padding:5px 12px; font-size:12.5px; font-weight:600; white-space:nowrap;">{{ f.court }}</div>
+              <span style="font-size:13px; color:var(--accent,#C96442); font-weight:600; cursor:pointer;">Editar</span>
+            </div>
+          </sc-for>
+          <button style="background:#fff; border:1px dashed #CFC8B9; border-radius:12px; padding:13px; font-size:14px; font-weight:600; color:#6B6660; cursor:pointer;">+ Agregar turno fijo semanal</button>
+        </div>
+      </sc-if>
+
+      <!-- eventos -->
+      <sc-if value="{{ tabEventos }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; gap:9px;">
+          <sc-for list="{{ eventos }}" as="e" hint-placeholder-count="3">
+            <div style="background:#FCFBF8; border:1px solid #E7E1D6; border-radius:12px; padding:16px;">
+              <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="width:8px; height:8px; border-radius:50%; background:var(--accent,#C96442);"></span>
+                    <span style="font-size:15px; font-weight:700;">{{ e.name }}</span>
+                  </div>
+                  <div style="font-size:13px; color:#6B6660; margin-top:5px;">{{ e.date }} · {{ e.time }} · {{ e.courts }}</div>
+                </div>
+                <div style="background:#FBEBE2; color:#B0572C; border-radius:999px; padding:5px 12px; font-size:12px; font-weight:600; white-space:nowrap;">{{ e.state }}</div>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-top:14px; gap:12px;">
+                <div style="font-size:13px; color:#6B6660;">Inscriptos: <strong style="color:#221F1B;">{{ e.cupos }}</strong></div>
+                <div style="display:flex; gap:8px;">
+                  <button style="background:#fff; border:1px solid #E0DACE; border-radius:9px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer;">Ver inscriptos</button>
+                  <button style="background:#fff; border:1px solid #E0DACE; border-radius:9px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer;">Editar</button>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+          <button style="background:var(--accent,#C96442); color:#fff; border:none; border-radius:12px; padding:13px; font-size:14px; font-weight:600; cursor:pointer;">+ Organizar americano o torneo</button>
+        </div>
+      </sc-if>
+    </div>
+    </sc-if>
+
+    <!-- ===== ESTADISTICAS ===== -->
+    <sc-if value="{{ isStats }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:24px 28px 40px; display:flex; flex-direction:column; gap:20px;">
+      <div style="display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:14px;">
+        <div>
+          <div style="font-family:'Instrument Serif',Georgia,serif; font-size:28px; line-height:1.1;">Estadísticas</div>
+          <div style="font-size:14px; color:#6B6660; margin-top:4px;">Cómo viene el club esta semana.</div>
+        </div>
+        <div style="display:inline-flex; gap:4px; background:#EAE4D8; border-radius:11px; padding:4px;">
+          <button style="background:#fff; color:#221F1B; box-shadow:0 1px 2px rgba(0,0,0,.05); border:none; border-radius:8px; padding:8px 15px; font-weight:600; font-size:13px; cursor:pointer;">Semana</button>
+          <button style="background:transparent; color:#6B6660; border:none; border-radius:8px; padding:8px 15px; font-weight:600; font-size:13px; cursor:pointer;">Mes</button>
+          <button style="background:transparent; color:#6B6660; border:none; border-radius:8px; padding:8px 15px; font-weight:600; font-size:13px; cursor:pointer;">Año</button>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:14px;">
+        <div style="background:#FCFBF8; border:1px solid #E7E1D6; border-radius:14px; padding:18px;">
+          <div style="font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#A39C8F;">Ocupación</div>
+          <div style="font-family:'Instrument Serif',Georgia,serif; font-size:32px; margin:6px 0 2px;">78%</div>
+          <div style="font-size:12.5px; color:#2F7D4E; font-weight:600;">+6% vs semana pasada</div>
+        </div>
+        <div style="background:#FCFBF8; border:1px solid #E7E1D6; border-radius:14px; padding:18px;">
+          <div style="font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#A39C8F;">Ingresos semana</div>
+          <div style="font-family:'Instrument Serif',Georgia,serif; font-size:32px; margin:6px 0 2px;">$486.000</div>
+          <div style="font-size:12.5px; color:#2F7D4E; font-weight:600;">+12% vs semana pasada</div>
+        </div>
+        <div style="background:#FCFBF8; border:1px solid #E7E1D6; border-radius:14px; padding:18px;">
+          <div style="font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#A39C8F;">Turnos tomados</div>
+          <div style="font-family:'Instrument Serif',Georgia,serif; font-size:32px; margin:6px 0 2px;">142</div>
+          <div style="font-size:12.5px; color:#928B7E;">de 180 disponibles</div>
+        </div>
+        <div style="background:#FCFBF8; border:1px solid #E7E1D6; border-radius:14px; padding:18px;">
+          <div style="font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#A39C8F;">Turnos libres</div>
+          <div style="font-family:'Instrument Serif',Georgia,serif; font-size:32px; margin:6px 0 2px;">38</div>
+          <div style="font-size:12.5px; color:#928B7E;">oportunidad de venta</div>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1.5fr 1fr; gap:14px;">
+        <div style="background:#FCFBF8; border:1px solid #E7E1D6; border-radius:16px; padding:22px;">
+          <div style="font-size:15px; font-weight:700; margin-bottom:18px;">Ocupación por día</div>
+          <div style="display:flex; align-items:flex-end; gap:14px; height:180px;">
+            <sc-for list="{{ statBars }}" as="b" hint-placeholder-count="7">
+              <div style="flex:1; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:8px; height:100%;">
+                <div style="font-size:11.5px; font-weight:700; color:#6B6660;">{{ b.h }}%</div>
+                <div style="width:100%; height:{{ b.h }}%; background:linear-gradient(180deg,#4FAE73,#2F7D4E); border-radius:7px 7px 0 0;"></div>
+                <div style="font-size:12px; color:#928B7E;">{{ b.d }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="background:#FCFBF8; border:1px solid #E7E1D6; border-radius:16px; padding:22px;">
+          <div style="font-size:15px; font-weight:700; margin-bottom:16px;">Clientes frecuentes</div>
+          <div style="display:flex; flex-direction:column; gap:14px;">
+            <sc-for list="{{ freq }}" as="cf" hint-placeholder-count="4">
+              <div style="display:flex; align-items:center; gap:12px;">
+                <div style="width:36px; height:36px; border-radius:50%; background:#EDE7DB; display:flex; align-items:center; justify-content:center; font-weight:700; color:#6B6660; font-size:14px; flex:none;">{{ cf.i }}</div>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ cf.who }}</div>
+                  <div style="font-size:12px; color:#928B7E;">{{ cf.turnos }}</div>
+                </div>
+                <div style="font-size:13.5px; font-weight:700; color:#221F1B;">{{ cf.monto }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:#FCFBF8; border:1px solid #E7E1D6; border-radius:16px; padding:22px; display:grid; grid-template-columns:repeat(3,1fr); gap:24px;">
+        <div>
+          <div style="font-size:12.5px; color:#928B7E;">Ingresos del mes</div>
+          <div style="font-family:'Instrument Serif',Georgia,serif; font-size:26px; margin-top:4px;">$1.920.000</div>
+        </div>
+        <div style="border-left:1px solid #EFEAE0; padding-left:24px;">
+          <div style="font-size:12.5px; color:#928B7E;">Ingresos del año</div>
+          <div style="font-family:'Instrument Serif',Georgia,serif; font-size:26px; margin-top:4px;">$18.400.000</div>
+        </div>
+        <div style="border-left:1px solid #EFEAE0; padding-left:24px;">
+          <div style="font-size:12.5px; color:#928B7E;">Eventos este mes</div>
+          <div style="font-family:'Instrument Serif',Georgia,serif; font-size:26px; margin-top:4px;">6 americanos</div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+  </div>
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;accentColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#C96442&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;clubName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Pádel Central&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;landing&quot;,&quot;login&quot;,&quot;dashboard&quot;,&quot;ajustes&quot;,&quot;estadisticas&quot;],&quot;default&quot;:&quot;landing&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      screen: (props && props.startScreen) || 'landing',
+      filter: 'all',
+      selected: null,
+      tab: 'plantilla',
+    };
+  }
+
+  STATUS = {
+    libre:  { bg:'#E9F3EA', bd:'#CFE6D2', fg:'#2F7D4E', dot:'#3E9B63', label:'Libre' },
+    tomado: { bg:'#FFFFFF', bd:'#E7E1D6', fg:'#7A746A', dot:'#B8B0A2', label:'Reservado' },
+    clase:  { bg:'#EAF0F8', bd:'#D3DEF0', fg:'#3D5C93', dot:'#5B7FBE', label:'Clase' },
+    fijo:   { bg:'#F1EAF7', bd:'#E2D4EF', fg:'#6B4E9E', dot:'#8A6BC4', label:'Turno fijo' },
+    evento: { bg:'#FBEBE2', bd:'#F2D6C5', fg:'#B0572C', dot:'#C96442', label:'Americano' },
+  };
+
+  EVENING = [
+    { start:'16:00', end:'17:30', cells:[
+      { court:1, status:'libre' },
+      { court:2, status:'tomado', who:'Martín G.', sub:'Turno simple · pagado', tel:'+54 9 11 5521-0098', freq:'8 turnos este mes' },
+      { court:3, status:'clase', who:'Prof. Lucía', sub:'4 alumnos' },
+    ]},
+    { start:'17:30', end:'19:00', cells:[
+      { court:1, status:'libre' }, { court:2, status:'libre' }, { court:3, status:'libre' },
+    ]},
+    { start:'19:00', end:'20:30', cells:[
+      { court:1, status:'fijo', who:'Carlos M.', sub:'Fijo · todos los martes', tel:'+54 9 11 4477-2231', freq:'Cliente fijo desde 2024' },
+      { court:2, status:'libre' },
+      { court:3, status:'tomado', who:'Sofía R.', sub:'Turno simple · seña', tel:'+54 9 11 6688-1190', freq:'3 turnos este mes' },
+    ]},
+    { start:'20:30', end:'22:00', event:'Americano abierto', cells:[
+      { court:1, status:'evento', who:'Americano', sub:'12/16 inscriptos' },
+      { court:2, status:'evento', who:'Americano', sub:'Categoría 5ª / 6ª' },
+      { court:3, status:'evento', who:'Americano', sub:'$6.000 por jugador' },
+    ]},
+    { start:'22:00', end:'23:30', cells:[
+      { court:1, status:'tomado', who:'Diego P.', sub:'Turno simple', tel:'+54 9 11 2233-7781', freq:'Primer turno' },
+      { court:2, status:'libre' }, { court:3, status:'libre' },
+    ]},
+  ];
+
+  go(s) { return () => this.setState({ screen:s, selected:null }); }
+  setFilter(f) { return () => this.setState({ filter:f, selected:null }); }
+  setTab(t) { return () => this.setState({ tab:t }); }
+  select(ri, court) { this.setState({ selected:{ ri, court } }); }
+
+  actionsFor(st, accent) {
+    const P = l => ({ label:l, bg:accent, fg:'#fff', bd:accent });
+    const N = l => ({ label:l, bg:'#fff', fg:'#221F1B', bd:'#E0DACE' });
+    const D = l => ({ label:l, bg:'#FCEEE9', fg:'#B23A28', bd:'#F1D3CB' });
+    const m = {
+      libre:  [ P('Reservar turno'), N('Marcar como clase'), N('Crear americano / torneo'), N('Bloquear horario') ],
+      tomado: [ P('Ver datos del cliente'), N('Pasar a turno fijo'), N('Reprogramar'), D('Dar de baja y avisar') ],
+      fijo:   [ P('Ver datos del cliente'), N('Editar recurrencia'), D('Suspender sólo por hoy') ],
+      clase:  [ P('Ver clase'), N('Cambiar profesor'), D('Liberar horario') ],
+      evento: [ P('Ver inscriptos (12)'), N('Editar evento'), N('Compartir link de inscripción'), D('Cancelar evento') ],
+    };
+    return m[st] || [];
+  }
+
+  renderVals() {
+    const s = this.state;
+    const accent = (this.props && this.props.accentColor) || '#C96442';
+    const club = (this.props && this.props.clubName) || 'Pádel Central';
+    const filterId = s.filter === 'all' ? null : parseInt(s.filter, 10);
+
+    const rows = this.EVENING.map((r, ri) => {
+      const visible = r.cells.filter(c => filterId === null || c.court === filterId);
+      const cells = visible.map(c => {
+        const st = this.STATUS[c.status];
+        const libre = c.status === 'libre';
+        return {
+          bg:st.bg, bd:st.bd, fg:st.fg, dot:st.dot, statusLabel:st.label,
+          who: libre ? '' : (c.who || ''),
+          sub: libre ? 'Disponible' : (c.sub || ''),
+          onClick: () => this.select(ri, c.court),
+        };
+      });
+      const free = r.cells.filter(c => c.status === 'libre').length;
+      const total = r.cells.length;
+      const lvl = free === total ? 'g' : (free === 0 ? 'r' : 'a');
+      const sum = {
+        g: { dot:'#3E9B63', bg:'#E9F3EA', fg:'#2F7D4E', txt:'Todas libres' },
+        a: { dot:'#D9A93B', bg:'#F8EFD7', fg:'#90701E', txt: free + '/' + total + ' libres' },
+        r: { dot:'#C2887A', bg:'#F3E7E2', fg:'#9A5E4C', txt:'Completo' },
+      }[lvl];
+      return { start:r.start, end:r.end, range:r.start + ' – ' + r.end, cells, sum, event:r.event || '', hasEvent: !!r.event };
+    });
+
+    let sel = null;
+    if (s.selected) {
+      const r = this.EVENING[s.selected.ri];
+      const c = r.cells.find(x => x.court === s.selected.court);
+      const st = this.STATUS[c.status];
+      sel = {
+        range: r.start + ' – ' + r.end,
+        court: 'Cancha ' + c.court,
+        statusLabel: st.label, dot:st.dot, fg:st.fg, bg:st.bg, bd:st.bd,
+        who: c.who || '', sub: c.sub || '', tel: c.tel || '', freq: c.freq || '',
+        initial: (c.who || '·').trim().charAt(0),
+        hasClient: !!c.tel,
+        actions: this.actionsFor(c.status, accent),
+        close: () => this.setState({ selected:null }),
+      };
+    }
+
+    const headers = (filterId === null ? [1,2,3] : [filterId]).map(n => ({
+      name: 'Cancha ' + n,
+      tag: n === 3 ? 'Muro' : 'Cristal',
+    }));
+
+    const navStyle = (active) => ({
+      bg: active ? '#FFFFFF' : 'transparent',
+      fg: active ? '#221F1B' : '#6B6660',
+      bd: active ? '#E7E1D6' : 'transparent',
+    });
+    const nd = navStyle(s.screen === 'dashboard');
+    const na = navStyle(s.screen === 'ajustes');
+    const ns = navStyle(s.screen === 'estadisticas');
+
+    const ks = {
+      clase:  { bg:'#EAF0F8', fg:'#3D5C93', bd:'#D3DEF0', label:'Clases' },
+      libre:  { bg:'#E9F3EA', fg:'#2F7D4E', bd:'#CFE6D2', label:'Abiertos' },
+      fijo:   { bg:'#F1EAF7', fg:'#6B4E9E', bd:'#E2D4EF', label:'Fijos' },
+      evento: { bg:'#FBEBE2', fg:'#B0572C', bd:'#F2D6C5', label:'Evento' },
+    };
+    const cell = (k, label) => ({ bg:ks[k].bg, fg:ks[k].fg, bd:ks[k].bd, label: label || ks[k].label });
+    const plantilla = [
+      { band:'Mañana', time:'08 – 16h', cells:[ cell('clase'),cell('clase'),cell('clase'),cell('clase'),cell('clase'),cell('clase'),cell('clase') ] },
+      { band:'Tarde',  time:'16 – 20h', cells:[ cell('libre'),cell('clase','Clase + abiertos'),cell('libre'),cell('clase','Clase + abiertos'),cell('libre'),cell('libre'),cell('libre') ] },
+      { band:'Noche',  time:'20 – 23:30h', cells:[ cell('libre'),cell('evento','Americano'),cell('libre'),cell('libre'),cell('fijo','Fijos + abiertos'),cell('evento','Torneo'),cell('libre') ] },
+    ];
+
+    const tabs = [['plantilla','Plantilla semanal'],['clases','Clases'],['fijos','Turnos fijos'],['eventos','Eventos']].map(([k,l]) => ({
+      label:l, onClick:this.setTab(k),
+      bg: s.tab===k ? '#FFFFFF' : 'transparent',
+      fg: s.tab===k ? '#221F1B' : '#6B6660',
+      sh: s.tab===k ? '0 1px 2px rgba(0,0,0,.05)' : 'none',
+    }));
+
+    return {
+      accent, club,
+      isLanding: s.screen === 'landing',
+      isLogin: s.screen === 'login',
+      isApp: ['dashboard','ajustes','estadisticas'].includes(s.screen),
+      isDash: s.screen === 'dashboard',
+      isAjustes: s.screen === 'ajustes',
+      isStats: s.screen === 'estadisticas',
+
+      goLanding: this.go('landing'),
+      goLogin: this.go('login'),
+      goDash: this.go('dashboard'),
+      goAjustes: this.go('ajustes'),
+      goStats: this.go('estadisticas'),
+
+      navDashBg:nd.bg, navDashFg:nd.fg, navDashBd:nd.bd,
+      navAjBg:na.bg, navAjFg:na.fg, navAjBd:na.bd,
+      navStBg:ns.bg, navStFg:ns.fg, navStBd:ns.bd,
+
+      chips: ['all','1','2','3'].map(f => ({
+        label: f === 'all' ? 'Todas' : 'Cancha ' + f,
+        onClick: this.setFilter(f),
+        bg: s.filter === f ? accent : '#FFFFFF',
+        fg: s.filter === f ? '#FFFFFF' : '#54504A',
+        bd: s.filter === f ? accent : '#E0DACE',
+      })),
+      headers, rows,
+      sel, hasSel: !!sel,
+
+      tabs,
+      tabPlantilla: s.tab === 'plantilla',
+      tabClases: s.tab === 'clases',
+      tabFijos: s.tab === 'fijos',
+      tabEventos: s.tab === 'eventos',
+      weekDays: ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'],
+      plantilla,
+      clases: [
+        { prof:'Lucía Fernández', day:'Lun a Vie', time:'08:00 – 12:00', court:'Cancha 3' },
+        { prof:'Lucía Fernández', day:'Lun a Vie', time:'12:00 – 16:00', court:'Cancha 1 + 3' },
+        { prof:'Martín Sosa', day:'Mar y Jue', time:'18:00 – 19:30', court:'Cancha 2' },
+        { prof:'Romina Díaz', day:'Sábado', time:'10:00 – 13:00', court:'Cancha 1' },
+      ],
+      fijos: [
+        { who:'Carlos M.', day:'martes', time:'19:00 – 20:30', court:'Cancha 1' },
+        { who:'Grupo "Las Pibas"', day:'viernes', time:'20:30 – 22:00', court:'Cancha 2' },
+        { who:'Equipo Liga A', day:'domingos', time:'11:00 – 12:30', court:'Cancha 3' },
+      ],
+      eventos: [
+        { name:'Americano abierto', date:'Hoy · Mar 23 jun', time:'20:30 – 22:00', courts:'3 canchas', cupos:'12/16', state:'Inscripción abierta' },
+        { name:'Torneo Apertura', date:'Sáb 27 jun', time:'09:00 – 18:00', courts:'3 canchas', cupos:'24/32', state:'Programado' },
+        { name:'Clínica con ex-profesional', date:'Mié 1 jul', time:'19:00 – 21:00', courts:'2 canchas', cupos:'6/12', state:'Programado' },
+      ],
+      statBars: [ {d:'Lun',h:62},{d:'Mar',h:78},{d:'Mié',h:70},{d:'Jue',h:82},{d:'Vie',h:91},{d:'Sáb',h:96},{d:'Dom',h:74} ],
+      freq: [
+        { who:'Carlos M.', i:'C', turnos:'14 turnos', monto:'$182.000' },
+        { who:'Sofía R.', i:'S', turnos:'9 turnos', monto:'$108.000' },
+        { who:'Diego P.', i:'D', turnos:'7 turnos', monto:'$84.000' },
+        { who:'Grupo Las Pibas', i:'G', turnos:'6 turnos', monto:'$96.000' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

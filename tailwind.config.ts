@@ -9,6 +9,11 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["'Hanken Grotesk'", "system-ui", "sans-serif"],
+        serif: ["'Instrument Serif'", "Georgia", "serif"],
+        mono: ["'Space Mono'", "monospace"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -26,7 +31,19 @@ const config: Config = {
         destructive: "hsl(var(--destructive))",
         "destructive-foreground": "hsl(var(--destructive-foreground))",
         card: "hsl(var(--card))",
-        "card-foreground": "hsl(var(--card-foreground))"
+        "card-foreground": "hsl(var(--card-foreground))",
+        cancha: {
+          bg: "#F4F1EA",
+          surface: "#FCFBF8",
+          ink: "#221F1B",
+          ink2: "#6B6660",
+          ink3: "#928B7E",
+          ink4: "#A39C8F",
+          border: "#E7E1D6",
+          border2: "#E0DACE",
+          accent: "#C96442",
+          "accent-hover": "#B5573A",
+        }
       },
       borderRadius: {
         lg: "var(--radius)",

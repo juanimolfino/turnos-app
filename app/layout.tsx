@@ -1,29 +1,26 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   title: {
-    default: "AI SaaS Boilerplate",
-    template: "%s | AI SaaS Boilerplate"
+    default: "Cancha",
+    template: "%s | Cancha"
   },
-  description: "Production-ready AI micro-SaaS starter with auth, billing, async AI jobs, credits, subscriptions, and SEO.",
+  description: "La agenda de tu club de pádel en una sola pantalla.",
   openGraph: {
-    title: "AI SaaS Boilerplate",
-    description: "Launch AI micro-SaaS products with the boring production pieces already wired.",
+    title: "Cancha",
+    description: "Gestioná turnos, clases y torneos de todas tus canchas.",
     url: "/",
-    siteName: "AI SaaS Boilerplate",
+    siteName: "Cancha",
     type: "website"
   }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
-      <body className="min-h-screen font-sans antialiased">{children}</body>
+    <html lang="es">
+      <body>{children}</body>
     </html>
   );
 }

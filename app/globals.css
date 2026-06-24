@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Hanken+Grotesk:wght@400;500;600;700;800&family=Space+Mono&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -21,13 +23,31 @@
   --input: 220 13% 84%;
   --ring: 172 78% 32%;
   --radius: 0.5rem;
+
+  /* Cancha design tokens */
+  --cancha-bg: #F4F1EA;
+  --cancha-surface: #FCFBF8;
+  --cancha-ink: #221F1B;
+  --cancha-ink2: #6B6660;
+  --cancha-ink3: #928B7E;
+  --cancha-ink4: #A39C8F;
+  --cancha-border: #E7E1D6;
+  --cancha-border2: #E0DACE;
+  --cancha-accent: #C96442;
+  --cancha-accent-hover: #B5573A;
 }
 
 body {
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
+  font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  background: var(--cancha-bg);
+  color: var(--cancha-ink);
+  -webkit-font-smoothing: antialiased;
 }
 
 * {
   border-color: hsl(var(--border));
 }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #dcd6ca; border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
