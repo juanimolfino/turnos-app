@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getUserByAuthId } from "@/lib/db/queries";
+import { ensureUserProfile } from "@/lib/db/queries";
 
 export async function GET(request: NextRequest) {
   const supabase = await createSupabaseServerClient();
@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
 
   if (!user) return NextResponse.redirect(new URL("/login", request.url));
 
-  const profile = await getUserByAuthId(user.id);
+  const profile = await ensureUserProfile(user);
   if (profile?.role === "superadmin") {
     return NextResponse.redirect(new URL("/superadmin", request.url));
   }
