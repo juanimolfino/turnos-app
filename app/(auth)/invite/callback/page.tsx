@@ -68,13 +68,8 @@ export default function InviteCallbackPage() {
         return;
       }
 
-      // Create DB profile (session is now in cookies from the browser client)
-      try {
-        await fetch("/api/auth/ensure-profile", { method: "POST" });
-      } catch {
-        // Non-fatal — the redirect or dashboard will handle it
-      }
-
+      // No creamos el perfil en DB acá: el usuario recién existe cuando
+      // completa su cuenta (contraseña + nombre de cancha) en /set-password.
       router.replace("/set-password");
     }
 

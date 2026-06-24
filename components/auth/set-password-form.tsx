@@ -43,9 +43,10 @@ export function SetPasswordForm({ askClubName = false, initialClubName = "" }: P
       return;
     }
 
-    // Guardamos el nombre de la cancha (crea/actualiza el club y asocia al usuario)
-    if (askClubName) {
-      try {
+    // Recién acá creamos el perfil en DB (el usuario "existe" cuando completa su cuenta).
+    try {
+      if (askClubName) {
+        // Admin: crea el perfil + el club con el nombre de la cancha.
         const res = await fetch("/api/auth/onboarding", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -57,11 +58,19 @@ export function SetPasswordForm({ askClubName = false, initialClubName = "" }: P
           setMessage(data.error ?? "No se pudo guardar el nombre de la cancha.");
           return;
         }
-      } catch {
-        setLoading(false);
-        setMessage("No se pudo guardar el nombre de la cancha. Reintentá.");
-        return;
+      } else {
+        // Superadmin u otros: solo crea el perfil.
+        const res = await fetch("/api/auth/ensure-profile", { method: "POST" });
+        if (!res.ok) {
+          setLoading(false);
+          setMessage("No se pudo crear tu cuenta. Reintentá.");
+          return;
+        }
       }
+    } catch {
+      setLoading(false);
+      setMessage("No se pudo crear tu cuenta. Reintentá.");
+      return;
     }
 
     router.push("/dashboard");

@@ -9,6 +9,27 @@ export async function getUserByAuthId(authUserId: string) {
   return getDb().query.users.findFirst({ where: eq(users.authUserId, authUserId) });
 }
 
+/**
+ * Borra cualquier perfil DB con ese email (invitación pendiente que nunca se completó)
+ * y, si el club asociado no tiene otros usuarios, lo borra también.
+ * Las tablas dependientes (credits, subscriptions, transactions) caen por cascade.
+ */
+export async function deleteDbUserByEmail(email: string) {
+  const db = getDb();
+  const rows = await db
+    .delete(users)
+    .where(eq(users.email, email))
+    .returning({ clubId: users.clubId });
+
+  for (const row of rows) {
+    if (!row.clubId) continue;
+    const remaining = await db.query.users.findFirst({ where: eq(users.clubId, row.clubId) });
+    if (!remaining) {
+      await db.delete(clubs).where(eq(clubs.id, row.clubId)).catch(() => {});
+    }
+  }
+}
+
 export async function setUserRole(authUserId: string, role: Role, venueName?: string) {
   const db = getDb();
   await db
