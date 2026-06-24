@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Calendar, SlidersHorizontal, BarChart2, LogOut, Menu, X } from "lucide-react";
+import { Calendar, CalendarRange, SlidersHorizontal, BarChart2, LogOut, Menu, X } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 
@@ -15,6 +15,7 @@ interface SidebarProps {
 
 const NAV = [
   { href: "/dashboard", label: "Agenda del día", Icon: Calendar },
+  { href: "/agenda", label: "Agenda semanal", Icon: CalendarRange },
   { href: "/ajustes", label: "Ajustes", Icon: SlidersHorizontal },
   { href: "/estadisticas", label: "Estadísticas", Icon: BarChart2 },
 ];
@@ -72,7 +73,12 @@ export function Sidebar({ clubName, courtCount, initials }: SidebarProps) {
                 fontSize: 10, fontWeight: 600, paddingTop: 2
               }}>
                 <Icon size={20} />
-                <span style={{ lineHeight: 1 }}>{label === "Agenda del día" ? "Agenda" : label}</span>
+                <span style={{ lineHeight: 1 }}>{
+                  label === "Agenda del día" ? "Hoy"
+                  : label === "Agenda semanal" ? "Semana"
+                  : label === "Estadísticas" ? "Stats"
+                  : label
+                }</span>
               </Link>
             );
           })}

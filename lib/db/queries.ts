@@ -1,9 +1,9 @@
-import { and, count, desc, eq, isNotNull, sql, lt, gt } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, sql, lt, gt, gte, lte, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { clubs, courts, credits, jobs, subscriptions, transactions, users, bookings, customers, type JobType, type Role } from "@/lib/db/schema";
+import { clubs, courts, sports, professors, credits, jobs, subscriptions, transactions, users, bookings, customers, type JobType, type Role } from "@/lib/db/schema";
 import { sendPurchaseConfirmationEmail, sendWelcomeEmail } from "@/lib/email/send";
 import type { User } from "@supabase/supabase-js";
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 
 export async function getUserByAuthId(authUserId: string) {
   return getDb().query.users.findFirst({ where: eq(users.authUserId, authUserId) });
@@ -353,6 +353,184 @@ export async function createBooking(data: {
     notes: data.notes ?? null,
   }).returning();
   return booking;
+}
+
+// ── Canchas (courts) ────────────────────────────────────────────────────────
+const BLOCK_TYPES = ["clase", "fijo", "evento", "bloqueo"] as const;
+export type BlockType = (typeof BLOCK_TYPES)[number];
+
+export async function ensurePadelSport() {
+  const db = getDb();
+  const existing = await db.query.sports.findFirst({ where: eq(sports.slug, "padel") });
+  if (existing) return existing;
+  await db.insert(sports).values({ name: "Pádel", slug: "padel" }).onConflictDoNothing();
+  return db.query.sports.findFirst({ where: eq(sports.slug, "padel") });
+}
+
+export async function getClubCourts(clubId: string, includeInactive = false) {
+  const db = getDb();
+  const list = includeInactive
+    ? await db.select().from(courts).where(eq(courts.clubId, clubId))
+    : await db.select().from(courts).where(and(eq(courts.clubId, clubId), eq(courts.active, true)));
+  return list.sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+/**
+ * Ajusta la cantidad de canchas ACTIVAS del club al número pedido.
+ * No borra canchas (preserva historial): desactiva las sobrantes y
+ * reactiva/crea según haga falta. Devuelve las canchas activas resultantes.
+ */
+export async function setClubCourtCount(clubId: string, count: number) {
+  const db = getDb();
+  const sport = await ensurePadelSport();
+  if (!sport) throw new Error("No se pudo crear el deporte por defecto");
+
+  const all = (await db.select().from(courts).where(eq(courts.clubId, clubId)))
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+  const active = all.filter((c) => c.active);
+  const inactive = all.filter((c) => !c.active);
+
+  if (active.length > count) {
+    // Desactivar las sobrantes (de mayor orden)
+    const toOff = active.slice(count);
+    if (toOff.length) {
+      await db.update(courts).set({ active: false }).where(inArray(courts.id, toOff.map((c) => c.id)));
+    }
+  } else if (active.length < count) {
+    let need = count - active.length;
+    // Reactivar inactivas primero
+    const toOn = inactive.slice(0, need);
+    if (toOn.length) {
+      await db.update(courts).set({ active: true }).where(inArray(courts.id, toOn.map((c) => c.id)));
+      need -= toOn.length;
+    }
+    // Crear nuevas
+    for (let i = 0; i < need; i++) {
+      const order = all.length + i;
+      await db.insert(courts).values({
+        clubId,
+        sportId: sport.id,
+        name: `Cancha ${order + 1}`,
+        sortOrder: order,
+      });
+    }
+  }
+
+  return getClubCourts(clubId);
+}
+
+export async function renameCourt(clubId: string, courtId: string, name: string) {
+  const db = getDb();
+  const [updated] = await db.update(courts)
+    .set({ name })
+    .where(and(eq(courts.id, courtId), eq(courts.clubId, clubId)))
+    .returning();
+  return updated;
+}
+
+// ── Agenda semanal / bloques ─────────────────────────────────────────────────
+/** Bloques + reservas de un rango de fechas (inclusive), con nombre resuelto. */
+export async function getWeekAgenda(clubId: string, startDate: string, endDate: string) {
+  const db = getDb();
+  const rows = await db.select({
+    id: bookings.id, courtId: bookings.courtId, date: bookings.date,
+    startTime: bookings.startTime, endTime: bookings.endTime, type: bookings.type,
+    status: bookings.status, notes: bookings.notes, blockGroupId: bookings.blockGroupId,
+    customerId: bookings.customerId, professorId: bookings.professorId,
+  }).from(bookings).where(and(
+    eq(bookings.clubId, clubId),
+    gte(bookings.date, startDate),
+    lte(bookings.date, endDate),
+  ));
+
+  const profIds = [...new Set(rows.map((r) => r.professorId).filter(Boolean))] as string[];
+  const custIds = [...new Set(rows.map((r) => r.customerId).filter(Boolean))] as string[];
+  const profMap: Record<string, string> = {};
+  const custMap: Record<string, string> = {};
+  if (profIds.length) {
+    const ps = await db.select({ id: professors.id, name: professors.name }).from(professors).where(inArray(professors.id, profIds));
+    ps.forEach((p) => { profMap[p.id] = p.name; });
+  }
+  if (custIds.length) {
+    const cs = await db.select({ id: customers.id, name: customers.name }).from(customers).where(inArray(customers.id, custIds));
+    cs.forEach((c) => { custMap[c.id] = c.name; });
+  }
+
+  return rows
+    .filter((r) => r.status !== "cancelado")
+    .map((r) => ({
+      id: r.id, courtId: r.courtId, date: r.date,
+      startTime: r.startTime, endTime: r.endTime, type: r.type,
+      blockGroupId: r.blockGroupId, notes: r.notes,
+      label: r.professorId ? profMap[r.professorId] ?? null : r.customerId ? custMap[r.customerId] ?? null : null,
+    }));
+}
+
+/**
+ * Crea bloques de agenda como bookings. Para cada cancha × fecha:
+ * borra primero cualquier bloque (no reserva "simple") que se superponga,
+ * y luego inserta el nuevo. Todos comparten un blockGroupId.
+ */
+export async function createAgendaBlocks(input: {
+  clubId: string;
+  type: BlockType;
+  courtIds: string[];
+  dates: string[];
+  startTime: string;
+  endTime: string;
+  notes?: string | null;
+}) {
+  const db = getDb();
+  const blockGroupId = randomUUID();
+
+  for (const courtId of input.courtIds) {
+    for (const date of input.dates) {
+      // Borrar bloques superpuestos (solo tipos de bloque, nunca reservas "simple")
+      await db.delete(bookings).where(and(
+        eq(bookings.clubId, input.clubId),
+        eq(bookings.courtId, courtId),
+        eq(bookings.date, date),
+        inArray(bookings.type, BLOCK_TYPES as unknown as BlockType[]),
+        lt(bookings.startTime, input.endTime),
+        gt(bookings.endTime, input.startTime),
+      ));
+
+      await db.insert(bookings).values({
+        clubId: input.clubId,
+        courtId,
+        date,
+        startTime: input.startTime,
+        endTime: input.endTime,
+        type: input.type,
+        status: "confirmado",
+        notes: input.notes ?? null,
+        blockGroupId,
+      });
+    }
+  }
+
+  return { blockGroupId, count: input.courtIds.length * input.dates.length };
+}
+
+/** Elimina un único bloque (una celda). */
+export async function deleteAgendaBlock(clubId: string, bookingId: string) {
+  const db = getDb();
+  await db.delete(bookings).where(and(
+    eq(bookings.id, bookingId),
+    eq(bookings.clubId, clubId),
+    inArray(bookings.type, BLOCK_TYPES as unknown as BlockType[]),
+  ));
+}
+
+/** Elimina toda la serie de un bloque (todas las canchas/semanas), opcionalmente desde una fecha. */
+export async function deleteAgendaBlockGroup(clubId: string, blockGroupId: string, fromDate?: string) {
+  const db = getDb();
+  const conds = [
+    eq(bookings.clubId, clubId),
+    eq(bookings.blockGroupId, blockGroupId),
+  ];
+  if (fromDate) conds.push(gte(bookings.date, fromDate));
+  await db.delete(bookings).where(and(...conds));
 }
 
 export async function cancelBooking(bookingId: string, clubId: string) {

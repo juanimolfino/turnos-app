@@ -139,6 +139,9 @@ export const bookings = pgTable("bookings", {
   professorId: uuid("professor_id").references(() => professors.id),
   eventId: uuid("event_id").references(() => events.id),
   recurringRuleId: uuid("recurring_rule_id").references(() => recurringRules.id),
+  // Agrupa bloques creados juntos (multi-cancha / repetidos por semana) para poder
+  // editar o desbloquear todo el grupo de una.
+  blockGroupId: uuid("block_group_id"),
   price: integer("price"),
   paymentStatus: paymentStatusEnum("payment_status"),
   notes: text("notes"),

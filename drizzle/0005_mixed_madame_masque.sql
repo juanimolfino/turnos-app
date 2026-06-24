@@ -1,0 +1,1 @@
+ALTER TABLE "bookings" ADD COLUMN "block_group_id" uuid;
