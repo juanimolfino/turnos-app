@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 
 export default function InviteCallbackPage() {
   const [failed, setFailed] = useState(false);
   const [failMsg, setFailMsg] = useState("");
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
     async function handle() {
@@ -17,10 +16,12 @@ export default function InviteCallbackPage() {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
       );
 
-      const code       = searchParams.get("code");
-      const tokenHash  = searchParams.get("token_hash");
-      const type       = searchParams.get("type");
-      const errorParam = searchParams.get("error_description") ?? searchParams.get("error");
+      // Leemos todo de la URL en el cliente (evita useSearchParams + Suspense)
+      const qs         = new URLSearchParams(window.location.search);
+      const code       = qs.get("code");
+      const tokenHash  = qs.get("token_hash");
+      const type       = qs.get("type");
+      const errorParam = qs.get("error_description") ?? qs.get("error");
 
       // Hash fragment tokens — only visible client-side (implicit flow)
       const hashStr = window.location.hash.slice(1);

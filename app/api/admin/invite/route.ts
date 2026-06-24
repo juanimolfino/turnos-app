@@ -29,11 +29,8 @@ export async function POST(request: NextRequest) {
 
   const { email, role, venueName } = parsed.data;
 
-  if (role === "admin" && !venueName) {
-    return NextResponse.json({ error: "El nombre de la cancha es requerido para admins" }, { status: 400 });
-  }
-
-  // For admins, create the club now so the club_id is available when they first log in
+  // El nombre de la cancha es opcional: si el superadmin lo carga, se pre-crea el club;
+  // si no, el admin lo define en su onboarding (set-password).
   let clubId: string | undefined;
   if (role === "admin" && venueName) {
     const club = await createClub(venueName);

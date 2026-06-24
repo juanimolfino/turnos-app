@@ -244,6 +244,7 @@ export async function getClubById(id: string) {
 }
 
 export async function updateClub(id: string, data: {
+  name?: string;
   address?: string | null;
   city?: string | null;
   neighborhood?: string | null;
@@ -255,6 +256,31 @@ export async function updateClub(id: string, data: {
   const db = getDb();
   const [updated] = await db.update(clubs).set(data).where(eq(clubs.id, id)).returning();
   return updated;
+}
+
+/**
+ * Onboarding del admin: crea el club si no existe y le pone el nombre de la cancha,
+ * dejando al usuario asociado. Idempotente.
+ */
+export async function setOnboardingClubName(authUserId: string, clubName: string) {
+  const db = getDb();
+  const profile = await db.query.users.findFirst({ where: eq(users.authUserId, authUserId) });
+  if (!profile) throw new Error("Perfil no encontrado");
+
+  let clubId = profile.clubId;
+  if (clubId) {
+    await db.update(clubs).set({ name: clubName }).where(eq(clubs.id, clubId));
+  } else {
+    const [club] = await db.insert(clubs).values({ name: clubName }).returning();
+    clubId = club.id;
+  }
+
+  await db
+    .update(users)
+    .set({ clubId, venueName: clubName, updatedAt: new Date() })
+    .where(eq(users.authUserId, authUserId));
+
+  return { clubId };
 }
 
 export async function generateApiKey(clubId: string) {
