@@ -19,12 +19,15 @@ export const transactionTypeEnum = pgEnum("transaction_type", [
   "credit_refund",
   "signup_bonus"
 ]);
+export const roleEnum = pgEnum("role", ["superadmin", "admin"]);
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
   authUserId: uuid("auth_user_id").notNull().unique(),
   email: text("email").notNull(),
   fullName: text("full_name"),
+  role: roleEnum("role"),
+  venueName: text("venue_name"),
   stripeCustomerId: text("stripe_customer_id").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
@@ -85,3 +88,4 @@ export type User = typeof users.$inferSelect;
 export type Job = typeof jobs.$inferSelect;
 export type JobType = typeof jobTypeEnum.enumValues[number];
 export type JobStatus = typeof jobStatusEnum.enumValues[number];
+export type Role = typeof roleEnum.enumValues[number];

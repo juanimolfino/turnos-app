@@ -1,8 +1,27 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { credits, jobs, subscriptions, transactions, users, type JobType } from "@/lib/db/schema";
+import { credits, jobs, subscriptions, transactions, users, type JobType, type Role } from "@/lib/db/schema";
 import { sendPurchaseConfirmationEmail, sendWelcomeEmail } from "@/lib/email/send";
 import type { User } from "@supabase/supabase-js";
+
+export async function getUserByAuthId(authUserId: string) {
+  return getDb().query.users.findFirst({ where: eq(users.authUserId, authUserId) });
+}
+
+export async function setUserRole(authUserId: string, role: Role, venueName?: string) {
+  const db = getDb();
+  await db
+    .update(users)
+    .set({ role, venueName: venueName ?? null, updatedAt: new Date() })
+    .where(eq(users.authUserId, authUserId));
+}
+
+export async function getAllAdmins() {
+  return getDb().query.users.findMany({
+    where: isNotNull(users.role),
+    columns: { id: true, email: true, role: true, venueName: true, createdAt: true }
+  });
+}
 
 export async function ensureUserProfile(authUser: User) {
   const db = getDb();
@@ -12,13 +31,18 @@ export async function ensureUserProfile(authUser: User) {
 
   const signupCredits = Number(process.env.FREE_SIGNUP_CREDITS ?? 5);
 
+  const invitedRole = authUser.user_metadata?.invited_role as Role | undefined;
+  const invitedVenueName = authUser.user_metadata?.venue_name as string | undefined;
+
   const { profile, createdProfile } = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(users)
       .values({
         authUserId: authUser.id,
         email,
-        fullName: authUser.user_metadata?.full_name ?? authUser.user_metadata?.name ?? null
+        fullName: authUser.user_metadata?.full_name ?? authUser.user_metadata?.name ?? null,
+        role: invitedRole ?? null,
+        venueName: invitedVenueName ?? null
       })
       .onConflictDoNothing({ target: users.authUserId })
       .returning();

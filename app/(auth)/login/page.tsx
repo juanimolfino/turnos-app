@@ -1,6 +1,6 @@
 import { LoginForm } from "@/components/auth/login-form";
 
-export const metadata = { title: "Login" };
+export const metadata = { title: "Ingresar" };
 
 export default async function LoginPage({
   searchParams
@@ -11,9 +11,9 @@ export default async function LoginPage({
 
   return (
     <main className="mx-auto grid min-h-screen max-w-md content-center px-6">
-      <h1 className="text-3xl font-semibold">Sign in</h1>
+      <h1 className="text-3xl font-semibold">Ingresar</h1>
       <p className="mb-6 mt-2 text-muted-foreground">
-        Use a magic link or Google OAuth to access the dashboard.
+        Accedé con tu email y contraseña.
       </p>
       <LoginForm initialMessage={error} />
     </main>
