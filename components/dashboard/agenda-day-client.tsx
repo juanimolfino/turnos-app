@@ -49,6 +49,7 @@ function toTime(m: number) {
   const mm = (m % 60).toString().padStart(2, "0");
   return `${h}:${mm}`;
 }
+function toMin(t: string) { const [h, m] = t.split(":").map(Number); return h * 60 + m; }
 function addDays(dateStr: string, n: number) {
   const d = new Date(dateStr + "T12:00:00");
   d.setDate(d.getDate() + n);
@@ -111,13 +112,22 @@ export function AgendaDayClient({ courts, blocks, date, clubName, timezone }: Pr
   }, [blocks, courts]);
 
   const isToday = now?.date === date;
+  const nowMin = now ? now.minutes : null;
   const nowHHMM = now ? toTime(now.minutes) : null;
-  // índice de la franja antes de la cual va la línea de "ahora"
-  const lineIdx = useMemo(() => {
-    if (!isToday || !nowHHMM) return -1;
-    const idx = segments.findIndex((s) => s.end > nowHHMM!);
-    return idx === -1 ? segments.length : idx;
-  }, [segments, isToday, nowHHMM]);
+
+  // Ubicación de la línea de "ahora":
+  //  - currentIdx: índice de la franja que contiene la hora actual (la línea
+  //    se dibuja DENTRO de esa franja, a la altura proporcional).
+  //  - edgeBefore/edgeAfter: la hora actual cae antes/después de toda la grilla.
+  const { currentIdx, edgeBefore, edgeAfter } = useMemo(() => {
+    if (!isToday || nowMin === null || segments.length === 0) {
+      return { currentIdx: -1, edgeBefore: false, edgeAfter: false };
+    }
+    if (nowMin < toMin(segments[0].start)) return { currentIdx: -1, edgeBefore: true, edgeAfter: false };
+    if (nowMin >= toMin(segments[segments.length - 1].end)) return { currentIdx: -1, edgeBefore: false, edgeAfter: true };
+    const idx = segments.findIndex((s) => toMin(s.start) <= nowMin && nowMin < toMin(s.end));
+    return { currentIdx: idx, edgeBefore: false, edgeAfter: false };
+  }, [segments, isToday, nowMin]);
 
   const headerCols = isMobile;
 
@@ -202,8 +212,13 @@ export function AgendaDayClient({ courts, blocks, date, clubName, timezone }: Pr
               </div>
             </div>
 
+            {edgeBefore && <NowLine time={nowHHMM!} isMobile={isMobile} />}
             {segments.map((row, idx) => {
               const past = isToday && nowHHMM !== null && row.end <= nowHHMM;
+              const isCurrent = idx === currentIdx;
+              const frac = isCurrent && nowMin !== null
+                ? (nowMin - toMin(row.start)) / Math.max(1, toMin(row.end) - toMin(row.start))
+                : 0;
               const sem = SEMAFORO[row.level];
               const semText = row.level === "green" ? "Todas libres" : row.level === "red" ? "Completo" : `${row.free}/${row.total} libres`;
               const visibleCells = courtFilter === "all" ? row.cells : row.cells.filter((c) => c.court.id === courtFilter);
@@ -211,8 +226,8 @@ export function AgendaDayClient({ courts, blocks, date, clubName, timezone }: Pr
 
               return (
                 <div key={row.start}>
-                  {idx === lineIdx && <NowLine time={nowHHMM!} isMobile={isMobile} />}
-                  <div style={{ display: "flex", gap: 8, marginBottom: 8, opacity: past ? 0.45 : 1 }}>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 8, opacity: past ? 0.45 : 1, position: isCurrent ? "relative" : "static" }}>
+                    {isCurrent && <NowOverlay frac={frac} time={nowHHMM!} isMobile={isMobile} />}
                     {/* Hora */}
                     <div style={{ width: 64, flexShrink: 0, textAlign: "right", paddingRight: 4, paddingTop: 8 }}>
                       <div style={{ fontSize: 14, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: "#221F1B" }}>{row.start}</div>
@@ -265,7 +280,7 @@ export function AgendaDayClient({ courts, blocks, date, clubName, timezone }: Pr
                 </div>
               );
             })}
-            {lineIdx === segments.length && <NowLine time={nowHHMM!} isMobile={isMobile} />}
+            {edgeAfter && <NowLine time={nowHHMM!} isMobile={isMobile} />}
           </div>
         </div>
       )}
@@ -319,6 +334,24 @@ function MergedBand({ block, start, end, courtCount, onClick }: { block: Block; 
       <span style={{ fontSize: 12, opacity: 0.85 }}>
         {block.notes ? `${block.notes} · ` : ""}{start} – {end} · las {courtCount} canchas
       </span>
+    </div>
+  );
+}
+
+// Línea de "ahora" superpuesta DENTRO de la franja actual, a la altura
+// proporcional al avance de la hora dentro de esa franja.
+function NowOverlay({ frac, time, isMobile }: { frac: number; time: string; isMobile: boolean }) {
+  return (
+    <div style={{
+      position: "absolute", left: 0, right: 0, top: `${Math.min(100, Math.max(0, frac * 100))}%`,
+      transform: "translateY(-1px)", display: "flex", gap: 8, alignItems: "center",
+      pointerEvents: "none", zIndex: 5,
+    }}>
+      <div style={{ width: 64, flexShrink: 0, textAlign: "right", paddingRight: 4 }}>
+        <span style={{ background: "#C96442", color: "#fff", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999 }}>{time}</span>
+      </div>
+      {!isMobile && <div style={{ width: 132, flexShrink: 0 }} />}
+      <div style={{ flex: 1, borderTop: "2px solid #C96442" }} />
     </div>
   );
 }
