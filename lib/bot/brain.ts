@@ -20,6 +20,10 @@ No inventes canchas, precios ni disponibilidad. Mantené las respuestas breves (
 const FALLBACK =
   "Uy, estoy teniendo un problemita para responder en este momento. ¿Probás de nuevo en un ratito? 🙏";
 
+// Un turno de la conversación. El cerebro recibe el historial ya armado; no sabe
+// de dónde sale (DB, canal, etc.).
+export type ChatTurn = { role: "user" | "assistant"; content: string };
+
 let client: OpenAI | null = null;
 function getOpenAI(): OpenAI {
   // Singleton lazy server-side. La API key vive solo en el entorno del servidor.
@@ -27,13 +31,15 @@ function getOpenAI(): OpenAI {
   return client;
 }
 
-export async function generarRespuesta(text: string): Promise<string> {
+// history default vacío: preserva el comportamiento (y los tests) de fases previas.
+export async function generarRespuesta(text: string, history: ChatTurn[] = []): Promise<string> {
   try {
     const completion = await getOpenAI().chat.completions.create(
       {
         model: MODEL,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
+          ...history,
           { role: "user", content: text },
         ],
         temperature: 0.6,

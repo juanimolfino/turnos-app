@@ -217,6 +217,18 @@ export const transactions = pgTable("transactions", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 });
 
+// ── Bot: memoria de conversación ─────────────────────────────────────────────────
+// Una fila por hilo. conversation_key = `${channel}:${userId}` (ej. "telegram:12345"),
+// así Telegram y el futuro WhatsApp no se mezclan.
+export const botConversations = pgTable("bot_conversations", {
+  conversationKey: text("conversation_key").primaryKey(),
+  messages: jsonb("messages")
+    .$type<{ role: "user" | "assistant"; content: string }[]>()
+    .default(sql`'[]'::jsonb`)
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+});
+
 // ── Relations ──────────────────────────────────────────────────────────────────
 export const userRelations = relations(users, ({ one, many }) => ({
   club: one(clubs, { fields: [users.clubId], references: [clubs.id] }),
@@ -266,3 +278,4 @@ export type BookingType = typeof bookingTypeEnum.enumValues[number];
 export type BookingStatus = typeof bookingStatusEnum.enumValues[number];
 export type Event = typeof events.$inferSelect;
 export type RecurringRule = typeof recurringRules.$inferSelect;
+export type BotConversation = typeof botConversations.$inferSelect;

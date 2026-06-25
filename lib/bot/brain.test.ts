@@ -31,6 +31,23 @@ describe("generarRespuesta", () => {
     expect(args.messages[1]).toEqual({ role: "user", content: "hola" });
   });
 
+  it("incluye el historial entre el system prompt y el mensaje nuevo", async () => {
+    create.mockImplementation(async () => okResponse("dale"));
+    const history = [
+      { role: "user" as const, content: "hola" },
+      { role: "assistant" as const, content: "¿para qué día?" },
+    ];
+    await generarRespuesta("el sábado", history);
+
+    const args = create.mock.calls.at(-1)![0];
+    expect(args.messages).toEqual([
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: "hola" },
+      { role: "assistant", content: "¿para qué día?" },
+      { role: "user", content: "el sábado" },
+    ]);
+  });
+
   it("devuelve el fallback si la respuesta viene vacía", async () => {
     create.mockImplementation(async () => okResponse(""));
     const out = await generarRespuesta("hola");
