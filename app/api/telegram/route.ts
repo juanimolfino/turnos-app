@@ -1,11 +1,13 @@
-import { NextResponse, type NextRequest, after } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { handleIncomingMessage } from "@/lib/bot/handle";
 import { secretMatches } from "@/lib/bot/verify";
 
 // Webhook del bot de Telegram. Telegram envía un "update" por cada mensaje.
 // Validamos el secret token (tiempo constante), extraemos chat.id + text, y
-// respondemos 200 enseguida; el procesamiento corre con after() tras enviar la
-// respuesta (soportado en Vercel), para no demorar el ack a Telegram.
+// ESPERAMOS el procesamiento (incluida la llamada a la IA) antes de devolver
+// 200: en serverless (Vercel) la función se congela apenas responde, así que un
+// fire-and-forget cortaría la llamada a OpenAI. Ante error procesando, igual
+// devolvemos 200 (el fallback ya se envió) para que Telegram no reintente.
 
 type TelegramUpdate = {
   message?: {
@@ -33,19 +35,16 @@ export async function POST(request: NextRequest) {
 
   // Solo procesamos mensajes de texto; el resto se ignora (200 igual).
   if (chatId != null && typeof text === "string") {
-    // after(): se ejecuta luego de enviar el 200, sin bloquear el ack.
-    after(async () => {
-      try {
-        await handleIncomingMessage({
-          channel: "telegram",
-          userId: String(chatId),
-          text,
-        });
-      } catch (err) {
-        // No propagamos a Telegram para evitar reintentos en loop.
-        console.error("[telegram] error procesando mensaje:", err);
-      }
-    });
+    try {
+      await handleIncomingMessage({
+        channel: "telegram",
+        userId: String(chatId),
+        text,
+      });
+    } catch (err) {
+      // No propagamos a Telegram para evitar reintentos en loop.
+      console.error("[telegram] error procesando mensaje:", err);
+    }
   }
 
   return NextResponse.json({ ok: true });

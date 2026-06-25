@@ -1,14 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { NextRequest } from "next/server";
 
-// Capturamos los callbacks de after() y los corremos manualmente, ya que fuera
-// del runtime de Next no hay scope de request.
-const afterCallbacks: Array<() => unknown> = [];
-vi.mock("next/server", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("next/server")>();
-  return { ...actual, after: (fn: () => unknown) => afterCallbacks.push(fn) };
-});
-
 const handleIncomingMessage = vi.fn();
 vi.mock("@/lib/bot/handle", () => ({
   handleIncomingMessage: (...args: unknown[]) => handleIncomingMessage(...args),
@@ -28,15 +20,11 @@ function req(body: unknown, secret: string | null): NextRequest {
   }) as unknown as NextRequest;
 }
 
-async function runAfter() {
-  for (const cb of afterCallbacks) await cb();
-}
-
 describe("POST /api/telegram", () => {
   beforeEach(() => {
     process.env.TELEGRAM_WEBHOOK_SECRET = SECRET;
     handleIncomingMessage.mockReset();
-    afterCallbacks.length = 0;
+    handleIncomingMessage.mockResolvedValue(undefined);
   });
 
   it("devuelve 401 si falta el header del secret", async () => {
@@ -51,10 +39,9 @@ describe("POST /api/telegram", () => {
     expect(handleIncomingMessage).not.toHaveBeenCalled();
   });
 
-  it("devuelve 200 y procesa un mensaje de texto válido", async () => {
+  it("espera el procesamiento y devuelve 200 con un mensaje de texto válido", async () => {
     const res = await POST(req({ message: { chat: { id: 42 }, text: "hola" } }, SECRET));
     expect(res.status).toBe(200);
-    await runAfter();
     expect(handleIncomingMessage).toHaveBeenCalledWith({
       channel: "telegram",
       userId: "42",
@@ -62,10 +49,15 @@ describe("POST /api/telegram", () => {
     });
   });
 
+  it("devuelve 200 aunque el procesamiento falle (no reintentos de Telegram)", async () => {
+    handleIncomingMessage.mockRejectedValueOnce(new Error("openai caído"));
+    const res = await POST(req({ message: { chat: { id: 7 }, text: "hola" } }, SECRET));
+    expect(res.status).toBe(200);
+  });
+
   it("ignora updates sin texto pero responde 200", async () => {
     const res = await POST(req({ message: { chat: { id: 42 } } }, SECRET));
     expect(res.status).toBe(200);
-    await runAfter();
     expect(handleIncomingMessage).not.toHaveBeenCalled();
   });
 
