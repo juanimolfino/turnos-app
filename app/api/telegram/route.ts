@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest, after } from "next/server";
-import { timingSafeEqual } from "node:crypto";
 import { handleIncomingMessage } from "@/lib/bot/handle";
+import { secretMatches } from "@/lib/bot/verify";
 
 // Webhook del bot de Telegram. Telegram envía un "update" por cada mensaje.
 // Validamos el secret token (tiempo constante), extraemos chat.id + text, y
@@ -13,20 +13,6 @@ type TelegramUpdate = {
     text?: string;
   };
 };
-
-// Comparación en tiempo constante. timingSafeEqual exige buffers de igual largo,
-// así que normalizamos longitudes manteniendo el comportamiento constante.
-function secretMatches(expected: string, got: string | null): boolean {
-  if (!got) return false;
-  const a = Buffer.from(expected);
-  const b = Buffer.from(got);
-  if (a.length !== b.length) {
-    // Comparamos contra sí mismo para no cortocircuitar por longitud.
-    timingSafeEqual(a, a);
-    return false;
-  }
-  return timingSafeEqual(a, b);
-}
 
 export async function POST(request: NextRequest) {
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
