@@ -10,7 +10,8 @@
     "lint": "next lint",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "inngest": "inngest-cli dev -u http://localhost:3000/api/inngest"
+    "inngest": "inngest-cli dev -u http://localhost:3000/api/inngest",
+    "set-webhook": "node scripts/set-webhook.mjs"
   },
   "dependencies": {
     "@fal-ai/client": "^1.6.2",
