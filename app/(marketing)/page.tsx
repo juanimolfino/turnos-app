@@ -99,7 +99,7 @@ export default function HomePage() {
             fontFamily: "'Space Mono', monospace", fontSize: 11,
             padding: "5px 10px", borderRadius: 7
           }}>
-            // reemplazá con foto real de la cancha
+            {"// reemplazá con foto real de la cancha"}
           </div>
         </div>
       </div>

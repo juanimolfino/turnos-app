@@ -45,7 +45,6 @@ export default function InviteCallbackPage() {
         // OTP flow — what Supabase sends for server-created invites
         const { error } = await supabase.auth.verifyOtp({
           token_hash: tokenHash,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           type: (type ?? "invite") as any,
         });
         authError = error;
