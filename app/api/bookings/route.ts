@@ -8,7 +8,7 @@ const schema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   startTime: z.string(),
   endTime: z.string(),
-  type: z.enum(["simple", "clase", "fijo", "evento", "bloqueo"]),
+  type: z.enum(["simple", "clase", "fijo", "flex", "evento", "americano", "torneo", "bloqueo"]),
   status: z.enum(["confirmado", "pendiente", "cancelado"]).optional(),
   customerId: z.string().uuid().nullable().optional(),
   professorId: z.string().uuid().nullable().optional(),

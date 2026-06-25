@@ -1,17 +1,14 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getUserByAuthId } from "@/lib/db/queries";
-import { getDb } from "@/lib/db";
-import { clubs } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { AgendaGrid } from "@/components/dashboard/agenda-grid";
+import { getUserByAuthId, getClubCourts, getWeekAgenda } from "@/lib/db/queries";
+import { AgendaDayClient } from "@/components/dashboard/agenda-day-client";
 
 export const metadata = { title: "Agenda del día" };
 
 export default async function DashboardPage({
-  searchParams
+  searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>
+  searchParams: Promise<{ date?: string }>;
 }) {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -41,20 +38,16 @@ export default async function DashboardPage({
   const { date: dateParam } = await searchParams;
   const date = dateParam ?? new Date().toISOString().slice(0, 10);
 
-  const db = getDb();
-  const [club] = await db.select().from(clubs).where(eq(clubs.id, profile.clubId));
-
-  const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const res = await fetch(`${base}/api/agenda?date=${date}&clubId=${profile.clubId}`, { cache: "no-store" });
-  const data = res.ok ? await res.json() : { courts: [], slots: [], hasMorningClasses: false };
+  const [courts, blocks] = await Promise.all([
+    getClubCourts(profile.clubId),
+    getWeekAgenda(profile.clubId, date, date),
+  ]);
 
   return (
-    <AgendaGrid
-      courts={data.courts}
-      slots={data.slots}
-      hasMorningClasses={data.hasMorningClasses}
+    <AgendaDayClient
+      courts={courts.map((c) => ({ id: c.id, name: c.name }))}
+      blocks={blocks}
       date={date}
-      clubName={club?.name ?? "Mi Club"}
     />
   );
 }

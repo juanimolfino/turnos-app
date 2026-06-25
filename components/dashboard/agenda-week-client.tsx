@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Plus, Settings2, X, Trash2 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 
-type BlockType = "clase" | "fijo" | "evento" | "bloqueo";
+type BlockType = "clase" | "fijo" | "flex" | "americano" | "torneo" | "bloqueo";
 
 interface Court { id: string; name: string; }
 interface Block {
@@ -28,12 +28,19 @@ interface Props {
 }
 
 const TYPE_META: Record<BlockType, { label: string; short: string; bg: string; bd: string; fg: string }> = {
-  clase:   { label: "Clases",            short: "Clases",  bg: "#EAF0F8", bd: "#D3DEF0", fg: "#3D5C93" },
-  fijo:    { label: "Turno fijo",         short: "Fijo",    bg: "#F1EAF7", bd: "#E2D4EF", fg: "#6B4E9E" },
-  evento:  { label: "Americano / Evento", short: "Evento",  bg: "#FBEBE2", bd: "#F2D6C5", fg: "#B0572C" },
-  bloqueo: { label: "Cerrado",            short: "Cerrado", bg: "#EFECE6", bd: "#DED8CC", fg: "#8A8377" },
+  clase:     { label: "Clases",     short: "Clases",    bg: "#EAF0F8", bd: "#D3DEF0", fg: "#3D5C93" },
+  fijo:      { label: "Turno fijo", short: "Fijo",      bg: "#F1EAF7", bd: "#E2D4EF", fg: "#6B4E9E" },
+  flex:      { label: "Turno flex", short: "Flex",      bg: "#E4F1EF", bd: "#C9E5E0", fg: "#2E7D6F" },
+  americano: { label: "Americano",  short: "Americano", bg: "#FBEBE2", bd: "#F2D6C5", fg: "#B0572C" },
+  torneo:    { label: "Torneo",     short: "Torneo",    bg: "#F7EFD9", bd: "#EBDFBF", fg: "#8A6D1F" },
+  bloqueo:   { label: "Cerrado",    short: "Cerrado",   bg: "#EFECE6", bd: "#DED8CC", fg: "#8A8377" },
 };
-const TYPES: BlockType[] = ["clase", "fijo", "evento", "bloqueo"];
+// Mapea el tipo guardado (incluye el legacy "evento") a su metadata visual.
+function metaFor(type: string) {
+  if (type === "evento") return TYPE_META.americano;
+  return TYPE_META[type as BlockType] ?? TYPE_META.bloqueo;
+}
+const TYPES: BlockType[] = ["clase", "fijo", "flex", "americano", "torneo", "bloqueo"];
 const DAY_NAMES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
 // ── helpers de tiempo/fecha ────────────────────────────────────────────────
@@ -295,7 +302,7 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
                     />
                   );
                 }
-                const meta = TYPE_META[block.type as BlockType] ?? TYPE_META.bloqueo;
+                const meta = metaFor(block.type);
                 const isFirst = block.startTime >= slot.start && block.startTime < slot.end
                   || (slot.start === slots[0].start && toMin(block.startTime) < gridStart);
                 return (
@@ -406,7 +413,14 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
               <input
                 value={nNotes}
                 onChange={(e) => setNNotes(e.target.value)}
-                placeholder={nType === "clase" ? "Ej: Profe Caro" : nType === "fijo" ? "Ej: Grupo Martín" : "Ej: Americano mixto"}
+                placeholder={
+                  nType === "clase" ? "Ej: Profe Caro"
+                  : nType === "fijo" ? "Ej: Grupo Martín"
+                  : nType === "flex" ? "Ej: Turno suelto"
+                  : nType === "torneo" ? "Ej: quién juega (o dejar vacío)"
+                  : nType === "americano" ? "Ej: Americano mixto"
+                  : "Ej: Mantenimiento"
+                }
                 style={inputStyle}
               />
             </Group>
@@ -431,7 +445,7 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
 
       {/* ── Modal: ver/eliminar bloque ── */}
       {viewBlock && (() => {
-        const meta = TYPE_META[viewBlock.type as BlockType] ?? TYPE_META.bloqueo;
+        const meta = metaFor(viewBlock.type);
         const courtName = courts.find((c) => c.id === viewBlock.courtId)?.name ?? "Cancha";
         return (
           <Modal onClose={() => setViewBlock(null)} title="Bloque">
@@ -563,15 +577,19 @@ function CourtsManager({ courts, onChanged, onClose }: { courts: Court[]; onChan
 }
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+  const isMobile = useIsMobile();
   return (
     <div onClick={onClose} style={{
       position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,.42)",
-      display: "flex", alignItems: "flex-end", justifyContent: "center", padding: 0,
+      display: "flex", alignItems: isMobile ? "flex-end" : "center", justifyContent: "center",
+      padding: isMobile ? 0 : 20,
     }}>
       <div onClick={(e) => e.stopPropagation()} style={{
-        background: "#F8F6F0", borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 560,
-        maxHeight: "92vh", overflowY: "auto", padding: "18px 18px 28px",
-        boxShadow: "0 -8px 30px -10px rgba(0,0,0,.25)",
+        background: "#F8F6F0",
+        borderRadius: isMobile ? "18px 18px 0 0" : 18,
+        width: "100%", maxWidth: 560,
+        maxHeight: isMobile ? "92vh" : "88vh", overflowY: "auto", padding: "18px 18px 28px",
+        boxShadow: isMobile ? "0 -8px 30px -10px rgba(0,0,0,.25)" : "0 20px 50px -12px rgba(0,0,0,.35)",
       }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <div style={{ fontFamily: "'Instrument Serif',Georgia,serif", fontSize: 22, color: "#221F1B" }}>{title}</div>

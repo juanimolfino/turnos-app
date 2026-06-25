@@ -327,7 +327,7 @@ export async function createBooking(data: {
   date: string;
   startTime: string;
   endTime: string;
-  type: "simple" | "clase" | "fijo" | "evento" | "bloqueo";
+  type: "simple" | "clase" | "fijo" | "flex" | "evento" | "americano" | "torneo" | "bloqueo";
   status?: "confirmado" | "pendiente" | "cancelado";
   customerId?: string | null;
   professorId?: string | null;
@@ -356,7 +356,7 @@ export async function createBooking(data: {
 }
 
 // ── Canchas (courts) ────────────────────────────────────────────────────────
-const BLOCK_TYPES = ["clase", "fijo", "evento", "bloqueo"] as const;
+const BLOCK_TYPES = ["clase", "fijo", "flex", "evento", "americano", "torneo", "bloqueo"] as const;
 export type BlockType = (typeof BLOCK_TYPES)[number];
 
 export async function ensurePadelSport() {

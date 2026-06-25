@@ -23,7 +23,7 @@ export const transactionTypeEnum = pgEnum("transaction_type", [
 export const roleEnum = pgEnum("role", ["superadmin", "admin"]);
 
 // ── Cancha enums ───────────────────────────────────────────────────────────────
-export const bookingTypeEnum = pgEnum("booking_type", ["simple", "clase", "fijo", "evento", "bloqueo"]);
+export const bookingTypeEnum = pgEnum("booking_type", ["simple", "clase", "fijo", "flex", "evento", "americano", "torneo", "bloqueo"]);
 export const bookingStatusEnum = pgEnum("booking_status", ["confirmado", "cancelado", "pendiente"]);
 export const eventKindEnum = pgEnum("event_kind", ["americano", "torneo", "clinica"]);
 export const eventStatusEnum = pgEnum("event_status", ["inscripcion_abierta", "programado", "finalizado", "cancelado"]);
