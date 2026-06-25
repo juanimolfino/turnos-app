@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getUserByAuthId, getClubCourts, getWeekAgenda } from "@/lib/db/queries";
+import { getDb } from "@/lib/db";
+import { clubs } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { todayInTz } from "@/lib/tz";
 import { AgendaWeekClient } from "@/components/dashboard/agenda-week-client";
 
 export const metadata = { title: "Agenda semanal" };
@@ -49,8 +53,12 @@ export default async function AgendaPage({
     );
   }
 
+  const db = getDb();
+  const [club] = await db.select().from(clubs).where(eq(clubs.id, profile.clubId));
+  const tz = club?.timezone ?? "America/Argentina/Buenos_Aires";
+
   const { week } = await searchParams;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayInTz(tz);
   const weekStart = mondayOf(week ?? today);
   const weekEnd = addDays(weekStart, 6);
 

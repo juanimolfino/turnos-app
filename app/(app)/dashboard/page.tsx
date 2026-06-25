@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getUserByAuthId, getClubCourts, getWeekAgenda } from "@/lib/db/queries";
+import { getDb } from "@/lib/db";
+import { clubs } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { todayInTz } from "@/lib/tz";
 import { AgendaDayClient } from "@/components/dashboard/agenda-day-client";
 
 export const metadata = { title: "Agenda del día" };
@@ -35,8 +39,12 @@ export default async function DashboardPage({
     );
   }
 
+  const db = getDb();
+  const [club] = await db.select().from(clubs).where(eq(clubs.id, profile.clubId));
+  const tz = club?.timezone ?? "America/Argentina/Buenos_Aires";
+
   const { date: dateParam } = await searchParams;
-  const date = dateParam ?? new Date().toISOString().slice(0, 10);
+  const date = dateParam ?? todayInTz(tz);
 
   const [courts, blocks] = await Promise.all([
     getClubCourts(profile.clubId),
@@ -48,6 +56,8 @@ export default async function DashboardPage({
       courts={courts.map((c) => ({ id: c.id, name: c.name }))}
       blocks={blocks}
       date={date}
+      clubName={club?.name ?? "Mi Club"}
+      timezone={tz}
     />
   );
 }

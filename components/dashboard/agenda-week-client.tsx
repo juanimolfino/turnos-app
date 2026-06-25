@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Plus, Settings2, X, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Settings2, X, Trash2, Pencil } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 
 type BlockType = "clase" | "fijo" | "flex" | "americano" | "torneo" | "bloqueo";
@@ -83,6 +83,7 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
   const [nEnd, setNEnd] = useState("16:00");
   const [nNotes, setNNotes] = useState("");
   const [nRepeat, setNRepeat] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
@@ -111,8 +112,14 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
     router.push(`/agenda?week=${addDays(weekStart, offset * 7)}`);
   }
 
+  function closeEditor() {
+    setNewOpen(false);
+    setEditingId(null);
+  }
+
   function openNew(prefill?: { date?: string; start?: string; courtId?: string }) {
     setErr("");
+    setEditingId(null);
     setNType("clase");
     setNCourts(prefill?.courtId ? [prefill.courtId] : selectedCourt ? [selectedCourt] : []);
     setNDays(prefill?.date ? [prefill.date] : []);
@@ -120,6 +127,21 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
     setNEnd(prefill?.start ? toTime(Math.min(toMin(prefill.start) + 90, 24 * 60)) : "16:00");
     setNNotes("");
     setNRepeat(false);
+    setNewOpen(true);
+  }
+
+  function openEdit(block: Block) {
+    setErr("");
+    setEditingId(block.id);
+    const t = block.type === "evento" ? "americano" : block.type;
+    setNType((TYPES.includes(t as BlockType) ? t : "bloqueo") as BlockType);
+    setNCourts([block.courtId]);
+    setNDays([block.date]);
+    setNStart(block.startTime);
+    setNEnd(block.endTime);
+    setNNotes(block.notes ?? "");
+    setNRepeat(false);
+    setViewBlock(null);
     setNewOpen(true);
   }
 
@@ -148,7 +170,18 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
         setErr(d.error ?? "No se pudo guardar el bloque.");
         return;
       }
-      setNewOpen(false);
+      // Al editar, borramos el bloque original (por si cambió a un horario que no
+      // se solapa con el nuevo y la inserción no lo reemplazó).
+      if (editingId) {
+        try {
+          await fetch("/api/agenda/block", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bookingId: editingId }),
+          });
+        } catch { /* no-op */ }
+      }
+      closeEditor();
       router.refresh();
     } catch {
       setErr("Error de conexión.");
@@ -347,7 +380,7 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
 
       {/* ── Modal: nuevo bloque ── */}
       {newOpen && (
-        <Modal onClose={() => setNewOpen(false)} title="Nuevo bloque">
+        <Modal onClose={closeEditor} title={editingId ? "Editar bloque" : "Nuevo bloque"}>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {/* Tipo */}
             <Group label="Tipo de bloque">
@@ -434,9 +467,9 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
             {err && <div style={{ fontSize: 13, color: "#B0492E" }}>{err}</div>}
 
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 2 }}>
-              <button onClick={() => setNewOpen(false)} style={ghostBtn}>Cancelar</button>
+              <button onClick={closeEditor} style={ghostBtn}>Cancelar</button>
               <button onClick={submitNew} disabled={saving} style={{ ...primaryBtn, opacity: saving ? 0.7 : 1 }}>
-                {saving ? "Guardando…" : "Guardar bloque"}
+                {saving ? "Guardando…" : editingId ? "Guardar cambios" : "Guardar bloque"}
               </button>
             </div>
           </div>
@@ -464,6 +497,9 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
               {viewBlock.notes && <div style={{ fontSize: 13.5, color: "#6B6660" }}>{viewBlock.notes}</div>}
 
               <div style={{ borderTop: "1px solid #EFEAE0", paddingTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+                <button onClick={() => openEdit(viewBlock)} style={primaryBtn}>
+                  <Pencil size={15} /> Editar este bloque
+                </button>
                 <button onClick={() => removeBlock("one")} disabled={saving} style={dangerBtn}>
                   <Trash2 size={15} /> Quitar este (solo esta cancha y día)
                 </button>
