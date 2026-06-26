@@ -6,9 +6,10 @@ import type { Intent } from "@/lib/bot/intent";
 
 // Búsqueda de disponibilidad para el bot. Reúne los HECHOS (lugares y horarios
 // libres reales) para que la IA solo los redacte, sin inventar.
-// MVP: el pueblo es Bolívar → filtramos clubs por city.
-
-export const CITY = "Bolívar";
+//
+// Filtro de ciudad: configurable por la env var BOT_CITY.
+//  - Sin definir (MVP single-pueblo, ej. Bolívar) → busca en TODOS los clubs.
+//  - Con valor (multi-ciudad) → filtra clubs por ese city (ilike, case-insensitive).
 const MAX_SLOTS_POR_LUGAR = 8;
 
 export type SlotLibre = { start: string; end: string; canchas: string[] };
@@ -60,7 +61,12 @@ export async function buscarDisponibilidad(intent: Intent, userText: string): Pr
   // Deporte que no se ofrece → sin disponibilidad (no devolvemos otros deportes).
   if (!sportId) return [];
 
-  const clubList = await db.select().from(clubs).where(ilike(clubs.city, `%${CITY}%`));
+  // Si BOT_CITY está definida, filtramos por esa ciudad; si no, todos los clubs.
+  const botCity = process.env.BOT_CITY?.trim();
+  const clubList = botCity
+    ? await db.select().from(clubs).where(ilike(clubs.city, `%${botCity}%`))
+    : await db.select().from(clubs);
+
   const { start, end } = interpretarFranja(userText, intent);
 
   const out: LugarDisponibilidad[] = [];
