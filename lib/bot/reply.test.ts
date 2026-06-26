@@ -9,7 +9,7 @@ vi.mock("openai", () => ({
   },
 }));
 
-import { redactarRespuesta } from "@/lib/bot/reply";
+import { redactarRespuesta, horariosPermitidos, horariosInventados } from "@/lib/bot/reply";
 import type { Intent } from "@/lib/bot/intent";
 
 const intent: Intent = { date: "2026-06-27", time: "18:00", zone: "Bolívar", sport: "padel" };
@@ -47,5 +47,63 @@ describe("redactarRespuesta", () => {
     });
     const out = await redactarRespuesta({ history: [], userText: "x", intent, lugares });
     expect(out).toMatch(/no pude armar la búsqueda/i);
+  });
+
+  it("el system prompt refuerza enumerar turnos concretos y prohíbe inventar", async () => {
+    create.mockImplementation(async () => modelReturns("ok"));
+    await redactarRespuesta({ history: [], userText: "el sábado", intent, lugares });
+
+    const system = create.mock.calls.at(-1)![0].messages[0].content as string;
+    expect(system).toMatch(/PROHIBIDO/);
+    expect(system).toMatch(/ENUMER/i); // enumerar turnos concretos
+    expect(system).toMatch(/rango/i); // prohíbe el rango difuso
+    expect(system).toMatch(/EXACTAMENTE/);
+  });
+});
+
+// Set de slots concretos para los tests del validador.
+const setLugares = [
+  { lugar: "Pádel Central", barrio: "Belgrano", slots: [
+    { start: "16:30", end: "18:00", canchas: ["Cancha 2"] },
+    { start: "20:00", end: "21:30", canchas: ["Cancha 1"] },
+  ] },
+];
+
+describe("horariosPermitidos", () => {
+  it("incluye start/end de cada slot y la hora pedida", () => {
+    const set = horariosPermitidos(setLugares, "18:00");
+    expect([...set].sort()).toEqual(["16:30", "18:00", "20:00", "21:30"]);
+  });
+
+  it("sin hora pedida, solo los horarios de los slots", () => {
+    const set = horariosPermitidos(setLugares, null);
+    expect([...set].sort()).toEqual(["16:30", "18:00", "20:00", "21:30"]);
+  });
+});
+
+describe("horariosInventados", () => {
+  it("una respuesta que solo usa horarios del set → no detecta inventados", () => {
+    const texto = "En Pádel Central, Cancha 2 hay 16:30 y en Cancha 1 a las 20:00. ¿Te sirve alguno?";
+    expect(horariosInventados(texto, setLugares, null)).toEqual([]);
+  });
+
+  it("detecta un horario que NO está en los datos (ej. 17:00 inventado)", () => {
+    const texto = "Hay turnos a las 16:30, 17:00 y 20:00.";
+    expect(horariosInventados(texto, setLugares, null)).toEqual(["17:00"]);
+  });
+
+  it("permite mencionar la hora pedida aunque no sea un slot (para el 'no hay a esa hora')", () => {
+    const texto = "A las 18:00 no hay, pero tenés 16:30 y 20:00.";
+    expect(horariosInventados(texto, setLugares, "18:00")).toEqual([]);
+  });
+
+  it("la respuesta del bot menciona solo horarios presentes en el set", async () => {
+    // Respuesta realista: enumera turnos concretos del set, sin inventar.
+    create.mockImplementation(async () =>
+      modelReturns("En Pádel Central: Cancha 2 a las 16:30 y Cancha 1 a las 20:00. ¿Querés alguno?"),
+    );
+    const out = await redactarRespuesta({ history: [], userText: "el sábado", intent: { ...intent, time: null }, lugares: setLugares });
+
+    expect(horariosInventados(out, setLugares, null)).toEqual([]); // ningún horario fuera de los datos
   });
 });
