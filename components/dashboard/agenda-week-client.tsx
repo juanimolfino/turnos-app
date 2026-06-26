@@ -501,11 +501,15 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
                   <Pencil size={15} /> Editar este bloque
                 </button>
                 <button onClick={() => removeBlock("one")} disabled={saving} style={dangerBtn}>
-                  <Trash2 size={15} /> Quitar este (solo esta cancha y día)
+                  <Trash2 size={15} /> {viewBlock.type === "simple"
+                    ? "Cancelar esta reserva (solo esta cancha y día)"
+                    : "Quitar este (solo esta cancha y día)"}
                 </button>
                 {viewBlock.blockGroupId && (
                   <button onClick={() => removeBlock("series")} disabled={saving} style={dangerBtnSolid}>
-                    <Trash2 size={15} /> Quitar toda la serie (todas las canchas y semanas)
+                    <Trash2 size={15} /> {viewBlock.type === "simple"
+                      ? "Cancelar toda la serie (todas las canchas y semanas)"
+                      : "Quitar toda la serie (todas las canchas y semanas)"}
                   </button>
                 )}
               </div>

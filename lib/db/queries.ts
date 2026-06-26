@@ -519,25 +519,55 @@ export async function createAgendaBlocks(input: {
   return { blockGroupId, count: input.courtIds.length * input.dates.length };
 }
 
-/** Elimina un único bloque (una celda). */
+/**
+ * Quita un único bloque (una celda). Las reservas type='simple' (de cliente o,
+ * a futuro, del bot) NO se borran en duro: se CANCELAN (status='cancelado'),
+ * igual que en la vista del día. El resto de los bloques (bloqueo/torneo/
+ * americano/clase/fijo/evento) sí se eliminan.
+ */
 export async function deleteAgendaBlock(clubId: string, bookingId: string) {
   const db = getDb();
+  const [b] = await db
+    .select({ type: bookings.type })
+    .from(bookings)
+    .where(and(eq(bookings.id, bookingId), eq(bookings.clubId, clubId)));
+  if (!b) return;
+
+  if (b.type === "simple") {
+    await db
+      .update(bookings)
+      .set({ status: "cancelado" })
+      .where(and(eq(bookings.id, bookingId), eq(bookings.clubId, clubId)));
+    return;
+  }
+
   await db.delete(bookings).where(and(
     eq(bookings.id, bookingId),
     eq(bookings.clubId, clubId),
-    inArray(bookings.type, BLOCK_TYPES as unknown as BlockType[]),
+    inArray(bookings.type, OVERLAP_REPLACE_TYPES as unknown as BlockType[]),
   ));
 }
 
-/** Elimina toda la serie de un bloque (todas las canchas/semanas), opcionalmente desde una fecha. */
+/**
+ * Quita toda la serie de un bloque (todas las canchas/semanas), opcionalmente
+ * desde una fecha. Las reservas 'simple' de la serie se cancelan (no se borran);
+ * el resto de los bloques se eliminan en duro.
+ */
 export async function deleteAgendaBlockGroup(clubId: string, blockGroupId: string, fromDate?: string) {
   const db = getDb();
-  const conds = [
+  const base = [
     eq(bookings.clubId, clubId),
     eq(bookings.blockGroupId, blockGroupId),
   ];
-  if (fromDate) conds.push(gte(bookings.date, fromDate));
-  await db.delete(bookings).where(and(...conds));
+  if (fromDate) base.push(gte(bookings.date, fromDate));
+
+  // 'simple' → cancelación suave (nunca borrado duro).
+  await db.update(bookings).set({ status: "cancelado" })
+    .where(and(...base, eq(bookings.type, "simple")));
+
+  // Resto de los bloques → borrado duro.
+  await db.delete(bookings)
+    .where(and(...base, inArray(bookings.type, OVERLAP_REPLACE_TYPES as unknown as BlockType[])));
 }
 
 export async function cancelBooking(bookingId: string, clubId: string) {
