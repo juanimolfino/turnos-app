@@ -560,52 +560,16 @@ export async function confirmBookingPayment(bookingId: string) {
   return updated;
 }
 
+/**
+ * Slots con canchas libres de un club/fecha. Delega en la fuente de verdad
+ * (lib/bookings/availability), que aplica la regla correcta (status != 'cancelado')
+ * y la ventana default. Nota: a diferencia de la versión vieja, solo devuelve
+ * slots con al menos una cancha libre.
+ */
 export async function getAvailableSlots(clubId: string, date: string, requestedStart?: string, requestedEnd?: string) {
-  const db = getDb();
-  const [club] = await db.select().from(clubs).where(eq(clubs.id, clubId));
-  if (!club) return [];
-
-  const { openingHours } = await import("@/lib/db/schema");
-  const dateObj = new Date(date + "T12:00:00");
-  const weekday = (dateObj.getDay() + 6) % 7; // Mon=0..Sun=6
-
-  const [hours] = await db.select().from(openingHours).where(
-    and(eq(openingHours.clubId, clubId), eq(openingHours.weekday, weekday))
-  );
-  if (!hours) return [];
-
-  const allCourts = await db.select().from(courts).where(and(eq(courts.clubId, clubId), eq(courts.active, true)));
-  const dayBookings = await db.select().from(bookings).where(
-    and(eq(bookings.clubId, clubId), eq(bookings.date, date), eq(bookings.status, "confirmado"))
-  );
-
-  const [openH, openM] = hours.openTime.split(":").map(Number);
-  const [closeH, closeM] = hours.closeTime.split(":").map(Number);
-  const slotMin = hours.slotMinutes;
-
-  const slots = [];
-  let cur = openH * 60 + openM;
-  const end = closeH * 60 + closeM;
-
-  while (cur + slotMin <= end) {
-    const slotStart = `${String(Math.floor(cur / 60)).padStart(2, "0")}:${String(cur % 60).padStart(2, "0")}`;
-    const slotEnd = `${String(Math.floor((cur + slotMin) / 60)).padStart(2, "0")}:${String((cur + slotMin) % 60).padStart(2, "0")}`;
-
-    if (requestedStart && requestedEnd) {
-      if (slotStart !== requestedStart) { cur += slotMin; continue; }
-    }
-
-    const freeCourts = allCourts.filter(c => {
-      return !dayBookings.some(b =>
-        b.courtId === c.id && b.startTime < slotEnd && b.endTime > slotStart
-      );
-    });
-
-    slots.push({ start: slotStart, end: slotEnd, freeCourts: freeCourts.map(c => ({ id: c.id, name: c.name })) });
-    cur += slotMin;
-  }
-
-  return slots;
+  const { getClubAvailability } = await import("@/lib/bookings/availability");
+  const avail = await getClubAvailability(clubId, date, { start: requestedStart, end: requestedEnd });
+  return (avail?.slots ?? []).map((s) => ({ start: s.start, end: s.end, freeCourts: s.freeCourts }));
 }
 
 export async function getClubByApiKey(apiKey: string) {
