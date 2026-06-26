@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Plus, Settings2, X, Trash2, Pencil } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 
-type BlockType = "clase" | "fijo" | "flex" | "americano" | "torneo" | "bloqueo";
+type BlockType = "simple" | "clase" | "fijo" | "americano" | "torneo" | "bloqueo";
 
 interface Court { id: string; name: string; }
 interface Block {
@@ -28,9 +28,9 @@ interface Props {
 }
 
 const TYPE_META: Record<BlockType, { label: string; short: string; bg: string; bd: string; fg: string }> = {
+  simple:    { label: "Turno libre", short: "Libre",     bg: "#E4F1EF", bd: "#C9E5E0", fg: "#2E7D6F" },
   clase:     { label: "Clases",     short: "Clases",    bg: "#EAF0F8", bd: "#D3DEF0", fg: "#3D5C93" },
   fijo:      { label: "Turno fijo", short: "Fijo",      bg: "#F1EAF7", bd: "#E2D4EF", fg: "#6B4E9E" },
-  flex:      { label: "Turno flex", short: "Flex",      bg: "#E4F1EF", bd: "#C9E5E0", fg: "#2E7D6F" },
   americano: { label: "Americano",  short: "Americano", bg: "#FBEBE2", bd: "#F2D6C5", fg: "#B0572C" },
   torneo:    { label: "Torneo",     short: "Torneo",    bg: "#F7EFD9", bd: "#EBDFBF", fg: "#8A6D1F" },
   bloqueo:   { label: "Cerrado",    short: "Cerrado",   bg: "#EFECE6", bd: "#DED8CC", fg: "#8A8377" },
@@ -40,7 +40,7 @@ function metaFor(type: string) {
   if (type === "evento") return TYPE_META.americano;
   return TYPE_META[type as BlockType] ?? TYPE_META.bloqueo;
 }
-const TYPES: BlockType[] = ["clase", "fijo", "flex", "americano", "torneo", "bloqueo"];
+const TYPES: BlockType[] = ["simple", "clase", "fijo", "americano", "torneo", "bloqueo"];
 const DAY_NAMES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
 // ── helpers de tiempo/fecha ────────────────────────────────────────────────
@@ -449,7 +449,7 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
                 placeholder={
                   nType === "clase" ? "Ej: Profe Caro"
                   : nType === "fijo" ? "Ej: Grupo Martín"
-                  : nType === "flex" ? "Ej: Turno suelto"
+                  : nType === "simple" ? "Ej: Turno suelto"
                   : nType === "torneo" ? "Ej: quién juega (o dejar vacío)"
                   : nType === "americano" ? "Ej: Americano mixto"
                   : "Ej: Mantenimiento"

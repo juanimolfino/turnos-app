@@ -20,21 +20,20 @@ interface Props {
   timezone: string;
 }
 
-type StatusKey = "libre" | "simple" | "clase" | "fijo" | "flex" | "americano" | "torneo" | "bloqueo";
+type StatusKey = "libre" | "simple" | "clase" | "fijo" | "americano" | "torneo" | "bloqueo";
 
 const STATUS: Record<StatusKey, { bg: string; bd: string; fg: string; dot: string; label: string }> = {
   libre:     { bg: "#E9F3EA", bd: "#CFE6D2", fg: "#2F7D4E", dot: "#3E9B63", label: "Libre" },
   simple:    { bg: "#FFFFFF", bd: "#E7E1D6", fg: "#7A746A", dot: "#B8B0A2", label: "Reservado" },
   clase:     { bg: "#EAF0F8", bd: "#D3DEF0", fg: "#3D5C93", dot: "#5B7FBE", label: "Clase" },
   fijo:      { bg: "#F1EAF7", bd: "#E2D4EF", fg: "#6B4E9E", dot: "#8A6BC4", label: "Turno fijo" },
-  flex:      { bg: "#E4F1EF", bd: "#C9E5E0", fg: "#2E7D6F", dot: "#3E9B8E", label: "Turno flex" },
   americano: { bg: "#FBEBE2", bd: "#F2D6C5", fg: "#B0572C", dot: "#C96442", label: "Americano" },
   torneo:    { bg: "#F7EFD9", bd: "#EBDFBF", fg: "#8A6D1F", dot: "#CBA23C", label: "Torneo" },
   bloqueo:   { bg: "#F3E7E2", bd: "#EDD0C5", fg: "#9A5E4C", dot: "#C2887A", label: "Cerrado" },
 };
 function statusOf(type: string): StatusKey {
   if (type === "evento") return "americano";
-  return (["simple", "clase", "fijo", "flex", "americano", "torneo", "bloqueo"] as StatusKey[]).includes(type as StatusKey)
+  return (["simple", "clase", "fijo", "americano", "torneo", "bloqueo"] as StatusKey[]).includes(type as StatusKey)
     ? (type as StatusKey) : "bloqueo";
 }
 
@@ -180,7 +179,6 @@ export function AgendaDayClient({ courts, blocks, date, clubName, timezone }: Pr
           { dot: STATUS.simple.dot, label: "Reservado" },
           { dot: STATUS.clase.dot, label: "Clase" },
           { dot: STATUS.fijo.dot, label: "Turno fijo" },
-          { dot: STATUS.flex.dot, label: "Turno flex" },
           { dot: STATUS.americano.dot, label: "Americano / torneo" },
         ].map(({ dot, label }) => (
           <div key={label} style={{ display: "flex", alignItems: "center", gap: 6 }}>

@@ -24,7 +24,7 @@ function addDays(dateStr: string, n: number) {
 }
 
 const createSchema = z.object({
-  type: z.enum(["clase", "fijo", "flex", "americano", "torneo", "bloqueo"]),
+  type: z.enum(["simple", "clase", "fijo", "americano", "torneo", "bloqueo"]),
   courtIds: z.array(z.string().uuid()).min(1),
   dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1),
   startTime: z.string().regex(/^\d{2}:\d{2}$/),

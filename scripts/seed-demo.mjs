@@ -1,7 +1,7 @@
 /**
  * seed-demo.mjs
  * Crea 3 clubs DEMO con canchas, ciudad, API key y una semana de bloques
- * variados (clases, fijos, flex, americanos, torneos, bloqueos), para simular
+ * variados (clases, fijos, simples, americanos, torneos, bloqueos), para simular
  * el uso de 3 lugares y las consultas del bot.
  *
  * Uso:   node --env-file=.env.local scripts/seed-demo.mjs
@@ -41,7 +41,7 @@ const CLUBS = [
       // Fijos de noche
       { weekday: 0, courts: [0], start: "19:00", end: "20:30", type: "fijo", note: "Grupo Martín" },
       { weekday: 2, courts: [1], start: "20:00", end: "21:30", type: "fijo", note: "Las pibas" },
-      { weekday: 1, courts: [2], start: "18:00", end: "19:30", type: "flex", note: "Turno suelto" },
+      { weekday: 1, courts: [2], start: "18:00", end: "19:30", type: "simple", note: "Turno suelto" },
       // Americano viernes noche en todas
       { weekday: 4, courts: "all", start: "20:00", end: "23:00", type: "americano", note: "Americano mixto" },
       // Torneo sábado tarde

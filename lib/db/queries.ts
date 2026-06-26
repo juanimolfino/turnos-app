@@ -327,7 +327,7 @@ export async function createBooking(data: {
   date: string;
   startTime: string;
   endTime: string;
-  type: "simple" | "clase" | "fijo" | "flex" | "evento" | "americano" | "torneo" | "bloqueo";
+  type: "simple" | "clase" | "fijo" | "evento" | "americano" | "torneo" | "bloqueo";
   status?: "confirmado" | "pendiente" | "cancelado";
   customerId?: string | null;
   professorId?: string | null;
@@ -356,8 +356,15 @@ export async function createBooking(data: {
 }
 
 // ── Canchas (courts) ────────────────────────────────────────────────────────
-const BLOCK_TYPES = ["clase", "fijo", "flex", "evento", "americano", "torneo", "bloqueo"] as const;
+// Tipos gestionables como "bloque" desde el panel del admin (crear/editar/borrar).
+// 'simple' es además el tipo de las reservas reales y de las que generará el bot.
+const BLOCK_TYPES = ["simple", "clase", "fijo", "evento", "americano", "torneo", "bloqueo"] as const;
 export type BlockType = (typeof BLOCK_TYPES)[number];
+
+// Tipos que un bloque nuevo REEMPLAZA al solaparse (se borran antes de insertar).
+// Excluimos 'simple' a propósito: una reserva real / del bot NO debe borrarse
+// silenciosamente al crear un bloque en una franja que se superpone.
+const OVERLAP_REPLACE_TYPES = BLOCK_TYPES.filter((t) => t !== "simple");
 
 export async function ensurePadelSport() {
   const db = getDb();
@@ -485,12 +492,12 @@ export async function createAgendaBlocks(input: {
 
   for (const courtId of input.courtIds) {
     for (const date of input.dates) {
-      // Borrar bloques superpuestos (solo tipos de bloque, nunca reservas "simple")
+      // Borrar bloques superpuestos (nunca reservas "simple": esas se protegen)
       await db.delete(bookings).where(and(
         eq(bookings.clubId, input.clubId),
         eq(bookings.courtId, courtId),
         eq(bookings.date, date),
-        inArray(bookings.type, BLOCK_TYPES as unknown as BlockType[]),
+        inArray(bookings.type, OVERLAP_REPLACE_TYPES as unknown as BlockType[]),
         lt(bookings.startTime, input.endTime),
         gt(bookings.endTime, input.startTime),
       ));

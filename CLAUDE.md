@@ -45,3 +45,9 @@ Definición de terminado (aplica a TODA fase): una fase no está completa hasta 
 compila sin errores de TS ni lint; tiene tests con vitest que cubren el camino feliz y los bordes;
 los secretos viven solo server-side; las entradas externas se validan; y no se tocan archivos
 ni tablas fuera del alcance de la fase actual.
+
+- Migraciones de Drizzle: correr SIEMPRE por DIRECT_URL (session pooler, puerto 5432, sin pgbouncer).
+- Runtime de la app (lib/db): usa DATABASE_URL (transaction pooler, puerto 6543, pgbouncer=true).
+- Nunca mezclar: no migrar por el pooler (el DDL como CREATE EXTENSION / constraints EXCLUDE falla),
+  ni correr el runtime por la conexión directa.
+- DIRECT_URL vive solo en .env.local, nunca en Vercel ni en código de runtime.
