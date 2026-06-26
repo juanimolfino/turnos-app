@@ -1,0 +1,61 @@
+import { ilike } from "drizzle-orm";
+import { getDb } from "@/lib/db";
+import { clubs } from "@/lib/db/schema";
+import { getClubAvailability } from "@/lib/bookings/availability";
+import type { Intent } from "@/lib/bot/intent";
+
+// Búsqueda de disponibilidad para el bot. Reúne los HECHOS (lugares y horarios
+// libres reales) para que la IA solo los redacte, sin inventar.
+// MVP: el pueblo es Bolívar → filtramos clubs por city.
+
+export const CITY = "Bolívar";
+const MAX_SLOTS_POR_LUGAR = 8;
+
+export type SlotLibre = { start: string; end: string; canchas: string[] };
+export type LugarDisponibilidad = { lugar: string; barrio: string | null; slots: SlotLibre[] };
+
+/**
+ * Traduce la hora pedida a una ventana de búsqueda.
+ * - Hora exacta (intent.time) → todo el día (sin acotar): después ofrecemos lo
+ *   más cercano a esa hora, no exigimos match exacto.
+ * - Sin hora exacta, según la franja mencionada: "tarde" desde 16:00, "noche"
+ *   desde 20:00, "mediodía" 12–15, "mañana" hasta 13:00.
+ * - Si no se menciona nada → todo el día.
+ */
+export function interpretarFranja(text: string, intent: Intent): { start: string | null; end: string | null } {
+  if (intent.time) return { start: null, end: null };
+
+  const t = text.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  if (/\bnoche\b/.test(t)) return { start: "20:00", end: null };
+  if (/\btarde\b/.test(t)) return { start: "16:00", end: null };
+  if (/\bmediodia\b/.test(t)) return { start: "12:00", end: "15:00" };
+  if (/(la|de|por)\s+manana/.test(t)) return { start: null, end: "13:00" };
+  return { start: null, end: null };
+}
+
+/**
+ * Devuelve la disponibilidad real agrupada POR LUGAR (club) para la fecha pedida.
+ * Reusa getClubAvailability (no reimplementa el cálculo). Solo incluye lugares
+ * que tienen al menos un horario libre.
+ */
+export async function buscarDisponibilidad(intent: Intent, userText: string): Promise<LugarDisponibilidad[]> {
+  if (!intent.date) return [];
+
+  const db = getDb();
+  const clubList = await db.select().from(clubs).where(ilike(clubs.city, `%${CITY}%`));
+  const { start, end } = interpretarFranja(userText, intent);
+
+  const out: LugarDisponibilidad[] = [];
+  for (const club of clubList) {
+    // MVP Bolívar: único deporte (padel) y todas las canchas son de padel, así
+    // que no hace falta filtrar por sportId acá; el gate de sport está en el flujo.
+    const avail = await getClubAvailability(club.id, intent.date, { start, end });
+    const slots = (avail?.slots ?? []).slice(0, MAX_SLOTS_POR_LUGAR).map((s) => ({
+      start: s.start,
+      end: s.end,
+      canchas: s.freeCourts.map((c) => c.name),
+    }));
+    if (slots.length) out.push({ lugar: club.name, barrio: club.neighborhood ?? null, slots });
+  }
+  return out;
+}
