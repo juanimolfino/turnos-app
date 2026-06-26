@@ -1,9 +1,18 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-// Capa de datos mockeada: getDb (clubs por ciudad) y getClubAvailability.
-const state = vi.hoisted(() => ({ clubs: [] as unknown[] }));
+// Capa de datos mockeada: getDb resuelve dos queries distintas.
+// - resolverSportId hace `select({ id }).from(sports)` → select CON columnas.
+// - clubs hace `select().from(clubs)` → select SIN columnas.
+// Discriminamos por eso y contamos los lookups de sport.
+const state = vi.hoisted(() => ({ clubs: [] as unknown[], sports: [] as unknown[], sportLookups: 0 }));
 vi.mock("@/lib/db", () => ({
-  getDb: () => ({ select: () => ({ from: () => ({ where: () => Promise.resolve(state.clubs) }) }) }),
+  getDb: () => ({
+    select: (cols?: unknown) => {
+      const isSport = cols !== undefined;
+      if (isSport) state.sportLookups++;
+      return { from: () => ({ where: () => Promise.resolve(isSport ? state.sports : state.clubs) }) };
+    },
+  }),
 }));
 
 const getClubAvailability = vi.fn();
@@ -47,13 +56,15 @@ describe("interpretarFranja", () => {
 describe("buscarDisponibilidad", () => {
   beforeEach(() => {
     getClubAvailability.mockReset();
+    state.sportLookups = 0;
+    state.sports = [{ id: "sport-padel" }]; // "padel" existe
     state.clubs = [
       { id: "c1", name: "El Corralón", neighborhood: "Centro", city: "Bolívar" },
       { id: "c2", name: "La Bombonera", neighborhood: null, city: "Bolívar" },
     ];
   });
 
-  it("filtra Bolívar, agrupa por lugar y solo incluye lugares con turnos", async () => {
+  it("filtra Bolívar, pasa el sportId y agrupa por lugar (solo lugares con turnos)", async () => {
     getClubAvailability.mockImplementation(async (clubId: string) =>
       clubId === "c1"
         ? { window: {}, slots: [{ start: "16:30", end: "18:00", freeCourts: [{ id: "x", name: "Cancha 1" }], totalCourts: 2 }] }
@@ -66,8 +77,24 @@ describe("buscarDisponibilidad", () => {
     expect(res).toEqual([
       { lugar: "El Corralón", barrio: "Centro", slots: [{ start: "16:30", end: "18:00", canchas: ["Cancha 1"] }] },
     ]);
-    // hora exacta → ventana de todo el día
-    expect(getClubAvailability).toHaveBeenCalledWith("c1", "2026-06-27", { start: null, end: null });
+    // hora exacta → todo el día, y el sportId resuelto va a la búsqueda
+    expect(getClubAvailability).toHaveBeenCalledWith("c1", "2026-06-27", { start: null, end: null, sportId: "sport-padel" });
+  });
+
+  it("un deporte inexistente → sin disponibilidad, sin crash y sin consultar canchas", async () => {
+    state.sports = []; // el slug no matchea ningún sport
+    const res = await buscarDisponibilidad(intent({ sport: "curling" }), "el sábado");
+    expect(res).toEqual([]);
+    expect(getClubAvailability).not.toHaveBeenCalled();
+  });
+
+  it("resuelve el deporte UNA sola vez aunque haya varios clubs", async () => {
+    getClubAvailability.mockResolvedValue({ window: {}, slots: [] });
+
+    await buscarDisponibilidad(intent({ time: null }), "el sábado");
+
+    expect(state.sportLookups).toBe(1); // un único lookup de sport
+    expect(getClubAvailability).toHaveBeenCalledTimes(2); // sí una vez por club
   });
 
   it("pasa la franja 'tarde' (start 16:00) a la búsqueda", async () => {
@@ -75,7 +102,7 @@ describe("buscarDisponibilidad", () => {
 
     await buscarDisponibilidad(intent({ time: null }), "a la tarde");
 
-    expect(getClubAvailability).toHaveBeenCalledWith("c1", "2026-06-27", { start: "16:00", end: null });
+    expect(getClubAvailability).toHaveBeenCalledWith("c1", "2026-06-27", { start: "16:00", end: null, sportId: "sport-padel" });
   });
 
   it("solo expone datos reales (nombres de cancha de la búsqueda)", async () => {

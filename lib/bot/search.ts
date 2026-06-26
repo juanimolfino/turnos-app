@@ -1,6 +1,6 @@
-import { ilike } from "drizzle-orm";
+import { eq, ilike, or } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { clubs } from "@/lib/db/schema";
+import { clubs, sports } from "@/lib/db/schema";
 import { getClubAvailability } from "@/lib/bookings/availability";
 import type { Intent } from "@/lib/bot/intent";
 
@@ -33,23 +33,39 @@ export function interpretarFranja(text: string, intent: Intent): { start: string
   return { start: null, end: null };
 }
 
+/** Resuelve un deporte (slug o nombre, ej "padel"/"futbol") a su id en la tabla
+ * sports. Devuelve null si no existe ninguno con ese slug/nombre. */
+async function resolverSportId(db: ReturnType<typeof getDb>, sport: string | null): Promise<string | null> {
+  if (!sport) return null;
+  const s = sport.trim().toLowerCase();
+  const [row] = await db
+    .select({ id: sports.id })
+    .from(sports)
+    .where(or(eq(sports.slug, s), ilike(sports.name, s)));
+  return row?.id ?? null;
+}
+
 /**
- * Devuelve la disponibilidad real agrupada POR LUGAR (club) para la fecha pedida.
- * Reusa getClubAvailability (no reimplementa el cálculo). Solo incluye lugares
- * que tienen al menos un horario libre.
+ * Devuelve la disponibilidad real agrupada POR LUGAR (club) para la fecha y el
+ * deporte pedidos. Reusa getClubAvailability (no reimplementa el cálculo). Solo
+ * incluye lugares con al menos un horario libre.
  */
 export async function buscarDisponibilidad(intent: Intent, userText: string): Promise<LugarDisponibilidad[]> {
   if (!intent.date) return [];
 
   const db = getDb();
+
+  // El deporte se resuelve UNA sola vez por búsqueda (no por club).
+  const sportId = await resolverSportId(db, intent.sport);
+  // Deporte que no se ofrece → sin disponibilidad (no devolvemos otros deportes).
+  if (!sportId) return [];
+
   const clubList = await db.select().from(clubs).where(ilike(clubs.city, `%${CITY}%`));
   const { start, end } = interpretarFranja(userText, intent);
 
   const out: LugarDisponibilidad[] = [];
   for (const club of clubList) {
-    // MVP Bolívar: único deporte (padel) y todas las canchas son de padel, así
-    // que no hace falta filtrar por sportId acá; el gate de sport está en el flujo.
-    const avail = await getClubAvailability(club.id, intent.date, { start, end });
+    const avail = await getClubAvailability(club.id, intent.date, { start, end, sportId });
     const slots = (avail?.slots ?? []).slice(0, MAX_SLOTS_POR_LUGAR).map((s) => ({
       start: s.start,
       end: s.end,
