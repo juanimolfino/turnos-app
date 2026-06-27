@@ -15,7 +15,8 @@ vi.mock("@/lib/db", () => ({
   }),
 }));
 
-import { createBooking, createAgendaBlocks } from "@/lib/db/queries";
+import { createBooking, createAgendaBlocks, normalizeEndTime } from "@/lib/db/queries";
+import { computeAvailability } from "@/lib/bookings/availability";
 
 describe("origin en creación de bookings", () => {
   beforeEach(() => {
@@ -46,5 +47,49 @@ describe("origin en creación de bookings", () => {
     });
     expect(state.inserts).toHaveLength(1);
     expect(state.inserts[0].origin).toBe("admin");
+  });
+});
+
+describe("normalizeEndTime", () => {
+  it("'24:00' (medianoche) → '23:59'", () => {
+    expect(normalizeEndTime("24:00")).toBe("23:59");
+  });
+  it("no toca horas válidas", () => {
+    expect(normalizeEndTime("23:00")).toBe("23:00");
+    expect(normalizeEndTime("09:30")).toBe("09:30");
+  });
+});
+
+describe("end_time='24:00' nunca se persiste", () => {
+  beforeEach(() => { state.inserts = []; });
+
+  it("createBooking que termina a medianoche guarda '23:59'", async () => {
+    await createBooking({
+      clubId: "c", courtId: "ct", date: "2026-06-27",
+      startTime: "22:30", endTime: "24:00", type: "simple",
+    });
+    expect(state.inserts[0].endTime).toBe("23:59");
+  });
+
+  it("createAgendaBlocks hasta medianoche guarda '23:59'", async () => {
+    await createAgendaBlocks({
+      clubId: "c", type: "bloqueo", courtIds: ["ct"], dates: ["2026-06-27"],
+      startTime: "20:00", endTime: "24:00",
+    });
+    expect(state.inserts[0].endTime).toBe("23:59");
+  });
+});
+
+describe("overlap con un booking que termina 23:59 sigue funcionando", () => {
+  it("un bloqueo …-23:59 ocupa el último slot del día", () => {
+    const courts = [{ id: "c1", name: "Cancha 1", sortOrder: 0, sportId: "padel" }];
+    const bookings = [{ courtId: "c1", startTime: "20:00", endTime: "23:59", status: "confirmado" }];
+    const slots = computeAvailability({
+      courts,
+      bookings,
+      window: { open: "20:00", close: "23:00", slotMinutes: 90 }, // slot 20:00-21:30, 21:30-23:00
+    });
+    // Ambos slots solapan el bloqueo (23:59 > sus starts) → cancha ocupada → sin slots libres
+    expect(slots).toEqual([]);
   });
 });

@@ -311,6 +311,16 @@ export async function generateApiKey(clubId: string) {
   return updated.apiKey;
 }
 
+/**
+ * Normaliza la hora de fin de un booking. El selector del panel ofrece "24:00"
+ * (medianoche), pero el formato es HH:MM 24h (máx 23:59) y toda la comparación de
+ * horas es lexicográfica/cronológica DENTRO del día. Guardamos "24:00" → "23:59"
+ * (no "00:00", que al ser < cualquier start rompería el overlap).
+ */
+export function normalizeEndTime(endTime: string): string {
+  return endTime === "24:00" ? "23:59" : endTime;
+}
+
 export async function findOrCreateCustomer(clubId: string, name: string, phone: string) {
   const db = getDb();
   const existing = await db.query.customers.findFirst({
@@ -345,7 +355,7 @@ export async function createBooking(data: {
     courtId: data.courtId,
     date: data.date,
     startTime: data.startTime,
-    endTime: data.endTime,
+    endTime: normalizeEndTime(data.endTime),
     type: data.type,
     status: data.status ?? "confirmado",
     origin: data.origin ?? "admin",
@@ -493,6 +503,7 @@ export async function createAgendaBlocks(input: {
 }) {
   const db = getDb();
   const blockGroupId = randomUUID();
+  const endTime = normalizeEndTime(input.endTime); // "24:00" → "23:59"
 
   for (const courtId of input.courtIds) {
     for (const date of input.dates) {
@@ -502,7 +513,7 @@ export async function createAgendaBlocks(input: {
         eq(bookings.courtId, courtId),
         eq(bookings.date, date),
         inArray(bookings.type, OVERLAP_REPLACE_TYPES as unknown as BlockType[]),
-        lt(bookings.startTime, input.endTime),
+        lt(bookings.startTime, endTime),
         gt(bookings.endTime, input.startTime),
       ));
 
@@ -511,7 +522,7 @@ export async function createAgendaBlocks(input: {
         courtId,
         date,
         startTime: input.startTime,
-        endTime: input.endTime,
+        endTime,
         type: input.type,
         status: "confirmado",
         origin: "admin", // bloques cargados desde el panel del admin
