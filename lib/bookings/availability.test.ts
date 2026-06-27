@@ -132,3 +132,117 @@ describe("computeAvailability", () => {
     );
   });
 });
+
+// ── Turnos "pegados a la ocupación" (opción A) ───────────────────────────────
+describe("computeAvailability — huecos pegados a la ocupación", () => {
+  const oneCourt: AvailabilityCourt[] = [{ id: "c1", name: "Cancha 1", sortOrder: 0, sportId: "padel" }];
+  const startsOf = (slots: { start: string }[]) => slots.map((s) => s.start);
+
+  it("CASO REAL: evento 08:00–19:00 + torneo 20:30–23:59 → ofrece 19:00–20:30 (antes daba 0)", () => {
+    const slots = computeAvailability({
+      courts: oneCourt,
+      bookings: [
+        { courtId: "c1", startTime: "08:00", endTime: "19:00", status: "confirmado" }, // evento
+        { courtId: "c1", startTime: "20:30", endTime: "23:59", status: "confirmado" }, // torneo
+      ],
+      window: { open: "08:00", close: "23:00", slotMinutes: 90 },
+    });
+    expect(slots).toEqual([
+      { start: "19:00", end: "20:30", freeCourts: [{ id: "c1", name: "Cancha 1" }], totalCourts: 1 },
+    ]);
+  });
+
+  it("hueco de 90 → un turno", () => {
+    const slots = computeAvailability({
+      courts: oneCourt,
+      bookings: [
+        { courtId: "c1", startTime: "08:00", endTime: "19:00", status: "confirmado" },
+        { courtId: "c1", startTime: "20:30", endTime: "23:00", status: "confirmado" },
+      ],
+      window: { open: "08:00", close: "23:00", slotMinutes: 90 },
+    });
+    expect(startsOf(slots)).toEqual(["19:00"]); // hueco 19:00–20:30 = 90
+  });
+
+  it("hueco de 180 → dos turnos consecutivos", () => {
+    const slots = computeAvailability({
+      courts: oneCourt,
+      bookings: [
+        { courtId: "c1", startTime: "08:00", endTime: "18:00", status: "confirmado" },
+        { courtId: "c1", startTime: "21:00", endTime: "23:00", status: "confirmado" },
+      ],
+      window: { open: "08:00", close: "23:00", slotMinutes: 90 },
+    });
+    // hueco 18:00–21:00 = 180 → 18:00–19:30 y 19:30–21:00
+    expect(slots.map((s) => `${s.start}-${s.end}`)).toEqual(["18:00-19:30", "19:30-21:00"]);
+  });
+
+  it("hueco de 60 → ningún turno (no entra un turno de 90)", () => {
+    const slots = computeAvailability({
+      courts: oneCourt,
+      bookings: [
+        { courtId: "c1", startTime: "08:00", endTime: "19:00", status: "confirmado" },
+        { courtId: "c1", startTime: "20:00", endTime: "23:00", status: "confirmado" },
+      ],
+      window: { open: "08:00", close: "23:00", slotMinutes: 90 },
+    });
+    expect(slots).toEqual([]); // hueco 19:00–20:00 = 60 < 90
+  });
+
+  it("cancha sin bookings → turnos desde la apertura", () => {
+    const slots = computeAvailability({
+      courts: oneCourt,
+      bookings: [],
+      window: { open: "08:00", close: "12:30", slotMinutes: 90 },
+    });
+    expect(slots.map((s) => `${s.start}-${s.end}`)).toEqual(["08:00-09:30", "09:30-11:00", "11:00-12:30"]);
+  });
+
+  it("cancha llena → 0 turnos", () => {
+    const slots = computeAvailability({
+      courts: oneCourt,
+      bookings: [{ courtId: "c1", startTime: "08:00", endTime: "23:00", status: "confirmado" }],
+      window: { open: "08:00", close: "23:00", slotMinutes: 90 },
+    });
+    expect(slots).toEqual([]);
+  });
+
+  it("BORDE 1: bloqueo 08:00–23:59 (día entero) → 0 turnos (no ofrece turno de 1 min ni que arranque 23:59)", () => {
+    const slots = computeAvailability({
+      courts: oneCourt,
+      bookings: [{ courtId: "c1", startTime: "08:00", endTime: "23:59", status: "confirmado" }],
+      window: { open: "08:00", close: "23:59", slotMinutes: 90 },
+    });
+    expect(slots).toEqual([]);
+  });
+
+  it("ningún turno excede el cierre de la ventana", () => {
+    const slots = computeAvailability({
+      courts: oneCourt,
+      bookings: [],
+      window: { open: "08:00", close: "23:00", slotMinutes: 90 },
+    });
+    const closeMin = 23 * 60;
+    const toMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+    expect(slots.every((s) => toMin(s.end) <= closeMin)).toBe(true);
+  });
+
+  it("BORDE 2: Pádel Central (día normal) sigue mostrando 08:00 … 21:30 (sin regresión)", () => {
+    const courts: AvailabilityCourt[] = [
+      { id: "c1", name: "Cancha 1", sortOrder: 0, sportId: "padel" },
+      { id: "c2", name: "Cancha 2", sortOrder: 1, sportId: "padel" },
+      { id: "c3", name: "Cancha 3", sortOrder: 2, sportId: "padel" },
+    ];
+    const slots = computeAvailability({
+      courts,
+      bookings: [
+        { courtId: "c1", startTime: "08:00", endTime: "20:00", status: "confirmado" }, // torneo
+        { courtId: "c1", startTime: "22:00", endTime: "23:30", status: "confirmado" }, // simple
+      ],
+      window: { open: "08:00", close: "23:30", slotMinutes: 90 },
+    });
+    expect(startsOf(slots)).toEqual([
+      "08:00", "09:30", "11:00", "12:30", "14:00", "15:30", "17:00", "18:30", "20:00", "21:30",
+    ]);
+  });
+});

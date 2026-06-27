@@ -41,13 +41,60 @@ function fmt(m: number) {
 }
 
 /**
+ * Turnos libres de UNA cancha (en minutos): "pegados a la ocupación".
+ * Cada turno arranca donde termina la ocupación previa (o en la apertura), y
+ * dentro de cada hueco se ofrecen turnos consecutivos de `slotMin` mientras
+ * entren COMPLETOS (un hueco de 60 con slot 90 → ningún turno; 180 → dos). Un
+ * turno nunca excede el cierre. El cálculo de ocupación (overlap, half-open) no
+ * cambia: solo cambia de dónde salen los candidatos.
+ */
+function turnosLibresCancha(
+  courtId: string,
+  occupying: AvailabilityBooking[],
+  openMin: number,
+  closeMin: number,
+  slotMin: number,
+): Array<[number, number]> {
+  // Intervalos ocupados de esta cancha, recortados a la ventana y fusionados.
+  const ocupados = occupying
+    .filter((b) => b.courtId === courtId)
+    .map((b): [number, number] => [Math.max(openMin, toMin(b.startTime)), Math.min(closeMin, toMin(b.endTime))])
+    .filter(([s, e]) => e > s)
+    .sort((a, b) => a[0] - b[0]);
+
+  const merged: Array<[number, number]> = [];
+  for (const iv of ocupados) {
+    const last = merged[merged.length - 1];
+    if (last && iv[0] <= last[1]) last[1] = Math.max(last[1], iv[1]);
+    else merged.push([...iv]);
+  }
+
+  // Recorre los huecos libres y genera turnos de slotMin que entren completos.
+  const turnos: Array<[number, number]> = [];
+  const emitir = (desde: number, hasta: number) => {
+    for (let t = desde; t + slotMin <= hasta; t += slotMin) turnos.push([t, t + slotMin]);
+  };
+
+  let cur = openMin;
+  for (const [s, e] of merged) {
+    emitir(cur, s); // hueco antes de esta ocupación
+    cur = Math.max(cur, e);
+  }
+  emitir(cur, closeMin); // hueco final hasta el cierre
+  return turnos;
+}
+
+/**
  * Cálculo puro de disponibilidad: dados las canchas, los bookings del día y la
- * ventana horaria, devuelve los slots con las canchas libres en cada uno.
- * Solo se incluyen los slots con al menos una cancha libre (igual que el
- * endpoint público original). Sin lógica de UI.
+ * ventana horaria, devuelve los turnos libres agrupados por horario (qué canchas
+ * están libres en cada turno). Solo incluye turnos con al menos una cancha libre.
+ * Sin lógica de UI.
  *
+ * - Los turnos se generan "pegados a la ocupación" (no en una grilla fija): así
+ *   se aprovechan los huecos reales aunque no caigan en múltiplos de slotMin.
+ * - `slotMin` sale de la ventana (default 90). TODO: a futuro, por deporte.
  * - `sportId`: si se pasa, filtra las canchas por deporte; si no, todas.
- * - `start`/`end`: acotan la ventana (slot.start >= start y slot.end <= end).
+ * - `start`/`end`: acotan los turnos ofrecidos (turno.start >= start, turno.end <= end).
  * - Un booking cuenta como ocupado salvo que su status sea 'cancelado'.
  */
 export function computeAvailability(input: {
@@ -67,31 +114,35 @@ export function computeAvailability(input: {
   // Solo ocupan los bookings no cancelados.
   const occupying = input.bookings.filter((b) => b.status !== "cancelado");
 
-  const slots: AvailabilitySlot[] = [];
+  const openMin = toMin(window.open);
   const closeMin = toMin(window.close);
   const slotMin = window.slotMinutes;
+  // Filtro de franja (acota los turnos a [start, end]).
+  const minStart = start ? toMin(start) : openMin;
+  const maxEnd = end ? toMin(end) : closeMin;
 
-  for (let cur = toMin(window.open); cur + slotMin <= closeMin; cur += slotMin) {
-    const s = fmt(cur);
-    const e = fmt(cur + slotMin);
-    if (start && s < start) continue;
-    if (end && e > end) continue;
+  // Agrupamos por (inicio, fin) las canchas libres. Recorremos courtsInScope en
+  // orden de sortOrder para preservar ese orden dentro de cada turno.
+  const porTurno = new Map<string, { start: number; end: number; courts: { id: string; name: string }[] }>();
 
-    const freeCourts = courtsInScope.filter(
-      (c) => !occupying.some((b) => b.courtId === c.id && b.startTime < e && b.endTime > s),
-    );
-
-    if (freeCourts.length > 0) {
-      slots.push({
-        start: s,
-        end: e,
-        freeCourts: freeCourts.map((c) => ({ id: c.id, name: c.name })),
-        totalCourts: courtsInScope.length,
-      });
+  for (const court of courtsInScope) {
+    for (const [tStart, tEnd] of turnosLibresCancha(court.id, occupying, openMin, closeMin, slotMin)) {
+      if (tStart < minStart || tEnd > maxEnd) continue; // fuera de la franja pedida
+      const key = `${tStart}-${tEnd}`;
+      const entry = porTurno.get(key) ?? { start: tStart, end: tEnd, courts: [] };
+      entry.courts.push({ id: court.id, name: court.name });
+      porTurno.set(key, entry);
     }
   }
 
-  return slots;
+  return [...porTurno.values()]
+    .sort((a, b) => a.start - b.start || a.end - b.end)
+    .map((t) => ({
+      start: fmt(t.start),
+      end: fmt(t.end),
+      freeCourts: t.courts,
+      totalCourts: courtsInScope.length,
+    }));
 }
 
 /**
