@@ -28,6 +28,8 @@ export const bookingStatusEnum = pgEnum("booking_status", ["confirmado", "cancel
 export const eventKindEnum = pgEnum("event_kind", ["americano", "torneo", "clinica"]);
 export const eventStatusEnum = pgEnum("event_status", ["inscripcion_abierta", "programado", "finalizado", "cancelado"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pagado", "senado", "impago"]);
+// Origen de la reserva: cargada desde el panel del admin, o creada por el bot (Fase 6).
+export const bookingOriginEnum = pgEnum("booking_origin", ["admin", "bot"]);
 export const notifChannelEnum = pgEnum("notif_channel", ["whatsapp", "email"]);
 export const notifKindEnum = pgEnum("notif_kind", ["cancelacion", "recordatorio", "confirmacion"]);
 export const notifStatusEnum = pgEnum("notif_status", ["pendiente", "enviado", "error"]);
@@ -135,6 +137,8 @@ export const bookings = pgTable("bookings", {
   endTime: text("end_time").notNull(),
   type: bookingTypeEnum("type").notNull(),
   status: bookingStatusEnum("status").default("confirmado").notNull(),
+  // Quién originó la reserva. 'admin' = panel; 'bot' = creada por el bot (Fase 6).
+  origin: bookingOriginEnum("origin").default("admin").notNull(),
   customerId: uuid("customer_id").references(() => customers.id),
   professorId: uuid("professor_id").references(() => professors.id),
   eventId: uuid("event_id").references(() => events.id),
@@ -276,6 +280,7 @@ export type Customer = typeof customers.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;
 export type BookingType = typeof bookingTypeEnum.enumValues[number];
 export type BookingStatus = typeof bookingStatusEnum.enumValues[number];
+export type BookingOrigin = typeof bookingOriginEnum.enumValues[number];
 export type Event = typeof events.$inferSelect;
 export type RecurringRule = typeof recurringRules.$inferSelect;
 export type BotConversation = typeof botConversations.$inferSelect;

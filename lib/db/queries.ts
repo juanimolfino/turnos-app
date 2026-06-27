@@ -335,6 +335,9 @@ export async function createBooking(data: {
   price?: number | null;
   paymentStatus?: "pagado" | "senado" | "impago" | null;
   notes?: string | null;
+  // Origen de la reserva. Default 'admin' (panel). En Fase 6, el bot creará
+  // reservas pasando origin: 'bot' por acá.
+  origin?: "admin" | "bot";
 }) {
   const db = getDb();
   const [booking] = await db.insert(bookings).values({
@@ -345,6 +348,7 @@ export async function createBooking(data: {
     endTime: data.endTime,
     type: data.type,
     status: data.status ?? "confirmado",
+    origin: data.origin ?? "admin",
     customerId: data.customerId ?? null,
     professorId: data.professorId ?? null,
     eventId: data.eventId ?? null,
@@ -510,6 +514,7 @@ export async function createAgendaBlocks(input: {
         endTime: input.endTime,
         type: input.type,
         status: "confirmado",
+        origin: "admin", // bloques cargados desde el panel del admin
         notes: input.notes ?? null,
         blockGroupId,
       });

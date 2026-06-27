@@ -71,6 +71,13 @@
       "when": 1782457696433,
       "tag": "0009_clean_blackheart",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782536424574,
+      "tag": "0010_workable_anthem",
+      "breakpoints": true
     }
   ]
 }

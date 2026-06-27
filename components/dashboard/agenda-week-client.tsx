@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Plus, Settings2, X, Trash2, Pencil } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-is-mobile";
+import { bookingTypeLabel } from "@/lib/bookings/labels";
 
 type BlockType = "simple" | "clase" | "fijo" | "americano" | "torneo" | "bloqueo";
 
@@ -27,13 +28,14 @@ interface Props {
   today: string;
 }
 
+// Las labels salen de lib/bookings/labels (fuente única). 'simple' = "Reservado".
 const TYPE_META: Record<BlockType, { label: string; short: string; bg: string; bd: string; fg: string }> = {
-  simple:    { label: "Turno libre", short: "Libre",     bg: "#E4F1EF", bd: "#C9E5E0", fg: "#2E7D6F" },
-  clase:     { label: "Clases",     short: "Clases",    bg: "#EAF0F8", bd: "#D3DEF0", fg: "#3D5C93" },
-  fijo:      { label: "Turno fijo", short: "Fijo",      bg: "#F1EAF7", bd: "#E2D4EF", fg: "#6B4E9E" },
-  americano: { label: "Americano",  short: "Americano", bg: "#FBEBE2", bd: "#F2D6C5", fg: "#B0572C" },
-  torneo:    { label: "Torneo",     short: "Torneo",    bg: "#F7EFD9", bd: "#EBDFBF", fg: "#8A6D1F" },
-  bloqueo:   { label: "Cerrado",    short: "Cerrado",   bg: "#EFECE6", bd: "#DED8CC", fg: "#8A8377" },
+  simple:    { label: bookingTypeLabel("simple"),    short: "Reservado", bg: "#FFFFFF", bd: "#E7E1D6", fg: "#7A746A" },
+  clase:     { label: bookingTypeLabel("clase"),     short: "Clases",    bg: "#EAF0F8", bd: "#D3DEF0", fg: "#3D5C93" },
+  fijo:      { label: bookingTypeLabel("fijo"),      short: "Fijo",      bg: "#F1EAF7", bd: "#E2D4EF", fg: "#6B4E9E" },
+  americano: { label: bookingTypeLabel("americano"), short: "Americano", bg: "#FBEBE2", bd: "#F2D6C5", fg: "#B0572C" },
+  torneo:    { label: bookingTypeLabel("torneo"),    short: "Torneo",    bg: "#F7EFD9", bd: "#EBDFBF", fg: "#8A6D1F" },
+  bloqueo:   { label: bookingTypeLabel("bloqueo"),   short: "Cerrado",   bg: "#EFECE6", bd: "#DED8CC", fg: "#8A8377" },
 };
 // Mapea el tipo guardado (incluye el legacy "evento") a su metadata visual.
 function metaFor(type: string) {
