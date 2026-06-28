@@ -246,3 +246,99 @@ describe("computeAvailability — huecos pegados a la ocupación", () => {
     ]);
   });
 });
+
+// ── Grilla a nivel CLUB: coherente entre canchas, dinámica, sin solapes ───────
+describe("computeAvailability — grilla de club (no solapada entre canchas)", () => {
+  const toMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+  const haySolape = (slots: { start: string; end: string }[]) => {
+    for (let i = 0; i < slots.length; i++)
+      for (let j = i + 1; j < slots.length; j++)
+        if (toMin(slots[i].start) < toMin(slots[j].end) && toMin(slots[i].end) > toMin(slots[j].start)) return true;
+    return false;
+  };
+  const win = { open: "08:00", close: "23:30", slotMinutes: 90 };
+
+  it("CASO DIAGNÓSTICO: cancha 1 clase hasta 16:00 + cancha 2 vacía → lista del club SIN solapes", () => {
+    const slots = computeAvailability({
+      courts: [
+        { id: "c1", name: "Cancha 1", sortOrder: 0, sportId: "padel" },
+        { id: "c2", name: "Cancha 2", sortOrder: 1, sportId: "padel" },
+      ],
+      bookings: [{ courtId: "c1", startTime: "08:00", endTime: "16:00", status: "confirmado" }],
+      window: win,
+    });
+    // Ningún turno del club se pisa con otro (antes había solapes cross-cancha).
+    expect(haySolape(slots)).toBe(false);
+    // Cada turno es coherente con los siguientes (consecutivos o separados, nunca corridos 30').
+    // La tarde arranca anclada a la ocupación: hay un turno a las 16:00 con Cancha 1 libre.
+    const t16 = slots.find((s) => s.start === "16:00");
+    expect(t16).toBeDefined();
+    expect(t16!.freeCourts.map((c) => c.id)).toContain("c1");
+  });
+
+  it("DINÁMICO: clase hasta 16:00 → primer turno de tarde 16:00; clase hasta 16:30 → 16:30", () => {
+    const mk = (claseEnd: string) =>
+      computeAvailability({
+        courts: [{ id: "c1", name: "Cancha 1", sortOrder: 0, sportId: "padel" }],
+        bookings: [{ courtId: "c1", startTime: "08:00", endTime: claseEnd, status: "confirmado" }],
+        window: win,
+      });
+    expect(mk("16:00")[0].start).toBe("16:00");
+    expect(mk("16:30")[0].start).toBe("16:30");
+  });
+
+  it("NO pierde el hueco real entre dos bloques (19:00–20:30) en una cancha del club", () => {
+    const slots = computeAvailability({
+      courts: [
+        { id: "c1", name: "Cancha 1", sortOrder: 0, sportId: "padel" },
+        { id: "c2", name: "Cancha 2", sortOrder: 1, sportId: "padel" },
+      ],
+      bookings: [
+        { courtId: "c1", startTime: "08:00", endTime: "19:00", status: "confirmado" },
+        { courtId: "c1", startTime: "20:30", endTime: "23:30", status: "confirmado" },
+        // Cancha 2 llena todo el día → el único hueco real es el de Cancha 1.
+        { courtId: "c2", startTime: "08:00", endTime: "23:30", status: "confirmado" },
+      ],
+      window: win,
+    });
+    const t = slots.find((s) => s.start === "19:00" && s.end === "20:30");
+    expect(t).toBeDefined();
+    expect(t!.freeCourts.map((c) => c.id)).toEqual(["c1"]);
+    expect(haySolape(slots)).toBe(false);
+  });
+
+  it("cada horario reporta correctamente qué canchas están libres", () => {
+    const slots = computeAvailability({
+      courts: [
+        { id: "c1", name: "Cancha 1", sortOrder: 0, sportId: "padel" },
+        { id: "c2", name: "Cancha 2", sortOrder: 1, sportId: "padel" },
+      ],
+      // c1 ocupada 08:00-09:30; c2 libre todo el día.
+      bookings: [{ courtId: "c1", startTime: "08:00", endTime: "09:30", status: "confirmado" }],
+      window: { open: "08:00", close: "12:30", slotMinutes: 90 },
+    });
+    const byStart = Object.fromEntries(slots.map((s) => [s.start, s.freeCourts.map((c) => c.id)]));
+    expect(byStart["08:00"]).toEqual(["c2"]); // c1 ocupada
+    expect(byStart["09:30"]).toEqual(["c1", "c2"]); // ambas libres
+    expect(byStart["11:00"]).toEqual(["c1", "c2"]);
+  });
+
+  it("Pádel Central (canchas alineadas) → mismos horarios, sin regresión", () => {
+    const slots = computeAvailability({
+      courts: [
+        { id: "c1", name: "Cancha 1", sortOrder: 0, sportId: "padel" },
+        { id: "c2", name: "Cancha 2", sortOrder: 1, sportId: "padel" },
+        { id: "c3", name: "Cancha 3", sortOrder: 2, sportId: "padel" },
+      ],
+      bookings: [
+        { courtId: "c1", startTime: "08:00", endTime: "20:00", status: "confirmado" },
+        { courtId: "c1", startTime: "22:00", endTime: "23:30", status: "confirmado" },
+      ],
+      window: win,
+    });
+    expect(slots.map((s) => s.start)).toEqual([
+      "08:00", "09:30", "11:00", "12:30", "14:00", "15:30", "17:00", "18:30", "20:00", "21:30",
+    ]);
+    expect(haySolape(slots)).toBe(false);
+  });
+});

@@ -71,13 +71,17 @@ el bot dice "hay turno a las 18" y cuando el jugador llega estaba ocupado, se pi
 jugador y al dueño. Por eso el panel busca que cargar disponibilidad sea lo más simple
 posible, y la fuente de verdad de "qué está libre" es siempre la base, una sola.
 
-#### Disponibilidad "pegada a la ocupación", no grilla fija
+#### Disponibilidad "pegada a la ocupación", a nivel club (no grilla fija ni por cancha aislada)
 Los turnos disponibles se calculan a partir de los huecos reales entre lo ocupado (un
 turno arranca donde termina la ocupación anterior), no sobre una grilla rígida anclada a
 un horario fijo. Una grilla fija perdía huecos jugables reales (ej. un hueco de 19:00 a
 20:30 que no caía en la grilla), y el bot decía "no hay" cuando sí había — el peor error
 posible para un producto de reservas. La duración del turno es 90 min para pádel, pero
-está pensada para ser configurable por deporte. *(El cómo del cálculo está en
+está pensada para ser configurable por deporte. Además, la grilla es **del club, no de
+cada cancha por separado**: un solo barrido del día arma horarios coherentes (cada uno
+con las canchas libres en ese momento) que **no se solapan entre sí**. Si se calculara
+cancha por cancha, dos canchas con ocupación distinta producían horarios corridos que se
+pisaban ("20:00 y 20:30" a la vez). *(El cómo del cálculo está en
 [§ Bot de reservas](#bot-de-reservas-asistente-de-pádel) y §5.)*
 
 #### El jugador no tiene login; se identifica por teléfono + nombre
@@ -468,9 +472,14 @@ y los canales son adaptadores en `lib/bot/channels/`. Redacción con OpenAI.
 5. El bot confirma con lugar, cancha, día, hora y el **código** (guardar para cancelar).
 
 ### Reglas clave
-- **Disponibilidad**: una cancha está libre en un rango si NO hay booking `status<>'cancelado'`
-  que se superponga (half-open `start < fin && end > inicio`). Turnos "pegados a la ocupación"
-  (no grilla fija), duración `slotMinutes` (default 90).
+- **Disponibilidad** (`lib/bookings/availability.ts → computeAvailability`): una cancha está
+  libre en un rango si NO hay booking `status<>'cancelado'` que se superponga (half-open
+  `start < fin && end > inicio`). La grilla es **a nivel club** (un solo barrido del día, no
+  una grilla por cancha que se mezcla): turnos "pegados a la ocupación" (no grilla fija),
+  **mutuamente excluyentes** (no se solapan entre sí), donde cada horario reporta las canchas
+  libres en ese momento. Es **dinámica**: el cursor se re-ancla a los bordes de ocupación
+  (clase termina 16:00 → primer turno 16:00; termina 16:30 → 16:30) y salta los tramos sin
+  nada libre sin perder huecos reales. Duración `slotMinutes` (default 90; a futuro por deporte).
 - **Anti-doble-booking en DOS capas:**
   - **Capa B (software):** re-chequeo de solapamiento antes de insertar. Mensaje amable si se ocupó.
   - **Capa A (base, garantía de hierro):** constraint `EXCLUDE USING gist` sobre `court_id` +
