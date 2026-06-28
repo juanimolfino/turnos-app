@@ -8,6 +8,8 @@ import { buscarDisponibilidad } from "@/lib/bot/search";
 import { redactarRespuesta } from "@/lib/bot/reply";
 import { extraerAccionReserva } from "@/lib/bot/extraer-reserva";
 import { crearReservaBot, resolverTurno, confirmarReservaTexto } from "@/lib/bot/reservar";
+import { extraerAccionCancelacion } from "@/lib/bot/extraer-cancelacion";
+import { cancelarReservaBotPorCodigo, respuestaCancelacionTexto } from "@/lib/bot/cancelar";
 
 // Registro de adaptadores por canal. Para sumar un canal nuevo (ej. WhatsApp),
 // se agrega su entrada acá y un value en el type Channel; handle no cambia.
@@ -29,6 +31,27 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
   const history = await getHistory(key);
   const userTurn: ChatTurn = { role: "user", content: msg.text };
   const convo = [...history, userTurn];
+
+  const accionCancelacion = extraerAccionCancelacion(convo);
+  if (accionCancelacion.tipo !== "ninguna") {
+    let respuesta: string;
+    if (accionCancelacion.tipo === "pedir_codigo") {
+      respuesta = "Pasame tu código de reserva (3 letras y 3 números, por ejemplo HYS324) y la cancelo.";
+    } else if (accionCancelacion.tipo === "codigo_invalido") {
+      respuesta = respuestaCancelacionTexto({ ok: false, error: "CODIGO_INVALIDO" });
+    } else {
+      const result = await cancelarReservaBotPorCodigo({
+        bookingCode: accionCancelacion.bookingCode,
+        customerPhone: msg.userId,
+      });
+      respuesta = respuestaCancelacionTexto(result);
+    }
+
+    const adapter = adapters[msg.channel];
+    await adapter.send(msg.userId, respuesta);
+    await appendTurns(key, [userTurn, { role: "assistant", content: respuesta }]);
+    return;
+  }
 
   // "Ahora": extraerIntencion lo formatea en la timezone del negocio (BA).
   const intent = await extraerIntencion(convo, new Date());

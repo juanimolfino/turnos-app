@@ -29,6 +29,16 @@ vi.mock("@/lib/bot/brain", () => ({ generarRespuesta: (...a: unknown[]) => gener
 const extraerAccionReserva = vi.fn();
 vi.mock("@/lib/bot/extraer-reserva", () => ({ extraerAccionReserva: (...a: unknown[]) => extraerAccionReserva(...a) }));
 
+const extraerAccionCancelacion = vi.fn();
+vi.mock("@/lib/bot/extraer-cancelacion", () => ({ extraerAccionCancelacion: (...a: unknown[]) => extraerAccionCancelacion(...a) }));
+
+const cancelarReservaBotPorCodigo = vi.fn();
+const respuestaCancelacionTexto = vi.fn();
+vi.mock("@/lib/bot/cancelar", () => ({
+  cancelarReservaBotPorCodigo: (...a: unknown[]) => cancelarReservaBotPorCodigo(...a),
+  respuestaCancelacionTexto: (...a: unknown[]) => respuestaCancelacionTexto(...a),
+}));
+
 const crearReservaBot = vi.fn();
 const resolverTurno = vi.fn();
 const confirmarReservaTexto = vi.fn();
@@ -59,6 +69,9 @@ describe("handleIncomingMessage (Fase 6 — reservar)", () => {
     redactarRespuesta.mockReset().mockResolvedValue("texto oferta");
     generarRespuesta.mockReset().mockResolvedValue("¿qué día?");
     extraerAccionReserva.mockReset().mockResolvedValue(accionNinguna);
+    extraerAccionCancelacion.mockReset().mockReturnValue({ tipo: "ninguna" });
+    cancelarReservaBotPorCodigo.mockReset();
+    respuestaCancelacionTexto.mockReset().mockReturnValue("CANCELADA");
     crearReservaBot.mockReset();
     resolverTurno.mockReset().mockReturnValue(turno);
     confirmarReservaTexto.mockReset().mockReturnValue("CONFIRMADA HYS324");
@@ -125,5 +138,27 @@ describe("handleIncomingMessage (Fase 6 — reservar)", () => {
 
     expect(crearReservaBot).not.toHaveBeenCalled();
     expect(redactarRespuesta).toHaveBeenCalled();
+  });
+
+  it("cancelación con código → cancela antes de buscar disponibilidad (teléfono = id del canal)", async () => {
+    extraerAccionCancelacion.mockReturnValue({ tipo: "cancelar", bookingCode: "HYS324" });
+    cancelarReservaBotPorCodigo.mockResolvedValue({ ok: true, status: "cancelada", reserva: { bookingCode: "HYS324" } });
+
+    await handleIncomingMessage(msg("quiero cancelar HYS324"));
+
+    expect(cancelarReservaBotPorCodigo).toHaveBeenCalledWith({ bookingCode: "HYS324", customerPhone: "123" });
+    expect(extraerIntencion).not.toHaveBeenCalled();
+    expect(buscarDisponibilidad).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith("123", "CANCELADA");
+  });
+
+  it("cancelación sin código → pide el código y no busca disponibilidad", async () => {
+    extraerAccionCancelacion.mockReturnValue({ tipo: "pedir_codigo" });
+
+    await handleIncomingMessage(msg("quiero cancelar mi turno"));
+
+    expect(cancelarReservaBotPorCodigo).not.toHaveBeenCalled();
+    expect(extraerIntencion).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith("123", expect.stringContaining("código de reserva"));
   });
 });

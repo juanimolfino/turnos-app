@@ -108,7 +108,9 @@ técnico de las dos capas está en [§ Bot de reservas](#bot-de-reservas-asisten
 #### El código de reserva tipo aerolínea
 Como no hay login, el jugador necesita una forma de identificar **su** reserva para
 cancelarla sin que otro pueda. Se le da un código corto tipo vuelo (`HYS324`) al
-reservar. Ese código es la prueba de que la reserva es suya.
+reservar. Para cancelar, el bot exige **código + mismo teléfono del canal**: el código
+identifica la reserva y el teléfono evita que alguien cancele una reserva ajena por
+adivinar o probar códigos.
 
 ### Pagos (diseñado, se implementa en una fase posterior)
 
@@ -460,6 +462,10 @@ y los canales son adaptadores en `lib/bot/channels/`. Redacción con OpenAI.
 - `extraer-reserva.ts` — `extraerAccionReserva`: decide si el usuario eligió un turno y/o dio su nombre.
 - `reservar.ts` — motor: `crearReservaBot` (atómico, anti-doble-booking), `generarBookingCode`,
   `resolverTurno`, `confirmarReservaTexto`.
+- `extraer-cancelacion.ts` — detecta si el usuario quiere cancelar y extrae/valida el
+  `booking_code` sin meter lógica en adaptadores.
+- `cancelar.ts` — motor de cancelación por código: busca reserva del bot, valida teléfono,
+  cancela suave (`status='cancelado'`) y responde con templates determinísticos.
 
 ### Flujo de reserva del bot (Fase 6) — end to end
 1. El usuario busca y el bot ofrece turnos concretos por lugar (búsqueda ya existente).
@@ -470,6 +476,22 @@ y los canales son adaptadores en `lib/bot/channels/`. Redacción con OpenAI.
    `payment_status='impago'` (el club del MVP requiere **0% de pago**), con `customer_name`,
    `customer_phone` y un `booking_code` único.
 5. El bot confirma con lugar, cancha, día, hora y el **código** (guardar para cancelar).
+
+### Flujo de cancelación del bot (Fase 6.5) — código + teléfono
+1. El usuario pide cancelar y pasa su `booking_code` (ej. `HYS324`). Si no lo pasa, el bot
+   lo pide; si el formato no es 3 letras + 3 números, pide el código bien.
+2. El bot busca solo reservas `origin='bot'` / `type='simple'` con ese código.
+3. **Regla de seguridad:** la cancelación solo procede si el código existe **y**
+   `customer_phone` coincide con el `userId` del canal que escribe. Si el código no existe
+   o el teléfono no coincide, el bot responde el mismo mensaje neutro ("no encontré una
+   reserva con ese código") y no revela si el código era válido.
+4. Si la reserva ya estaba `cancelado`, avisa que ya estaba cancelada y no escribe nada.
+5. Si el turno ya empezó o quedó en el pasado según la timezone del club, no permite
+   cancelarlo desde el bot.
+6. Si pasa las validaciones, cancela suave: actualiza `bookings.status='cancelado'` (no
+   borra la fila). Eso libera el turno porque la disponibilidad ignora bookings cancelados.
+7. La confirmación al usuario es determinística e incluye código, lugar, cancha, día y hora;
+   la IA no redacta datos críticos de la cancelación.
 
 ### Reglas clave
 - **Disponibilidad** (`lib/bookings/availability.ts → computeAvailability`): una cancha está
@@ -496,5 +518,5 @@ y los canales son adaptadores en `lib/bot/channels/`. Redacción con OpenAI.
   pago) sin reescribir la firma ni el manejo de errores (documentado en `crearReservaBot`).
 - Nombre/teléfono se guardan **en el booking** (no en `customers`): la tabla global de clientes
   queda para una etapa posterior.
-- **Fase futura (NO en Fase 6):** pago / link de MercadoPago / hold con expiración / cancelación
-  por código / `customers` global / búsqueda por distancia (lat/lng).
+- **Fase futura:** pago / link de MercadoPago / hold con expiración / refunds /
+  `customers` global / búsqueda por distancia (lat/lng).
