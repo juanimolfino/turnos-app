@@ -59,6 +59,27 @@ describe("redactarRespuesta", () => {
     expect(system).toMatch(/rango/i); // prohíbe el rango difuso
     expect(system).toMatch(/EXACTAMENTE/);
   });
+
+  it("el prompt cierra honesto: no ofrecer 'más' del mismo día, ofrecer OTRO día", async () => {
+    create.mockImplementation(async () => modelReturns("ok"));
+    await redactarRespuesta({ history: [], userText: "el sábado", intent, lugares });
+
+    const system = create.mock.calls.at(-1)![0].messages[0].content as string;
+    // No prometer opciones inexistentes; "más" solo si quedan turnos sin nombrar.
+    expect(system).toMatch(/NUNCA prometas opciones que no están/i);
+    expect(system).toMatch(/SOLO es válido si quedan turnos/i);
+    // Cuando ya mostró todos: ofrecer otro día (acción real).
+    expect(system).toMatch(/OTRO día/);
+    expect(system).toMatch(/no repitas la misma lista/i);
+  });
+
+  it("a los datos les marca que son TODOS los turnos del día", async () => {
+    create.mockImplementation(async () => modelReturns("ok"));
+    await redactarRespuesta({ history: [], userText: "el sábado", intent, lugares });
+
+    const datosMsg = create.mock.calls.at(-1)![0].messages.at(-1).content as string;
+    expect(datosMsg).toContain('"sonTodosLosTurnosDelDia":true');
+  });
 });
 
 // Set de slots concretos para los tests del validador.
