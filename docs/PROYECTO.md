@@ -81,7 +81,7 @@ El layout `(app)` muestra el **Sidebar** (escritorio) o barra superior + nav inf
 ### Agenda semanal (`/agenda`) — donde se carga la información
 - Grilla **por cancha** (pestañas) × **horarios**, navegable por semana.
 - Botón **+ Nuevo bloque** (o tocar una celda libre). El editor permite:
-  - **Tipo**: `clase` · `fijo` · `flex` (turno variable) · `americano` · `torneo` · `bloqueo` (cerrado)
+  - **Tipo**: `simple` (Reservado) · `clase` · `fijo` · `americano` · `torneo` · `bloqueo` (cerrado)
   - **Canchas**: una, varias o **Todas**
   - **Días** de la semana (multi-selección)
   - **Horario** desde/hasta (cada 30 min)
@@ -100,7 +100,7 @@ El layout `(app)` muestra el **Sidebar** (escritorio) o barra superior + nav inf
 - Se arma con los **mismos `bookings`** de la agenda semanal, para el día elegido.
 - Formato: columna **Disponibilidad** (semáforo: Todas libres / X libres / Completo),
   franjas según los bordes de los bloques, y **estado por celda** (Libre · Reservado ·
-  Clase · Turno fijo · Turno flex · Americano · Torneo · Cerrado).
+  Clase · Turno fijo · Americano · Torneo · Cerrado).
 - **Banda unificada** cuando un bloque abarca todas las canchas.
 - **Línea de "ahora"** posicionada a la hora real dentro de la franja, y lo ya
   transcurrido del día **atenuado**.
@@ -140,9 +140,11 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
   booking con `status != cancelado` que se superponga (`start < rangoFin && end > rangoInicio`).
 - Lo que carga el dueño en /agenda y lo que reserva el bot viven **todo acá**.
 
-### `customers` 🤖 — jugadores/clientes del club
+### `customers` — jugadores/clientes del club (legacy / panel)
 `id` · `club_id` · `name` · `phone` · `email` · `notes` · `created_at`
-(se crean por find-or-create con el teléfono al reservar)
+- La usa el endpoint **legacy** `/api/public/bookings` (find-or-create por teléfono).
+- **El bot NO usa esta tabla:** guarda `customer_name`/`customer_phone` directo en el
+  `booking`. La tabla global de clientes queda para una **etapa futura**.
 
 ### `professors` — profes de clases
 `id` · `club_id` · `name` · `active`
@@ -205,7 +207,9 @@ GET /api/public/availability?date=YYYY-MM-DD[&api_key=...][&city=...][&start=HH:
 POST /api/public/bookings   (header x-api-key)
 body: { courtId, date, startTime, endTime, customerName, customerPhone, notes? }
 ```
-- Crea/encuentra el `customer` por teléfono, e inserta un `booking` `type: "simple"`.
+- (Endpoint **legacy**) Crea/encuentra un `customer` por teléfono e inserta un `booking`
+  `type: "simple"`. **Ojo:** el **bot** (`lib/bot/reservar.ts`) NO usa este endpoint ni la
+  tabla `customers` — guarda `customer_name`/`customer_phone` directo en el booking.
 - Si el club tiene `requires_payment`: queda `status: "pendiente"` y, si hay token de
   MercadoPago, devuelve `paymentUrl`. Si no, `status: "confirmado"`.
 
@@ -215,8 +219,8 @@ GET /api/public/bookings/[id]/confirm   (callback de MercadoPago)
 ```
 
 > El modelo es consistente: las reservas de jugadores son `bookings` `type: simple`;
-> los bloques del dueño son los otros `type`. El bot solo necesita
-> `clubs → courts → bookings (+ customers)`.
+> los bloques del dueño son los otros `type`. El bot trabaja con
+> `clubs → courts → bookings` (no usa `customers`: guarda nombre/teléfono en el booking).
 
 ---
 
@@ -244,7 +248,10 @@ node --env-file=.env.local scripts/seed-demo.mjs --clean   # borrarlos
 
 # Migraciones
 npm run db:generate   # genera SQL desde schema.ts
-npm run db:migrate    # aplica a la DB (DATABASE_URL)
+npm run db:migrate    # aplica las migraciones por DIRECT_URL (conexión directa, puerto 5432)
+# Las migraciones corren por DIRECT_URL, NO por el pooler (DATABASE_URL, 6543): el DDL
+# (CREATE EXTENSION, constraints EXCLUDE) falla a través de pgbouncer. El runtime de la
+# app sí usa DATABASE_URL (pooler). DIRECT_URL vive solo en .env.local.
 ```
 
 Clubs DEMO que crea el seed (api_key entre paréntesis):
