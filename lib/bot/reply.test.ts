@@ -13,7 +13,7 @@ import { redactarRespuesta, horariosPermitidos, horariosInventados } from "@/lib
 import type { Intent } from "@/lib/bot/intent";
 
 const intent: Intent = { date: "2026-06-27", time: "18:00", zone: "Bolívar", sport: "padel" };
-const lugares = [{ lugar: "El Corralón", barrio: "Centro", slots: [{ start: "16:30", end: "18:00", canchas: ["Cancha 1"] }] }];
+const lugares = [{ clubId: "cl1", lugar: "El Corralón", barrio: "Centro", slots: [{ start: "16:30", end: "18:00", canchas: [{ id: "ct1", name: "Cancha 1" }] }] }];
 
 const modelReturns = (content: string) => ({ choices: [{ message: { content } }] });
 
@@ -63,9 +63,9 @@ describe("redactarRespuesta", () => {
 
 // Set de slots concretos para los tests del validador.
 const setLugares = [
-  { lugar: "Pádel Central", barrio: "Belgrano", slots: [
-    { start: "16:30", end: "18:00", canchas: ["Cancha 2"] },
-    { start: "20:00", end: "21:30", canchas: ["Cancha 1"] },
+  { clubId: "cl1", lugar: "Pádel Central", barrio: "Belgrano", slots: [
+    { start: "16:30", end: "18:00", canchas: [{ id: "a", name: "Cancha 2" }] },
+    { start: "20:00", end: "21:30", canchas: [{ id: "b", name: "Cancha 1" }] },
   ] },
 ];
 

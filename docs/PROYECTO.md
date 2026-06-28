@@ -4,8 +4,9 @@
 
 Cancha es un sistema de gestión de turnos para canchas de pádel. Cada **club** (lugar)
 tiene un **admin** que gestiona su agenda; un **superadmin** administra los clubs y
-los admins. A futuro, un **bot de WhatsApp (n8n + IA)** consultará la misma base de
-datos para que los jugadores busquen y reserven turnos.
+los admins. Un **bot conversacional** (hoy Telegram, WhatsApp después; con OpenAI)
+usa la misma base para que los jugadores busquen y reserven turnos. Ver
+[§ Bot de reservas](#bot-de-reservas-asistente-de-pádel).
 
 ---
 
@@ -126,10 +127,15 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
 `id` · `club_id` · `court_id` · `date` (YYYY-MM-DD) · `start_time` · `end_time` (HH:MM) ·
 `type` · `status` · `customer_id` · `professor_id` · `event_id` · `recurring_rule_id` ·
 `block_group_id` · `price` · `payment_status` · `notes` · `created_at`
-- **`type`**: `simple` (reserva de jugador) · `clase` · `fijo` · `flex` · `americano` ·
-  `torneo` · `bloqueo` · `evento` (legacy)
+- **`type`**: `simple` (reserva de jugador / del bot) · `clase` · `fijo` · `americano` ·
+  `torneo` · `bloqueo` · `evento` (legacy). *(`flex` fue retirado: lo reemplazó `simple`.)*
+- **`origin`**: `admin` (cargado en el panel) · `bot` (creado por el bot)
 - **`status`**: `confirmado` · `pendiente` (espera pago) · `cancelado`
 - **`payment_status`**: `pagado` · `senado` · `impago`
+- **`customer_name` / `customer_phone`**: datos del cliente del bot (sin login); las
+  reservas del admin pueden no tenerlos.
+- **`booking_code`**: código tipo aerolínea (3 letras + 3 números, ej `HYS324`), único,
+  que el bot le da al cliente para cancelar.
 - **Regla de disponibilidad**: una cancha está **libre** en un rango si NO hay ningún
   booking con `status != cancelado` que se superponga (`start < rangoFin && end > rangoInicio`).
 - Lo que carga el dueño en /agenda y lo que reserva el bot viven **todo acá**.
@@ -250,10 +256,69 @@ Clubs DEMO que crea el seed (api_key entre paréntesis):
 
 ## 9. Pendientes / ideas a futuro
 
-- **Bot WhatsApp (n8n + IA)**: consulta directa a la DB (clubs/courts/bookings/customers).
 - **Búsqueda por zona en ciudades grandes**: hoy se filtra por `city`; el barrio
   (`neighborhood`) sirve como zona. Mejor evolución: agregar `lat`/`lng` al club y
   ordenar por **distancia real** a la ubicación que comparte el jugador por WhatsApp.
 - **Pagos**: el flujo MercadoPago está armado pero requiere token por club y prueba E2E.
 - **`opening_hours`**: darle UI por club (hoy se usa un default).
-- **`flex`** como modalidad reservable por el bot (turno variable).
+
+---
+
+## Bot de reservas (asistente de pádel)
+
+Bot conversacional del pueblo (MVP: Bolívar). Hoy **Telegram**; WhatsApp después.
+Agnóstico al canal: la lógica vive detrás de `handleIncomingMessage(IncomingMessage)`
+y los canales son adaptadores en `lib/bot/channels/`. Redacción con OpenAI.
+
+### Glosario
+- **lugar / club**: espacio físico (ej. "Pádel Central").
+- **cancha / court**: campo de juego; un lugar tiene varias.
+- **turno / reserva / booking**: una fila en `bookings`.
+- **booking_code**: código (3 letras + 3 números) que el bot da al cliente para cancelar.
+- **origin**: `admin` (panel) o `bot` (lo creó el bot).
+- **status**: `confirmado` / `pendiente` (espera pago) / `cancelado`.
+- **payment_status**: `impago` / `senado` (seña) / `pagado`.
+- **hold**: reserva en espera de pago (status `pendiente`). Concepto para Fase 7; hoy no se usa.
+
+### Módulos (`lib/bot/`)
+- `memory.ts` — historial de conversación (tabla `bot_conversations`, últimos ~10 mensajes).
+- `intent.ts` — `extraerIntencion` → `{ date, time, zone, sport }` (resuelve fechas relativas en tz BA).
+- `search.ts` — `buscarDisponibilidad`: clubs del pueblo (env `BOT_CITY`; sin setear = todos) →
+  reúsa `getClubAvailability`, agrupa por lugar; `interpretarFranja` (tarde→16:00, etc.).
+- `reply.ts` — `redactarRespuesta`: la IA redacta **solo sobre los datos reales** (no inventa horarios).
+- `extraer-reserva.ts` — `extraerAccionReserva`: decide si el usuario eligió un turno y/o dio su nombre.
+- `reservar.ts` — motor: `crearReservaBot` (atómico, anti-doble-booking), `generarBookingCode`,
+  `resolverTurno`, `confirmarReservaTexto`.
+
+### Flujo de reserva del bot (Fase 6) — end to end
+1. El usuario busca y el bot ofrece turnos concretos por lugar (búsqueda ya existente).
+2. El usuario elige un turno → el bot pide **nombre y apellido** ("¿A nombre de quién?").
+   El **teléfono sale del canal** (Telegram: `userId`); no se pide por chat.
+3. Al dar el nombre, **antes de escribir** se re-verifica que el turno siga libre (**capa B**).
+4. Si sigue libre, se crea el booking: `type='simple'`, `origin='bot'`, `status='confirmado'`,
+   `payment_status='impago'` (el club del MVP requiere **0% de pago**), con `customer_name`,
+   `customer_phone` y un `booking_code` único.
+5. El bot confirma con lugar, cancha, día, hora y el **código** (guardar para cancelar).
+
+### Reglas clave
+- **Disponibilidad**: una cancha está libre en un rango si NO hay booking `status<>'cancelado'`
+  que se superponga (half-open `start < fin && end > inicio`). Turnos "pegados a la ocupación"
+  (no grilla fija), duración `slotMinutes` (default 90).
+- **Anti-doble-booking en DOS capas:**
+  - **Capa B (software):** re-chequeo de solapamiento antes de insertar. Mensaje amable si se ocupó.
+  - **Capa A (base, garantía de hierro):** constraint `EXCLUDE USING gist` sobre `court_id` +
+    un rango temporal `tsrange` (extensión `btree_gist`), con `WHERE status <> 'cancelado'`.
+    El rango se arma con una función `booking_tsrange(date,start,end)` marcada `IMMUTABLE`
+    (el cast text→timestamp es STABLE; al ser strings ISO de formato fijo es determinístico,
+    y así se puede usar en la expresión del índice sin columna generada). Ante una carrera
+    concurrente, Postgres rechaza la 2ª inserción (`23P01`) y el motor la traduce a
+    `SLOT_NO_DISPONIBLE`. Una cancelada NO bloquea (coherente con la regla de disponibilidad).
+
+### Decisiones y alcance
+- Reserva del bot = **simple / bot / confirmado / impago** (MVP 0% de pago).
+- La creación está modelada para que en **Fase 7** se inserte un paso de **hold** (esperando
+  pago) sin reescribir la firma ni el manejo de errores (documentado en `crearReservaBot`).
+- Nombre/teléfono se guardan **en el booking** (no en `customers`): la tabla global de clientes
+  queda para una etapa posterior.
+- **Fase futura (NO en Fase 6):** pago / link de MercadoPago / hold con expiración / cancelación
+  por código / `customers` global / búsqueda por distancia (lat/lng).

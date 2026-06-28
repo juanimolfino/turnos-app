@@ -12,8 +12,9 @@ import type { Intent } from "@/lib/bot/intent";
 //  - Con valor (multi-ciudad) → filtra clubs por ese city (ilike, case-insensitive).
 const MAX_SLOTS_POR_LUGAR = 8;
 
-export type SlotLibre = { start: string; end: string; canchas: string[] };
-export type LugarDisponibilidad = { lugar: string; barrio: string | null; slots: SlotLibre[] };
+// canchas con id+nombre: el id se usa para reservar (Fase 6); el nombre, para mostrar.
+export type SlotLibre = { start: string; end: string; canchas: { id: string; name: string }[] };
+export type LugarDisponibilidad = { clubId: string; lugar: string; barrio: string | null; slots: SlotLibre[] };
 
 /**
  * Traduce la hora pedida a una ventana de búsqueda.
@@ -75,9 +76,9 @@ export async function buscarDisponibilidad(intent: Intent, userText: string): Pr
     const slots = (avail?.slots ?? []).slice(0, MAX_SLOTS_POR_LUGAR).map((s) => ({
       start: s.start,
       end: s.end,
-      canchas: s.freeCourts.map((c) => c.name),
+      canchas: s.freeCourts.map((c) => ({ id: c.id, name: c.name })),
     }));
-    if (slots.length) out.push({ lugar: club.name, barrio: club.neighborhood ?? null, slots });
+    if (slots.length) out.push({ clubId: club.id, lugar: club.name, barrio: club.neighborhood ?? null, slots });
   }
   return out;
 }

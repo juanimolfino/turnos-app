@@ -64,10 +64,15 @@ export async function redactarRespuesta(input: {
   intent: Intent;
   lugares: LugarDisponibilidad[];
 }): Promise<string> {
+  // Al modelo le pasamos solo lo humano (nombres de cancha, no ids).
   const datos = {
     fecha: input.intent.date,
     horaPedida: input.intent.time,
-    lugares: input.lugares,
+    lugares: input.lugares.map((l) => ({
+      lugar: l.lugar,
+      barrio: l.barrio,
+      slots: l.slots.map((s) => ({ start: s.start, end: s.end, canchas: s.canchas.map((c) => c.name) })),
+    })),
   };
 
   try {

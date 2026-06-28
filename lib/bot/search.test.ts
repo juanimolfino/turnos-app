@@ -106,7 +106,7 @@ describe("buscarDisponibilidad", () => {
     expect(getClubAvailability).toHaveBeenCalledTimes(2);
     // Pádel Central (Buenos Aires) aparece con su hueco real.
     expect(res).toEqual([
-      { lugar: "Pádel Central", barrio: "Belgrano", slots: [{ start: "20:00", end: "21:30", canchas: ["Cancha 1"] }] },
+      { clubId: "pc", lugar: "Pádel Central", barrio: "Belgrano", slots: [{ start: "20:00", end: "21:30", canchas: [{ id: "x", name: "Cancha 1" }] }] },
     ]);
   });
 
@@ -138,7 +138,7 @@ describe("buscarDisponibilidad", () => {
     const res = await buscarDisponibilidad(intent(), "el sábado");
     expect(res).toHaveLength(1);
     expect(res[0].lugar).toBe("Pádel Central");
-    expect(res[0].slots[0].canchas).toEqual(["Cancha 2"]);
+    expect(res[0].slots[0].canchas).toEqual([{ id: "y", name: "Cancha 2" }]);
   });
 
   it("un deporte inexistente → sin disponibilidad, sin crash y sin consultar canchas", async () => {

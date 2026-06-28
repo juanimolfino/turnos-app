@@ -149,6 +149,14 @@ export const bookings = pgTable("bookings", {
   price: integer("price"),
   paymentStatus: paymentStatusEnum("payment_status"),
   notes: text("notes"),
+  // Reservas del bot (sin login): nombre/teléfono se guardan en el propio booking
+  // (la tabla customers global queda para una etapa posterior). Nullable porque
+  // las reservas del admin pueden no tenerlos.
+  customerName: text("customer_name"),
+  customerPhone: text("customer_phone"),
+  // Código tipo aerolínea (3 letras + 3 números) para que el cliente cancele.
+  // Único en la tabla (ver constraint en migración).
+  bookingCode: text("booking_code").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
