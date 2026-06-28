@@ -44,8 +44,15 @@ interface ClubSettings {
   phone?: string | null;
   requiresPayment?: boolean;
   paymentDeadlineHours?: number;
-  mercadopagoAccessToken?: string | null;
   apiKey?: string | null;
+  mercadoPago?: {
+    connected: boolean;
+    mercadoPagoUserId?: string | null;
+    liveMode?: boolean | null;
+    expiresAt?: Date | string | null;
+    connectedAt?: Date | string | null;
+    updatedAt?: Date | string | null;
+  };
 }
 
 interface AjustesClientProps {
@@ -85,12 +92,14 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
   const [phone, setPhone] = useState(initial.phone ?? "");
   const [requiresPayment, setRequiresPayment] = useState(initial.requiresPayment ?? false);
   const [deadlineHours, setDeadlineHours] = useState(String(initial.paymentDeadlineHours ?? 24));
-  const [mpToken, setMpToken] = useState(initial.mercadopagoAccessToken ?? "");
   const [apiKey, setApiKey] = useState(initial.apiKey ?? "");
   const [saving, setSaving] = useState(false);
   const [genning, setGenning] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState("");
+  const mpStatus = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("mp");
+  const [error, setError] = useState(mpStatus === "error" ? "No se pudo conectar Mercado Pago. Intentá de nuevo." : "");
+  const notice = mpStatus === "connected" ? "Mercado Pago conectado" : "";
+  const mercadoPago = initial.mercadoPago ?? { connected: false };
 
   async function save() {
     setSaving(true); setError(""); setSaved(false);
@@ -105,7 +114,6 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
           phone: phone || null,
           requiresPayment,
           paymentDeadlineHours: parseInt(deadlineHours) || 24,
-          mercadopagoAccessToken: mpToken || null,
         }),
       });
       if (!res.ok) { const d = await res.json(); setError(d.error ?? "Error al guardar"); return; }
@@ -138,6 +146,9 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
       {saved && (
         <div style={{ background: "#E9F3EA", border: "1px solid #CFE6D2", borderRadius: 10, padding: "10px 14px", fontSize: 13.5, color: "#2F7D4E", fontWeight: 600 }}>✓ Cambios guardados</div>
       )}
+      {notice && (
+        <div style={{ background: "#E9F3EA", border: "1px solid #CFE6D2", borderRadius: 10, padding: "10px 14px", fontSize: 13.5, color: "#2F7D4E", fontWeight: 600 }}>{notice}</div>
+      )}
 
       <div style={{ background: "#FCFBF8", border: "1px solid #E7E1D6", borderRadius: 16, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: "#221F1B", letterSpacing: ".04em", textTransform: "uppercase" }}>Información del club</div>
@@ -150,12 +161,12 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
       </div>
 
       <div style={{ background: "#FCFBF8", border: "1px solid #E7E1D6", borderRadius: 16, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#221F1B", letterSpacing: ".04em", textTransform: "uppercase" }}>Pagos y MercadoPago</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#221F1B", letterSpacing: ".04em", textTransform: "uppercase" }}>Pagos y Mercado Pago</div>
 
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
           <div>
             <div style={{ fontSize: 14, fontWeight: 600, color: "#221F1B" }}>Requerir pago para confirmar reservas</div>
-            <div style={{ fontSize: 12.5, color: "#928B7E", marginTop: 2 }}>El bot enviará un link de MercadoPago y confirmará al pagar</div>
+            <div style={{ fontSize: 12.5, color: "#928B7E", marginTop: 2 }}>Preparado para la fase de cobro online del bot</div>
           </div>
           <button onClick={() => setRequiresPayment(!requiresPayment)} style={{
             width: 44, height: 26, borderRadius: 999,
@@ -173,7 +184,25 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
           <Field label="Horas límite para pagar" value={deadlineHours} onChange={setDeadlineHours} placeholder="24" type="number" />
         )}
 
-        <Field label="Access Token de MercadoPago" value={mpToken} onChange={setMpToken} placeholder="APP_USR-..." type="password" />
+        <div style={{ border: "1px solid #E0DACE", background: "#FFFFFF", borderRadius: 12, padding: 14, display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", gap: 12, alignItems: isMobile ? "stretch" : "center" }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#221F1B" }}>
+              {mercadoPago.connected ? "Mercado Pago conectado" : "Mercado Pago no conectado"}
+            </div>
+            <div style={{ fontSize: 12.5, color: "#928B7E", marginTop: 3 }}>
+              {mercadoPago.connected
+                ? "La cuenta del club ya autorizó a Cancha. No mostramos credenciales en el panel."
+                : "Conectá la cuenta del club para poder cobrar a nombre del club en una fase posterior."}
+            </div>
+          </div>
+          <a href="/api/mercadopago/oauth/start" style={{
+            display: "inline-flex", justifyContent: "center", alignItems: "center",
+            background: "#221F1B", color: "#fff", borderRadius: 9, padding: "10px 16px",
+            fontWeight: 700, fontSize: 13, textDecoration: "none", whiteSpace: "nowrap",
+          }}>
+            {mercadoPago.connected ? "Reconectar Mercado Pago" : "Conectar Mercado Pago"}
+          </a>
+        </div>
       </div>
 
       <div style={{ background: "#FCFBF8", border: "1px solid #E7E1D6", borderRadius: 16, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>

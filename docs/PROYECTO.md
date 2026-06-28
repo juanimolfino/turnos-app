@@ -112,19 +112,32 @@ reservar. Para cancelar, el bot exige **código + mismo teléfono del canal**: e
 identifica la reserva y el teléfono evita que alguien cancele una reserva ajena por
 adivinar o probar códigos.
 
-### Pagos (diseñado, se implementa en una fase posterior)
+### Pagos (diseñado, onboarding OAuth iniciado en Fase 7)
 
 El pago es **opcional y configurable por cada club**: puede pedir 0% (solo reservar,
 pagar en el lugar), 25% (una seña) o 100% (pago completo). El MVP arranca con el caso
 0%: la reserva se confirma directo, sin pago online.
 
-Cuando se sume el pago, el modelo es **marketplace**: cada club cobra a **su propia
-cuenta de Mercado Pago** (no hay una cuenta central que recibe todo). El flujo será:
-el jugador confirma → se re-chequea disponibilidad → la reserva pasa a **hold** (queda
-bloqueada para los demás) → se genera el link de pago de MP de ese club → si paga dentro
-de ~10 minutos, el webhook confirma la reserva; si no, el hold expira y el turno se
-libera. El estado de pago se refleja en `payment_status`: `impago` / `senado` (seña) /
-`pagado`.
+El modelo es **marketplace**: cada club cobra a **su propia cuenta de Mercado Pago** (no
+hay una cuenta central que recibe todo). La Fase 7 arranca por onboarding: desde
+`/ajustes` el admin conecta la cuenta de Mercado Pago del club vía OAuth. Cancha usa las
+credenciales de **nuestra aplicación de Mercado Pago** (`MERCADOPAGO_CLIENT_ID`,
+`MERCADOPAGO_CLIENT_SECRET`, `MERCADOPAGO_OAUTH_REDIRECT_URI`) para redirigir al dueño,
+recibir el `code` en `/api/mercadopago/oauth/callback` y canjearlo server-side por tokens
+del vendedor.
+
+Los tokens del club se guardan en `club_mercadopago_credentials` (server-side): `club_id`,
+`mercadopago_user_id`, `access_token`, `refresh_token`, `expires_at`, `scope`,
+`public_key`, `live_mode`, `connected_at`, `updated_at`. No se muestran al cliente ni se
+loggean. Reconectar Mercado Pago hace upsert sobre la misma fila del club. La columna
+legacy `clubs.mercadopago_access_token` queda para compatibilidad histórica; el onboarding
+OAuth nuevo no la expone en el panel.
+
+El uso de esos tokens queda para pasos siguientes: el jugador confirma → se re-chequea
+disponibilidad → la reserva pasa a **hold** (queda bloqueada para los demás) → se genera
+el link de pago de MP de ese club → si paga dentro de ~10 minutos, el webhook confirma la
+reserva; si no, el hold expira y el turno se libera. El estado de pago se refleja en
+`payment_status`: `impago` / `senado` (seña) / `pagado`.
 
 La plataforma podrá cobrar una **comisión configurable por club** (un *marketplace fee*),
 manejada desde la cuenta de superadmin. En el MVP arranca en 0%, pero la lógica se diseña
@@ -283,8 +296,16 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
 
 ### `clubs` 🤖 — cada lugar/cancha
 `id` · `name` · `timezone` · `plan` · `address` · `city` · `neighborhood` (barrio/zona) ·
-`phone` · `requires_payment` (bool) · `payment_deadline_hours` · `mercadopago_access_token` ·
+`phone` · `requires_payment` (bool) · `payment_deadline_hours` · `mercadopago_access_token` (legacy) ·
 `api_key` (auth del bot) · `created_at`
+
+### `club_mercadopago_credentials` — credenciales OAuth de MP por club
+`club_id` · `mercadopago_user_id` · `access_token` · `refresh_token` · `public_key` ·
+`scope` · `live_mode` · `expires_at` · `connected_at` · `updated_at`
+- Una fila por club conectado. Reconectar reemplaza tokens y metadatos.
+- Tokens server-side únicamente: no se devuelven en `/api/clubs/settings`, no se pasan al
+  cliente y no se loggean.
+- El uso para crear preferencias / links de pago del bot queda para pasos siguientes.
 
 ### `courts` 🤖 — canchas de cada club
 `id` · `club_id` · `sport_id` · `name` · `surface` · `sort_order` · `active`
@@ -432,7 +453,8 @@ Clubs DEMO que crea el seed (api_key entre paréntesis):
 - **Búsqueda por zona en ciudades grandes**: hoy se filtra por `city`; el barrio
   (`neighborhood`) sirve como zona. Mejor evolución: agregar `lat`/`lng` al club y
   ordenar por **distancia real** a la ubicación que comparte el jugador por WhatsApp.
-- **Pagos**: el flujo MercadoPago está armado pero requiere token por club y prueba E2E.
+- **Pagos**: el onboarding OAuth de Mercado Pago conecta cada club y guarda tokens
+  server-side. Falta usar esos tokens para crear pagos del bot y probar E2E.
 - **`opening_hours`**: darle UI por club (hoy se usa un default).
 
 ---

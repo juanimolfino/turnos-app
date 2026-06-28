@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getUserByAuthId } from "@/lib/db/queries";
+import { getClubMercadoPagoConnectionStatus, getUserByAuthId } from "@/lib/db/queries";
 import { getDb } from "@/lib/db";
 import { recurringRules, events, professors, customers, courts, clubs } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -19,13 +19,14 @@ export default async function AjustesPage() {
   const db = getDb();
   const clubId = profile.clubId;
 
-  const [allRules, allEvents, allProfessors, allCustomers, allCourts, clubRow] = await Promise.all([
+  const [allRules, allEvents, allProfessors, allCustomers, allCourts, clubRow, mercadoPagoStatus] = await Promise.all([
     db.select().from(recurringRules).where(and(eq(recurringRules.clubId, clubId), eq(recurringRules.active, true))),
     db.select().from(events).where(eq(events.clubId, clubId)),
     db.select().from(professors).where(and(eq(professors.clubId, clubId), eq(professors.active, true))),
     db.select().from(customers).where(eq(customers.clubId, clubId)),
     db.select().from(courts).where(and(eq(courts.clubId, clubId), eq(courts.active, true))),
     db.select().from(clubs).where(eq(clubs.id, clubId)),
+    getClubMercadoPagoConnectionStatus(clubId),
   ]);
 
   const professorMap = Object.fromEntries(allProfessors.map(p => [p.id, p.name]));
@@ -71,7 +72,7 @@ export default async function AjustesPage() {
     phone: club?.phone,
     requiresPayment: club?.requiresPayment,
     paymentDeadlineHours: club?.paymentDeadlineHours,
-    mercadopagoAccessToken: club?.mercadopagoAccessToken,
     apiKey: club?.apiKey,
+    mercadoPago: mercadoPagoStatus,
   }} />;
 }

@@ -1,6 +1,6 @@
 import { and, count, desc, eq, isNotNull, sql, lt, gt, gte, lte, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { clubs, courts, sports, professors, credits, jobs, subscriptions, transactions, users, bookings, customers, type JobType, type Role } from "@/lib/db/schema";
+import { clubs, courts, sports, professors, credits, jobs, subscriptions, transactions, users, bookings, customers, clubMercadoPagoCredentials, type JobType, type Role } from "@/lib/db/schema";
 import { sendPurchaseConfirmationEmail, sendWelcomeEmail } from "@/lib/email/send";
 import type { User } from "@supabase/supabase-js";
 import { randomBytes, randomUUID } from "crypto";
@@ -277,6 +277,72 @@ export async function updateClub(id: string, data: {
   const db = getDb();
   const [updated] = await db.update(clubs).set(data).where(eq(clubs.id, id)).returning();
   return updated;
+}
+
+export async function getClubMercadoPagoConnectionStatus(clubId: string) {
+  const row = await getDb().query.clubMercadoPagoCredentials.findFirst({
+    where: eq(clubMercadoPagoCredentials.clubId, clubId),
+    columns: {
+      clubId: true,
+      mercadoPagoUserId: true,
+      liveMode: true,
+      expiresAt: true,
+      connectedAt: true,
+      updatedAt: true,
+    },
+  });
+
+  return row
+    ? {
+        connected: true as const,
+        mercadoPagoUserId: row.mercadoPagoUserId,
+        liveMode: row.liveMode,
+        expiresAt: row.expiresAt,
+        connectedAt: row.connectedAt,
+        updatedAt: row.updatedAt,
+      }
+    : { connected: false as const };
+}
+
+export async function upsertClubMercadoPagoCredentials(clubId: string, data: {
+  mercadoPagoUserId?: string | null;
+  accessToken: string;
+  refreshToken: string;
+  publicKey?: string | null;
+  scope?: string | null;
+  liveMode?: boolean | null;
+  expiresAt?: Date | null;
+}) {
+  const db = getDb();
+  const values = {
+    clubId,
+    mercadoPagoUserId: data.mercadoPagoUserId ?? null,
+    accessToken: data.accessToken,
+    refreshToken: data.refreshToken,
+    publicKey: data.publicKey ?? null,
+    scope: data.scope ?? null,
+    liveMode: data.liveMode ?? null,
+    expiresAt: data.expiresAt ?? null,
+    updatedAt: new Date(),
+  };
+
+  const [row] = await db
+    .insert(clubMercadoPagoCredentials)
+    .values(values)
+    .onConflictDoUpdate({
+      target: clubMercadoPagoCredentials.clubId,
+      set: values,
+    })
+    .returning({
+      clubId: clubMercadoPagoCredentials.clubId,
+      mercadoPagoUserId: clubMercadoPagoCredentials.mercadoPagoUserId,
+      liveMode: clubMercadoPagoCredentials.liveMode,
+      expiresAt: clubMercadoPagoCredentials.expiresAt,
+      connectedAt: clubMercadoPagoCredentials.connectedAt,
+      updatedAt: clubMercadoPagoCredentials.updatedAt,
+    });
+
+  return row;
 }
 
 /**

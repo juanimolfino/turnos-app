@@ -52,6 +52,19 @@ export const clubs = pgTable("clubs", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const clubMercadoPagoCredentials = pgTable("club_mercadopago_credentials", {
+  clubId: uuid("club_id").references(() => clubs.id, { onDelete: "cascade" }).primaryKey(),
+  mercadoPagoUserId: text("mercadopago_user_id"),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  publicKey: text("public_key"),
+  scope: text("scope"),
+  liveMode: boolean("live_mode"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  connectedAt: timestamp("connected_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const sports = pgTable("sports", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
@@ -250,7 +263,7 @@ export const userRelations = relations(users, ({ one, many }) => ({
   transactions: many(transactions)
 }));
 
-export const clubRelations = relations(clubs, ({ many }) => ({
+export const clubRelations = relations(clubs, ({ one, many }) => ({
   courts: many(courts),
   customers: many(customers),
   professors: many(professors),
@@ -258,6 +271,14 @@ export const clubRelations = relations(clubs, ({ many }) => ({
   events: many(events),
   recurringRules: many(recurringRules),
   bookings: many(bookings),
+  mercadoPagoCredentials: one(clubMercadoPagoCredentials, {
+    fields: [clubs.id],
+    references: [clubMercadoPagoCredentials.clubId],
+  }),
+}));
+
+export const clubMercadoPagoCredentialsRelations = relations(clubMercadoPagoCredentials, ({ one }) => ({
+  club: one(clubs, { fields: [clubMercadoPagoCredentials.clubId], references: [clubs.id] }),
 }));
 
 export const courtRelations = relations(courts, ({ one, many }) => ({
@@ -283,6 +304,7 @@ export type JobType = typeof jobTypeEnum.enumValues[number];
 export type JobStatus = typeof jobStatusEnum.enumValues[number];
 export type Role = typeof roleEnum.enumValues[number];
 export type Club = typeof clubs.$inferSelect;
+export type ClubMercadoPagoCredentials = typeof clubMercadoPagoCredentials.$inferSelect;
 export type Court = typeof courts.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;

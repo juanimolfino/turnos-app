@@ -10,9 +10,23 @@ const schema = z.object({
   phone: z.string().nullable().optional(),
   requiresPayment: z.boolean().optional(),
   paymentDeadlineHours: z.number().int().min(1).max(168).optional(),
-  mercadopagoAccessToken: z.string().nullable().optional(),
   generateApiKey: z.boolean().optional(),
 });
+
+function publicClubSettings(club: Awaited<ReturnType<typeof getClubById>>) {
+  if (!club) return null;
+  return {
+    id: club.id,
+    name: club.name,
+    address: club.address,
+    city: club.city,
+    neighborhood: club.neighborhood,
+    phone: club.phone,
+    requiresPayment: club.requiresPayment,
+    paymentDeadlineHours: club.paymentDeadlineHours,
+    apiKey: club.apiKey,
+  };
+}
 
 export async function GET() {
   const supabase = await createSupabaseServerClient();
@@ -23,7 +37,7 @@ export async function GET() {
   if (!profile?.clubId) return NextResponse.json({ error: "Sin club" }, { status: 403 });
 
   const club = await getClubById(profile.clubId);
-  return NextResponse.json({ club });
+  return NextResponse.json({ club: publicClubSettings(club) });
 }
 
 export async function POST(request: NextRequest) {
@@ -47,5 +61,5 @@ export async function POST(request: NextRequest) {
     apiKey = await generateApiKey(profile.clubId);
   }
 
-  return NextResponse.json({ club: { ...club, apiKey } });
+  return NextResponse.json({ club: { ...publicClubSettings(club), apiKey } });
 }
