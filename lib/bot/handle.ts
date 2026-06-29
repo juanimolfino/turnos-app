@@ -79,11 +79,11 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
           endTime: turno.endTime,
           customerName: accion.nombre,
           customerPhone: msg.userId,
-	        });
-	        respuesta = res.ok
-	          ? confirmarReservaTexto(turno, accion.nombre, res)
-	          : "Uy, ese turno se acaba de ocupar 😕. " +
-	            (await redactarRespuesta({ history, userText: msg.text, intent, lugares }));
+        });
+        respuesta = res.ok
+          ? confirmarReservaTexto(turno, accion.nombre, res)
+          : "Uy, ese turno se acaba de ocupar 😕. " +
+            (await redactarRespuesta({ history, userText: msg.text, intent, lugares }));
       }
     } else {
       // Sigue explorando → redactamos la oferta sobre los datos reales.

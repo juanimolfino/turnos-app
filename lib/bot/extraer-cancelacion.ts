@@ -14,6 +14,16 @@ function quiereCancelar(text: string): boolean {
   return /\b(cancel|cancelar|cancelo|cancelame|anular|anul[ao]|baja|dar de baja)\b/.test(normalized);
 }
 
+function rechazaCancelar(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return /\b(no|nono|nope)\b.{0,24}\b(cancel|cancelar|cancelo|cancelame|anular|dar de baja)\b/.test(normalized);
+}
+
+function cambiaATurnoOReserva(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return /\b(reserv|turno|turnos|cancha|canchas|jugar|juego|hay algo|disponible|disponibilidad|horario|horarios)\b/.test(normalized);
+}
+
 function botPidioCodigo(history: ChatTurn[]): boolean {
   const lastAssistant = [...history].reverse().find((turn) => turn.role === "assistant");
   if (!lastAssistant) return false;
@@ -30,6 +40,9 @@ export function extraerAccionCancelacion(history: ChatTurn[]): AccionCancelacion
 
   const cancelIntent = quiereCancelar(text);
   const awaitingCode = botPidioCodigo(history.slice(0, -1));
+  if (rechazaCancelar(text) || (awaitingCode && !cancelIntent && cambiaATurnoOReserva(text))) {
+    return { tipo: "ninguna" };
+  }
   if (!cancelIntent && !awaitingCode) return { tipo: "ninguna" };
 
   if (INVALID_CODE_TOKEN_RE.test(text)) return { tipo: "codigo_invalido" };

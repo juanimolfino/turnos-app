@@ -34,4 +34,22 @@ describe("extraerAccionCancelacion", () => {
       tipo: "ninguna",
     });
   });
+
+  it("si estaba esperando código pero el usuario cambia a reservar, no insiste con cancelación", () => {
+    const history = [
+      { role: "assistant" as const, content: "Pasame tu código de reserva y la cancelo." },
+      { role: "user" as const, content: "Nono, no quiero cancelar, quiero reservar" },
+    ];
+
+    expect(extraerAccionCancelacion(history)).toEqual({ tipo: "ninguna" });
+  });
+
+  it("si estaba esperando código pero el usuario pregunta turnos, vuelve al flujo de búsqueda", () => {
+    const history = [
+      { role: "assistant" as const, content: "Pasame tu código de reserva y la cancelo." },
+      { role: "user" as const, content: "Me mostrás qué turnos hay para el lunes 29?" },
+    ];
+
+    expect(extraerAccionCancelacion(history)).toEqual({ tipo: "ninguna" });
+  });
 });
