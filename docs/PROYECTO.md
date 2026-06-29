@@ -546,10 +546,13 @@ desde datos reales.
    avisa que no quedó reservado.
 
 ### Webhook de pago de Mercado Pago (Fase 7 Paso 5)
-1. MP llama `POST /api/mercadopago/webhook?data.id=<paymentId>&booking_id=<bookingId>`.
+1. MP llama `POST /api/mercadopago/webhook?data.id=<paymentId>&booking_id=<bookingId>`; si
+   `data.id` no viene en la URL, se toma de `body.data.id`. Ese valor es el id del pago, no
+   el `id` de la notificación.
 2. Antes de procesar, el endpoint valida `x-signature` y `x-request-id` con
    `MERCADOPAGO_WEBHOOK_SECRET`: manifest `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`,
-   HMAC-SHA256 y comparación en tiempo constante.
+   HMAC-SHA256 y comparación en tiempo constante. Temporalmente, si falla la firma, se loguean
+   `manifest`, `v1` recibido y hash calculado para diagnosticar sin exponer la secret.
 3. Con `booking_id`, busca la reserva y lee el `access_token` del club desde
    `club_mercadopago_credentials` en un lookup separado (sin bloquear esa tabla); consulta el
    pago real en la API de MP con ese token.

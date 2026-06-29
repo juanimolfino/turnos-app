@@ -6,10 +6,11 @@ import {
   getBookingPaymentContext,
 } from "@/lib/db/queries";
 import { getMercadoPagoPayment, getMercadoPagoPaymentForAccessToken } from "@/lib/mercadopago/client";
-import { verifyMercadoPagoWebhookSignature } from "@/lib/mercadopago/webhook-signature";
+import { inspectMercadoPagoWebhookSignature } from "@/lib/mercadopago/webhook-signature";
 import { getCreditPack } from "@/lib/stripe/pricing";
 
 type MercadoPagoWebhookBody = {
+  id?: string | number;
   type?: string;
   action?: string;
   data?: { id?: string | number };
@@ -38,22 +39,32 @@ function bookingPaymentStatus(paymentMode: unknown, fallbackMode: string) {
 
 export async function POST(request: Request) {
   const url = new URL(request.url);
-  const dataId = url.searchParams.get("data.id") ?? "";
+  const body = (await request.json().catch(() => ({}))) as MercadoPagoWebhookBody;
+  const dataId = url.searchParams.get("data.id") ?? String(body.data?.id ?? "");
 
   if (!dataId) return NextResponse.json({ error: "Missing payment id" }, { status: 400 });
   if (!process.env.MERCADOPAGO_WEBHOOK_SECRET) {
     return NextResponse.json({ error: "MERCADOPAGO_WEBHOOK_SECRET is required" }, { status: 500 });
   }
 
-  const validSignature = verifyMercadoPagoWebhookSignature({
+  const signatureInspection = inspectMercadoPagoWebhookSignature({
     signature: request.headers.get("x-signature"),
     requestId: request.headers.get("x-request-id"),
     dataId,
     secret: process.env.MERCADOPAGO_WEBHOOK_SECRET,
   });
-  if (!validSignature) return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
+  if (!signatureInspection.valid) {
+    console.warn("[mp webhook] firma inválida", {
+      manifest: "manifest" in signatureInspection ? signatureInspection.manifest : null,
+      receivedV1: "receivedV1" in signatureInspection ? signatureInspection.receivedV1 : null,
+      expectedHash: "expectedHash" in signatureInspection ? signatureInspection.expectedHash : null,
+      reason: "reason" in signatureInspection ? signatureInspection.reason : "hash_mismatch",
+      dataId,
+      notificationId: "id" in body ? body.id : null,
+    });
+    return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
+  }
 
-  const body = (await request.json().catch(() => ({}))) as MercadoPagoWebhookBody;
   if (!isPaymentEvent(body)) return NextResponse.json({ received: true, ignored: true });
 
   const bookingIdHint = url.searchParams.get("booking_id");

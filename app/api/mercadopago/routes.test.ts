@@ -39,7 +39,8 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 function signedPaymentRequest(url: string, body: Record<string, unknown> = { type: "payment", data: { id: "123" } }) {
-  const dataId = new URL(url).searchParams.get("data.id") ?? "";
+  const payload = body as { data?: { id?: string | number } };
+  const dataId = new URL(url).searchParams.get("data.id") ?? String(payload.data?.id ?? "");
   const requestId = "request_123";
   const ts = "1700000000";
   const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
@@ -205,6 +206,7 @@ describe("Mercado Pago webhook route", () => {
   });
 
   it("firma inválida → 401 y no procesa", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { POST } = await import("./webhook/route");
     const request = new Request("https://example.com/api/mercadopago/webhook?data.id=123&booking_id=bk-1", {
       method: "POST",
@@ -219,9 +221,16 @@ describe("Mercado Pago webhook route", () => {
     const response = await POST(request);
 
     expect(response.status).toBe(401);
+    expect(warn).toHaveBeenCalledWith("[mp webhook] firma inválida", expect.objectContaining({
+      manifest: "id:123;request-id:request_123;ts:1700000000;",
+      receivedV1: "bad",
+      expectedHash: expect.any(String),
+      dataId: "123",
+    }));
     expect(mocks.getPaymentForAccessToken).not.toHaveBeenCalled();
     expect(mocks.confirmBotHoldPayment).not.toHaveBeenCalled();
     expect(mocks.avisarPagoAcreditado).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it("firma válida + pago approved + hold vigente → confirma como seña y avisa al cliente", async () => {
@@ -247,6 +256,42 @@ describe("Mercado Pago webhook route", () => {
       id: "bk-1",
       bookingCode: "HYS324",
       customerPhone: "12345",
+    }));
+  });
+
+  it("payload real de MP: usa body.data.id del pago, no el id de la notificación", async () => {
+    mocks.getPaymentForAccessToken.mockResolvedValue({
+      id: 166282222956,
+      status: "approved",
+      external_reference: "booking:bk-1",
+      metadata: { payment_mode: "partial" },
+      currency_id: "ARS",
+      transaction_amount: 250,
+      status_detail: "accredited",
+    });
+    const { POST } = await import("./webhook/route");
+    const payload = {
+      action: "payment.created",
+      api_version: "v1",
+      data: { id: "166282222956" },
+      date_created: "2026-06-29T19:53:17Z",
+      id: 134112211690,
+      live_mode: true,
+      type: "payment",
+      user_id: "3340802168",
+    };
+    const request = signedPaymentRequest(
+      "https://example.com/api/mercadopago/webhook?booking_id=bk-1",
+      payload,
+    );
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ received: true, kind: "booking", confirmed: true });
+    expect(mocks.getPaymentForAccessToken).toHaveBeenCalledWith("APP_USR-club-token", { id: "166282222956" });
+    expect(mocks.confirmBotHoldPayment).toHaveBeenCalledWith(expect.objectContaining({
+      mpPaymentId: "166282222956",
     }));
   });
 
