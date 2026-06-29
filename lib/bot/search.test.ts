@@ -141,6 +141,28 @@ describe("buscarDisponibilidad", () => {
     expect(res[0].slots[0].canchas).toEqual([{ id: "y", name: "Cancha 2" }]);
   });
 
+  it("no recorta horarios disponibles por lugar", async () => {
+    const slots = Array.from({ length: 10 }, (_, i) => {
+      const hour = String(8 + i).padStart(2, "0");
+      const nextHour = String(9 + i).padStart(2, "0");
+      return {
+        start: `${hour}:00`,
+        end: `${nextHour}:00`,
+        freeCourts: [{ id: `ct-${i}`, name: "Cancha 1" }],
+        totalCourts: 1,
+      };
+    });
+    getClubAvailability.mockImplementation(async (clubId: string) =>
+      clubId === "pc" ? { window: {}, slots } : { window: {}, slots: [] },
+    );
+
+    const res = await buscarDisponibilidad(intent(), "el sábado");
+
+    expect(res).toHaveLength(1);
+    expect(res[0].slots).toHaveLength(10);
+    expect(res[0].slots.at(-1)).toMatchObject({ start: "17:00", end: "18:00" });
+  });
+
   it("un deporte inexistente → sin disponibilidad, sin crash y sin consultar canchas", async () => {
     state.sports = [];
     const res = await buscarDisponibilidad(intent({ sport: "curling" }), "el sábado");

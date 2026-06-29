@@ -10,8 +10,6 @@ import type { Intent } from "@/lib/bot/intent";
 // Filtro de ciudad: configurable por la env var BOT_CITY.
 //  - Sin definir (MVP single-pueblo, ej. Bolívar) → busca en TODOS los clubs.
 //  - Con valor (multi-ciudad) → filtra clubs por ese city (ilike, case-insensitive).
-const MAX_SLOTS_POR_LUGAR = 8;
-
 // canchas con id+nombre: el id se usa para reservar (Fase 6); el nombre, para mostrar.
 export type SlotLibre = { start: string; end: string; canchas: { id: string; name: string }[] };
 export type LugarDisponibilidad = { clubId: string; lugar: string; barrio: string | null; slots: SlotLibre[] };
@@ -73,7 +71,7 @@ export async function buscarDisponibilidad(intent: Intent, userText: string): Pr
   const out: LugarDisponibilidad[] = [];
   for (const club of clubList) {
     const avail = await getClubAvailability(club.id, intent.date, { start, end, sportId });
-    const slots = (avail?.slots ?? []).slice(0, MAX_SLOTS_POR_LUGAR).map((s) => ({
+    const slots = (avail?.slots ?? []).map((s) => ({
       start: s.start,
       end: s.end,
       canchas: s.freeCourts.map((c) => ({ id: c.id, name: c.name })),

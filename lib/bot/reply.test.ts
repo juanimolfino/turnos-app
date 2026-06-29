@@ -1,84 +1,75 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-// Mock del SDK de OpenAI. Cada test setea su mockImplementation (sin mockReset en
-// beforeEach: combinado con un throw dispara un falso unhandled rejection).
-const create = vi.fn();
-vi.mock("openai", () => ({
-  default: class {
-    chat = { completions: { create } };
-  },
-}));
-
-import { redactarRespuesta, horariosPermitidos, horariosInventados } from "@/lib/bot/reply";
+import { formatearDisponibilidadTexto, redactarRespuesta, horariosPermitidos, horariosInventados } from "@/lib/bot/reply";
 import type { Intent } from "@/lib/bot/intent";
+import type { LugarDisponibilidad } from "@/lib/bot/search";
 
 const intent: Intent = { date: "2026-06-27", time: "18:00", zone: "Bolívar", sport: "padel" };
-const lugares = [{ clubId: "cl1", lugar: "El Corralón", barrio: "Centro", slots: [{ start: "16:30", end: "18:00", canchas: [{ id: "ct1", name: "Cancha 1" }] }] }];
-
-const modelReturns = (content: string) => ({ choices: [{ message: { content } }] });
 
 describe("redactarRespuesta", () => {
-  it("devuelve el texto del modelo y le pasa los datos reales (no inventa)", async () => {
-    create.mockImplementation(async () => modelReturns("En El Corralón hay a las 16:30."));
-    const out = await redactarRespuesta({ history: [], userText: "el sábado a las 18", intent, lugares });
+  it("enumera todos los horarios recibidos, incluso más de 8 en el mismo lugar", async () => {
+    const lugares: LugarDisponibilidad[] = [
+      {
+        clubId: "pc",
+        lugar: "Pádel Central",
+        barrio: "Belgrano",
+        slots: [
+          { start: "08:00", end: "09:30", canchas: [{ id: "c2", name: "Cancha 2" }] },
+          { start: "09:30", end: "11:00", canchas: [{ id: "c2", name: "Cancha 2" }] },
+          { start: "11:00", end: "12:30", canchas: [{ id: "c2", name: "Cancha 2" }] },
+          { start: "12:30", end: "14:00", canchas: [{ id: "c2", name: "Cancha 2" }] },
+          { start: "14:00", end: "15:30", canchas: [{ id: "c2", name: "Cancha 2" }] },
+          {
+            start: "16:00",
+            end: "17:30",
+            canchas: [
+              { id: "c1", name: "Cancha 1" },
+              { id: "c2", name: "Cancha 2" },
+            ],
+          },
+          {
+            start: "17:30",
+            end: "19:00",
+            canchas: [
+              { id: "c1", name: "Cancha 1" },
+              { id: "c2", name: "Cancha 2" },
+            ],
+          },
+          {
+            start: "19:00",
+            end: "20:30",
+            canchas: [
+              { id: "c1", name: "Cancha 1" },
+              { id: "c2", name: "Cancha 2" },
+            ],
+          },
+          {
+            start: "20:30",
+            end: "22:00",
+            canchas: [
+              { id: "c1", name: "Cancha 1" },
+              { id: "c2", name: "Cancha 2" },
+            ],
+          },
+          { start: "22:00", end: "23:30", canchas: [{ id: "c1", name: "Cancha 1" }] },
+        ],
+      },
+    ];
 
-    expect(out).toBe("En El Corralón hay a las 16:30.");
+    const out = await redactarRespuesta({ history: [], userText: "para hoy", intent, lugares });
 
-    const messages = create.mock.calls.at(-1)![0].messages;
-    const datosMsg = messages.at(-1); // los DATOS_DISPONIBILIDAD van como último mensaje
-    expect(datosMsg.content).toContain("DATOS_DISPONIBILIDAD");
-    expect(datosMsg.content).toContain("El Corralón");
-    expect(datosMsg.content).toContain("16:30");
-    // el mensaje del usuario también viaja
-    expect(messages.some((m: { content: string }) => m.content === "el sábado a las 18")).toBe(true);
+    expect(out).toContain("En Pádel Central, Belgrano:");
+    for (const hora of ["08:00", "09:30", "11:00", "12:30", "14:00", "16:00", "17:30", "19:00", "20:30", "22:00"]) {
+      expect(out).toContain(hora);
+    }
+    expect(out).toContain("Cancha 1 y Cancha 2 a las 16:00, 17:30, 19:00 y 20:30.");
   });
+});
 
-  it("con lugares vacíos pasa la lista vacía (para el 'no hay')", async () => {
-    create.mockImplementation(async () => modelReturns("No hay nada ese día, ¿otro?"));
-    await redactarRespuesta({ history: [], userText: "el sábado", intent: { ...intent, time: null }, lugares: [] });
-
-    const datosMsg = create.mock.calls.at(-1)![0].messages.at(-1);
-    expect(datosMsg.content).toContain('"lugares":[]');
-  });
-
-  it("ante error de la API devuelve un fallback sin crashear", async () => {
-    create.mockImplementation(async () => {
-      throw new Error("rate limit");
-    });
-    const out = await redactarRespuesta({ history: [], userText: "x", intent, lugares });
-    expect(out).toMatch(/no pude armar la búsqueda/i);
-  });
-
-  it("el system prompt refuerza enumerar turnos concretos y prohíbe inventar", async () => {
-    create.mockImplementation(async () => modelReturns("ok"));
-    await redactarRespuesta({ history: [], userText: "el sábado", intent, lugares });
-
-    const system = create.mock.calls.at(-1)![0].messages[0].content as string;
-    expect(system).toMatch(/PROHIBIDO/);
-    expect(system).toMatch(/ENUMER/i); // enumerar turnos concretos
-    expect(system).toMatch(/rango/i); // prohíbe el rango difuso
-    expect(system).toMatch(/EXACTAMENTE/);
-  });
-
-  it("el prompt cierra honesto: no ofrecer 'más' del mismo día, ofrecer OTRO día", async () => {
-    create.mockImplementation(async () => modelReturns("ok"));
-    await redactarRespuesta({ history: [], userText: "el sábado", intent, lugares });
-
-    const system = create.mock.calls.at(-1)![0].messages[0].content as string;
-    // No prometer opciones inexistentes; "más" solo si quedan turnos sin nombrar.
-    expect(system).toMatch(/NUNCA prometas opciones que no están/i);
-    expect(system).toMatch(/SOLO es válido si quedan turnos/i);
-    // Cuando ya mostró todos: ofrecer otro día (acción real).
-    expect(system).toMatch(/OTRO día/);
-    expect(system).toMatch(/no repitas la misma lista/i);
-  });
-
-  it("a los datos les marca que son TODOS los turnos del día", async () => {
-    create.mockImplementation(async () => modelReturns("ok"));
-    await redactarRespuesta({ history: [], userText: "el sábado", intent, lugares });
-
-    const datosMsg = create.mock.calls.at(-1)![0].messages.at(-1).content as string;
-    expect(datosMsg).toContain('"sonTodosLosTurnosDelDia":true');
+describe("formatearDisponibilidadTexto", () => {
+  it("con lugares vacíos devuelve un no encontrado claro", () => {
+    const out = formatearDisponibilidadTexto(intent, []);
+    expect(out).toMatch(/no encontré turnos disponibles/i);
   });
 });
 
@@ -119,10 +110,6 @@ describe("horariosInventados", () => {
   });
 
   it("la respuesta del bot menciona solo horarios presentes en el set", async () => {
-    // Respuesta realista: enumera turnos concretos del set, sin inventar.
-    create.mockImplementation(async () =>
-      modelReturns("En Pádel Central: Cancha 2 a las 16:30 y Cancha 1 a las 20:00. ¿Querés alguno?"),
-    );
     const out = await redactarRespuesta({ history: [], userText: "el sábado", intent: { ...intent, time: null }, lugares: setLugares });
 
     expect(horariosInventados(out, setLugares, null)).toEqual([]); // ningún horario fuera de los datos
