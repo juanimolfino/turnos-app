@@ -791,18 +791,17 @@ export async function confirmBotHoldPayment(input: {
         clubName: clubs.name,
         clubPaymentMode: clubs.paymentMode,
         courtName: courts.name,
-        mercadoPagoAccessToken: clubMercadoPagoCredentials.accessToken,
       })
       .from(bookings)
       .innerJoin(clubs, eq(bookings.clubId, clubs.id))
       .innerJoin(courts, eq(bookings.courtId, courts.id))
-      .leftJoin(clubMercadoPagoCredentials, eq(bookings.clubId, clubMercadoPagoCredentials.clubId))
       .where(eq(bookings.id, input.bookingId))
       .for("update");
 
     if (!current) return { status: "not_found" };
-    if (current.mpPaymentId === input.mpPaymentId) return { status: "already_processed", booking: current };
-    if (current.mpPaymentId) return { status: "already_processed", booking: current };
+    const currentWithToken = { ...current, mercadoPagoAccessToken: null };
+    if (current.mpPaymentId === input.mpPaymentId) return { status: "already_processed", booking: currentWithToken };
+    if (current.mpPaymentId) return { status: "already_processed", booking: currentWithToken };
 
     const expectedAmount = current.price ?? 0;
     if (input.paidAmount != null && expectedAmount > 0 && Math.round(input.paidAmount) < expectedAmount) {
@@ -814,7 +813,7 @@ export async function confirmBotHoldPayment(input: {
       return {
         status: "not_confirmed",
         reason: "amount_mismatch",
-        booking: { ...current, ...updated, clubName: current.clubName, courtName: current.courtName, mercadoPagoAccessToken: current.mercadoPagoAccessToken },
+        booking: { ...currentWithToken, ...updated, clubName: current.clubName, courtName: current.courtName },
       };
     }
 
@@ -827,7 +826,7 @@ export async function confirmBotHoldPayment(input: {
       return {
         status: "not_confirmed",
         reason: "not_pending",
-        booking: { ...current, ...updated, clubName: current.clubName, courtName: current.courtName, mercadoPagoAccessToken: current.mercadoPagoAccessToken },
+        booking: { ...currentWithToken, ...updated, clubName: current.clubName, courtName: current.courtName },
       };
     }
 
@@ -840,7 +839,7 @@ export async function confirmBotHoldPayment(input: {
       return {
         status: "not_confirmed",
         reason: "hold_expired",
-        booking: { ...current, ...updated, clubName: current.clubName, courtName: current.courtName, mercadoPagoAccessToken: current.mercadoPagoAccessToken },
+        booking: { ...currentWithToken, ...updated, clubName: current.clubName, courtName: current.courtName },
       };
     }
 
@@ -857,7 +856,7 @@ export async function confirmBotHoldPayment(input: {
 
     return {
       status: "confirmed",
-      booking: { ...current, ...updated, clubName: current.clubName, courtName: current.courtName, mercadoPagoAccessToken: current.mercadoPagoAccessToken },
+      booking: { ...currentWithToken, ...updated, clubName: current.clubName, courtName: current.courtName },
     };
   });
 }

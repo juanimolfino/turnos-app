@@ -550,14 +550,17 @@ desde datos reales.
 2. Antes de procesar, el endpoint valida `x-signature` y `x-request-id` con
    `MERCADOPAGO_WEBHOOK_SECRET`: manifest `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`,
    HMAC-SHA256 y comparación en tiempo constante.
-3. Con `booking_id`, busca la reserva y el `access_token` del club en
-   `club_mercadopago_credentials`; consulta el pago real en la API de MP con ese token.
+3. Con `booking_id`, busca la reserva y lee el `access_token` del club desde
+   `club_mercadopago_credentials` en un lookup separado (sin bloquear esa tabla); consulta el
+   pago real en la API de MP con ese token.
 4. Verifica que `external_reference` devuelto por MP sea `booking:<bookingId>`.
 5. Solo si el pago está `approved`, la reserva sigue `status='pendiente'`, el hold no expiró
    y el monto coincide, actualiza la reserva a `status='confirmado'`. Si el modo era `partial`,
    deja `payment_status='senado'`; si era `full`, `payment_status='pagado'`.
-6. Guarda `mp_payment_id` para idempotencia. Reintentos del mismo pago responden 200 sin
-   volver a confirmar ni reenviar mensajes.
+6. La actualización se hace dentro de una transacción que bloquea la fila de `bookings`
+   (`SELECT ... FOR UPDATE`) sin `LEFT JOIN` nullable a credenciales. Guarda `mp_payment_id`
+   para idempotencia. Reintentos del mismo pago responden 200 sin volver a confirmar ni reenviar
+   mensajes.
 7. Si el pago aprobado llega tarde (`held_until` vencido), la reserva ya no está pendiente o
    el monto no coincide, NO confirma: guarda `mp_payment_id` y `payment_review_reason` para
    revisión/refund manual.
