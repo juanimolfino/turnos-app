@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseReadOnlyServerClient } from "@/lib/supabase/server";
 import { getClubMercadoPagoConnectionStatus, getUserByAuthId } from "@/lib/db/queries";
 import { getDb } from "@/lib/db";
 import { recurringRules, events, professors, customers, courts, clubs } from "@/lib/db/schema";
@@ -9,7 +9,7 @@ import { AjustesClient } from "@/components/dashboard/ajustes-client";
 export const metadata = { title: "Ajustes" };
 
 export default async function AjustesPage() {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await createSupabaseReadOnlyServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseReadOnlyServerClient } from "@/lib/supabase/server";
 import { getUserByAuthId } from "@/lib/db/queries";
 import { getDb } from "@/lib/db";
 import { courts, clubs } from "@/lib/db/schema";
@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 import { Sidebar } from "@/components/layout/sidebar";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await createSupabaseReadOnlyServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 

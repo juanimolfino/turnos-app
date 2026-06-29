@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseReadOnlyServerClient } from "@/lib/supabase/server";
 import { getUserByAuthId } from "@/lib/db/queries";
 import { SetPasswordForm } from "@/components/auth/set-password-form";
 
 export const metadata = { title: "Crear contraseña" };
 
 export default async function SetPasswordPage() {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await createSupabaseReadOnlyServerClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) redirect("/login");

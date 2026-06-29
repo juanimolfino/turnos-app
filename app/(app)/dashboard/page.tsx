@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseReadOnlyServerClient } from "@/lib/supabase/server";
 import { getUserByAuthId, getClubCourts, getWeekAgenda } from "@/lib/db/queries";
 import { getDb } from "@/lib/db";
 import { clubs } from "@/lib/db/schema";
@@ -14,7 +14,7 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ date?: string }>;
 }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await createSupabaseReadOnlyServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 

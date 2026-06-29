@@ -28,6 +28,25 @@ export async function createSupabaseServerClient() {
   );
 }
 
+export async function createSupabaseReadOnlyServerClient() {
+  const cookieStore = await cookies();
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll() {
+          // Server Components can read cookies during render but cannot mutate them.
+          // Session refresh writes are handled by middleware / route handlers.
+        }
+      }
+    }
+  );
+}
+
 let adminClient: ReturnType<typeof createClient> | null = null;
 
 export function getSupabaseAdmin() {

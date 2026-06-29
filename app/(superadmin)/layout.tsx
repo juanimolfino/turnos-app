@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseReadOnlyServerClient } from "@/lib/supabase/server";
 import { getUserByAuthId } from "@/lib/db/queries";
 import { SuperadminSidebar } from "@/components/layout/superadmin-sidebar";
 
 export default async function SuperadminLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await createSupabaseReadOnlyServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
