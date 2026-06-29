@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // Mock de getDb. preCheck = filas que devuelve la capa B (overlap). insertQueue =
 // comportamiento de cada insert: "ok" | "23P01" (exclusión) | "23505" (unique).
 const state = vi.hoisted(() => ({
+  settings: { paymentMode: "none", depositPct: 25, courtPrice: 1000 },
   preCheck: [] as { id: string }[],
   insertQueue: [] as ("ok" | "23P01" | "23505")[],
   insertedValues: [] as Record<string, unknown>[],
@@ -14,7 +15,14 @@ function pgError(code: string) {
 
 vi.mock("@/lib/db", () => ({
   getDb: () => ({
-    select: () => ({ from: () => ({ where: () => Promise.resolve(state.preCheck) }) }),
+    select: (fields?: Record<string, unknown>) => {
+      const isSettingsQuery = Boolean(fields?.paymentMode);
+      const query = {
+        innerJoin: () => query,
+        where: () => Promise.resolve(isSettingsQuery ? [state.settings] : state.preCheck),
+      };
+      return { from: () => query };
+    },
     insert: () => ({
       values: (v: Record<string, unknown>) => {
         state.insertedValues.push(v);
@@ -50,6 +58,7 @@ describe("generarBookingCode", () => {
 
 describe("crearReservaBot", () => {
   beforeEach(() => {
+    state.settings = { paymentMode: "none", depositPct: 25, courtPrice: 1000 };
     state.preCheck = [];
     state.insertQueue = [];
     state.insertedValues = [];
@@ -57,7 +66,15 @@ describe("crearReservaBot", () => {
 
   it("reserva exitosa: simple/bot/confirmado/impago + code + nombre/teléfono", async () => {
     const res = await crearReservaBot(input);
-    expect(res).toEqual({ ok: true, bookingId: "bk-1", bookingCode: expect.stringMatching(/^[A-Z]{3}[0-9]{3}$/) });
+    expect(res).toEqual({
+      ok: true,
+      bookingId: "bk-1",
+      bookingCode: expect.stringMatching(/^[A-Z]{3}[0-9]{3}$/),
+      status: "confirmado",
+      paymentMode: "none",
+      amountToCharge: 0,
+      heldUntil: null,
+    });
 
     const v = state.insertedValues[0];
     expect(v).toMatchObject({
@@ -66,7 +83,47 @@ describe("crearReservaBot", () => {
       startTime: "19:00", endTime: "20:30",
       customerName: "Juan Pérez", customerPhone: "12345",
     });
+    expect(v.heldUntil).toBeNull();
+    expect(v.price).toBeNull();
     expect(v.bookingCode).toMatch(/^[A-Z]{3}[0-9]{3}$/);
+  });
+
+  it("club partial: crea hold pendiente con held_until y monto de seña", async () => {
+    state.settings = { paymentMode: "partial", depositPct: 25, courtPrice: 1000 };
+    const now = new Date("2026-06-27T15:00:00.000Z");
+
+    const res = await crearReservaBot({ ...input, now });
+
+    expect(res).toEqual({
+      ok: true,
+      bookingId: "bk-1",
+      bookingCode: expect.stringMatching(/^[A-Z]{3}[0-9]{3}$/),
+      status: "pendiente",
+      paymentMode: "partial",
+      amountToCharge: 250,
+      heldUntil: new Date("2026-06-27T15:10:00.000Z"),
+    });
+    expect(state.insertedValues[0]).toMatchObject({
+      status: "pendiente",
+      paymentStatus: "impago",
+      price: 250,
+      heldUntil: new Date("2026-06-27T15:10:00.000Z"),
+    });
+  });
+
+  it("club full: crea hold pendiente con monto total", async () => {
+    state.settings = { paymentMode: "full", depositPct: 25, courtPrice: 1200 };
+
+    const res = await crearReservaBot({ ...input, now: new Date("2026-06-27T15:00:00.000Z") });
+
+    expect(res).toMatchObject({
+      ok: true,
+      status: "pendiente",
+      paymentMode: "full",
+      amountToCharge: 1200,
+      heldUntil: new Date("2026-06-27T15:10:00.000Z"),
+    });
+    expect(state.insertedValues[0]).toMatchObject({ status: "pendiente", price: 1200 });
   });
 
   it("booking_code: si colisiona (unique), reintenta con otro", async () => {
@@ -84,10 +141,25 @@ describe("crearReservaBot", () => {
     expect(state.insertedValues).toHaveLength(0); // no intentó escribir
   });
 
+  it("un hold existente bloquea el turno en capa B", async () => {
+    state.preCheck = [{ id: "hold-existente" }];
+    const res = await crearReservaBot(input);
+    expect(res).toEqual({ ok: false, error: "SLOT_NO_DISPONIBLE" });
+    expect(state.insertedValues).toHaveLength(0);
+  });
+
   it("CAPA A: la constraint EXCLUDE (23P01) se traduce a SLOT_NO_DISPONIBLE", async () => {
     state.insertQueue = ["23P01"];
     const res = await crearReservaBot(input);
     expect(res).toEqual({ ok: false, error: "SLOT_NO_DISPONIBLE" });
+  });
+
+  it("CAPA A: la constraint EXCLUDE sigue aplicando cuando el nuevo booking es hold", async () => {
+    state.settings = { paymentMode: "partial", depositPct: 25, courtPrice: 1000 };
+    state.insertQueue = ["23P01"];
+    const res = await crearReservaBot(input);
+    expect(res).toEqual({ ok: false, error: "SLOT_NO_DISPONIBLE" });
+    expect(state.insertedValues[0]).toMatchObject({ status: "pendiente" });
   });
 
   it("CONCURRENCIA: dos inserciones del mismo turno → una gana, la otra SLOT_NO_DISPONIBLE", async () => {
@@ -147,11 +219,42 @@ describe("confirmarReservaTexto", () => {
       clubId: "cl1", courtId: "ct1", clubName: "Pádel Central", courtName: "Cancha 1",
       date: "2026-06-27", startTime: "19:00", endTime: "20:30",
     };
-    const txt = confirmarReservaTexto(turno, "Juan Pérez", "HYS324");
+    const txt = confirmarReservaTexto(turno, "Juan Pérez", {
+      ok: true,
+      bookingId: "bk1",
+      bookingCode: "HYS324",
+      status: "confirmado",
+      paymentMode: "none",
+      amountToCharge: 0,
+      heldUntil: null,
+    });
     expect(txt).toContain("Pádel Central");
     expect(txt).toContain("Cancha 1");
     expect(txt).toContain("19:00");
     expect(txt).toContain("HYS324");
     expect(txt).toContain("Juan Pérez");
+  });
+
+  it("para hold muestra monto y avisa que el link se suma después", () => {
+    const turno = {
+      clubId: "cl1", courtId: "ct1", clubName: "Pádel Central", courtName: "Cancha 1",
+      date: "2026-06-27", startTime: "19:00", endTime: "20:30",
+    };
+    const txt = confirmarReservaTexto(turno, "Juan Pérez", {
+      ok: true,
+      bookingId: "bk1",
+      bookingCode: "HYS324",
+      status: "pendiente",
+      paymentMode: "partial",
+      amountToCharge: 250,
+      heldUntil: new Date("2026-06-27T15:10:00.000Z"),
+    });
+
+    expect(txt).toContain("provisoriamente");
+    expect(txt).toContain("$");
+    expect(txt).toContain("250");
+    expect(txt).toContain("seña");
+    expect(txt).toContain("El link de pago se suma en el próximo paso");
+    expect(txt).not.toContain("http");
   });
 });

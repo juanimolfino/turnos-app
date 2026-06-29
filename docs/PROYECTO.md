@@ -150,11 +150,12 @@ la fila de `club_mercadopago_credentials` y se fuerza `payment_mode='none'` /
 `requires_payment=false` en la misma transacción, para que ningún club quede pidiendo pago
 sin tener MP conectado.
 
-El uso de esos tokens queda para pasos siguientes: el jugador confirma → se re-chequea
-disponibilidad → la reserva pasa a **hold** (queda bloqueada para los demás) → se genera
-el link de pago de MP de ese club → si paga dentro de ~10 minutos, el webhook confirma la
-reserva; si no, el hold expira y el turno se libera. El estado de pago se refleja en
-`payment_status`: `impago` / `senado` (seña) / `pagado`.
+El hold ya está introducido en el bot para clubes con `payment_mode='partial'` o `full`:
+el jugador confirma → se re-chequea disponibilidad → se crea una reserva `status='pendiente'`
+con `held_until = now() + 10 minutos`, `payment_status='impago'` y el monto a cobrar en
+`bookings.price`. Ese hold queda bloqueando el turno porque la disponibilidad ignora solo
+`cancelado`. Pasos siguientes: generar el link de pago de MP de ese club, confirmar por
+webhook si paga y liberar automáticamente holds vencidos si no paga.
 
 La plataforma podrá cobrar una **comisión configurable por club** (un *marketplace fee*),
 manejada desde la cuenta de superadmin. En el MVP arranca en 0%, pero la lógica se diseña
@@ -332,18 +333,21 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
 ### `bookings` 🤖 — **tabla clave: ocupación y reservas**
 `id` · `club_id` · `court_id` · `date` (YYYY-MM-DD) · `start_time` · `end_time` (HH:MM) ·
 `type` · `status` · `customer_id` · `professor_id` · `event_id` · `recurring_rule_id` ·
-`block_group_id` · `price` · `payment_status` · `notes` · `created_at`
+`block_group_id` · `price` · `payment_status` · `held_until` · `notes` · `created_at`
 - **`type`**: `simple` (reserva de jugador / del bot) · `clase` · `fijo` · `americano` ·
   `torneo` · `bloqueo` · `evento` (legacy). *(`flex` fue retirado: lo reemplazó `simple`.)*
 - **`origin`**: `admin` (cargado en el panel) · `bot` (creado por el bot)
 - **`status`**: `confirmado` · `pendiente` (espera pago) · `cancelado`
 - **`payment_status`**: `pagado` · `senado` · `impago`
+- **`held_until`**: vencimiento del hold para reservas del bot que esperan pago. Nullable:
+  reservas confirmadas o sin pago no lo usan.
 - **`customer_name` / `customer_phone`**: datos del cliente del bot (sin login); las
   reservas del admin pueden no tenerlos.
 - **`booking_code`**: código tipo aerolínea (3 letras + 3 números, ej `HYS324`), único,
   que el bot le da al cliente para cancelar.
 - **Regla de disponibilidad**: una cancha está **libre** en un rango si NO hay ningún
   booking con `status != cancelado` que se superponga (`start < rangoFin && end > rangoInicio`).
+  Un hold `pendiente` ocupa igual que una confirmada hasta que se cancele o expire.
 - Lo que carga el dueño en /agenda y lo que reserva el bot viven **todo acá**.
 
 ### `customers` — jugadores/clientes del club (legacy / panel)
@@ -509,15 +513,21 @@ y los canales son adaptadores en `lib/bot/channels/`. Redacción con OpenAI.
 - `cancelar.ts` — motor de cancelación por código: busca reserva del bot, valida teléfono,
   cancela suave (`status='cancelado'`) y responde con templates determinísticos.
 
-### Flujo de reserva del bot (Fase 6) — end to end
+### Flujo de reserva del bot (Fase 6 + hold Fase 7) — end to end
 1. El usuario busca y el bot ofrece turnos concretos por lugar (búsqueda ya existente).
 2. El usuario elige un turno → el bot pide **nombre y apellido** ("¿A nombre de quién?").
    El **teléfono sale del canal** (Telegram: `userId`); no se pide por chat.
 3. Al dar el nombre, **antes de escribir** se re-verifica que el turno siga libre (**capa B**).
-4. Si sigue libre, se crea el booking: `type='simple'`, `origin='bot'`, `status='confirmado'`,
-   `payment_status='impago'` (el club del MVP requiere **0% de pago**), con `customer_name`,
-   `customer_phone` y un `booking_code` único.
-5. El bot confirma con lugar, cancha, día, hora y el **código** (guardar para cancelar).
+4. Si sigue libre, el resultado depende de `clubs.payment_mode`:
+   - `none`: crea el booking directo como antes: `type='simple'`, `origin='bot'`,
+     `status='confirmado'`, `payment_status='impago'`, con `customer_name`, `customer_phone`
+     y `booking_code`.
+   - `partial` / `full`: crea un **hold** `type='simple'`, `origin='bot'`,
+     `status='pendiente'`, `payment_status='impago'`, `held_until=now()+10min`, con el monto
+     calculado en `price` (`partial`: `court.price * deposit_pct / 100`; `full`: `court.price`).
+5. El bot responde con un template determinístico. Para `none` confirma la reserva; para holds
+   avisa que la reserva es provisoria, muestra el monto a pagar y aclara que el link de pago se
+   suma en el próximo paso. No inventa links.
 
 ### Flujo de cancelación del bot (Fase 6.5) — código + teléfono
 1. El usuario pide cancelar y pasa su `booking_code` (ej. `HYS324`). Si no lo pasa, el bot
@@ -538,7 +548,8 @@ y los canales son adaptadores en `lib/bot/channels/`. Redacción con OpenAI.
 ### Reglas clave
 - **Disponibilidad** (`lib/bookings/availability.ts → computeAvailability`): una cancha está
   libre en un rango si NO hay booking `status<>'cancelado'` que se superponga (half-open
-  `start < fin && end > inicio`). La grilla es **a nivel club** (un solo barrido del día, no
+  `start < fin && end > inicio`). Un hold `pendiente` bloquea el turno igual que una reserva
+  confirmada. La grilla es **a nivel club** (un solo barrido del día, no
   una grilla por cancha que se mezcla): turnos "pegados a la ocupación" (no grilla fija),
   **mutuamente excluyentes** (no se solapan entre sí), donde cada horario reporta las canchas
   libres en ese momento. Es **dinámica**: el cursor se re-ancla a los bordes de ocupación
@@ -555,10 +566,10 @@ y los canales son adaptadores en `lib/bot/channels/`. Redacción con OpenAI.
     `SLOT_NO_DISPONIBLE`. Una cancelada NO bloquea (coherente con la regla de disponibilidad).
 
 ### Decisiones y alcance
-- Reserva del bot = **simple / bot / confirmado / impago** (MVP 0% de pago).
-- La creación está modelada para que en **Fase 7** se inserte un paso de **hold** (esperando
-  pago) sin reescribir la firma ni el manejo de errores (documentado en `crearReservaBot`).
+- Reserva del bot sin pago (`payment_mode='none'`) = **simple / bot / confirmado / impago**.
+- Reserva del bot con pago (`partial`/`full`) = **simple / bot / pendiente / impago** con
+  `held_until` y monto a cobrar. El link de pago y webhook todavía no están implementados.
 - Nombre/teléfono se guardan **en el booking** (no en `customers`): la tabla global de clientes
   queda para una etapa posterior.
-- **Fase futura:** pago / link de MercadoPago / hold con expiración / refunds /
+- **Fase futura:** link de MercadoPago / expiración automática de holds / refunds /
   `customers` global / búsqueda por distancia (lat/lng).

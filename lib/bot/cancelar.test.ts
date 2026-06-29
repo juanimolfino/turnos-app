@@ -99,6 +99,36 @@ describe("cancelarReservaBotPorCodigo", () => {
     ]);
   });
 
+  it("un hold pendiente se puede cancelar por booking_code y libera el turno", async () => {
+    const row = { ...futureRow(), status: "pendiente" as const };
+    state.rows = [row];
+
+    const antes = computeAvailability({
+      courts: [{ id: "ct1", name: "Cancha 1", sortOrder: 0, sportId: "padel" }],
+      bookings: [{ courtId: "ct1", startTime: row.startTime, endTime: row.endTime, status: row.status }],
+      window: { open: "19:00", close: "20:30", slotMinutes: 90 },
+    });
+    expect(antes).toEqual([]);
+
+    const result = await cancelarReservaBotPorCodigo({
+      bookingCode: "HYS324",
+      customerPhone: "123",
+      now: new Date("2026-07-01T12:00:00-03:00"),
+    });
+
+    expect(result).toEqual({ ok: true, status: "cancelada", reserva: expect.objectContaining({ status: "cancelado" }) });
+    expect(state.updates).toEqual([{ status: "cancelado" }]);
+
+    const despues = computeAvailability({
+      courts: [{ id: "ct1", name: "Cancha 1", sortOrder: 0, sportId: "padel" }],
+      bookings: [{ courtId: "ct1", startTime: row.startTime, endTime: row.endTime, status: row.status }],
+      window: { open: "19:00", close: "20:30", slotMinutes: 90 },
+    });
+    expect(despues).toEqual([
+      { start: "19:00", end: "20:30", freeCourts: [{ id: "ct1", name: "Cancha 1" }], totalCourts: 1 },
+    ]);
+  });
+
   it("seguridad: código válido + teléfono distinto → NO cancela y devuelve mensaje neutro idéntico a no encontrado", async () => {
     state.rows = [futureRow()];
     const distinto = await cancelarReservaBotPorCodigo({

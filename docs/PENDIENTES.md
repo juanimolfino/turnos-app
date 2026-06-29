@@ -107,11 +107,13 @@ desvinculación de Mercado Pago: hecho en el Paso 2. Cada club puede conectar/re
 de Mercado Pago desde `/ajustes`; los tokens quedan server-side en `club_mercadopago_credentials`.
 El precio vive por cancha (`courts.price`) y el modo vive por club (`clubs.payment_mode` /
 `clubs.deposit_pct`). Al desvincular MP, el club queda automáticamente en `payment_mode='none'`.
+Hold del bot para clubes con pago: hecho en el Paso 3. La reserva queda `pendiente`, con
+`held_until` y monto calculado, y bloquea el turno.
 
-Pendiente de la fase grande: usar esos tokens para crear preferencias/link de pago del bot, flujo
-hold → link de pago → webhook confirma → reservado, hold con expiración de ~10 min, comisión de
-plataforma configurable desde superadmin (hoy 0%), prueba E2E y cancelación CON refund (política
-24/48hs). Se planifica paso a paso por ser la parte que toca dinero.
+Pendiente de la fase grande: usar esos tokens para crear preferencias/link de pago del bot, webhook
+confirma → reservado, expiración automática de holds vencidos, comisión de plataforma configurable
+desde superadmin (hoy 0%), prueba E2E y cancelación CON refund (política 24/48hs). Se planifica
+paso a paso por ser la parte que toca dinero.
 
 
 

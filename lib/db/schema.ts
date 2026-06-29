@@ -170,6 +170,7 @@ export const bookings = pgTable("bookings", {
   blockGroupId: uuid("block_group_id"),
   price: integer("price"),
   paymentStatus: paymentStatusEnum("payment_status"),
+  heldUntil: timestamp("held_until", { withTimezone: true }),
   notes: text("notes"),
   // Reservas del bot (sin login): nombre/teléfono se guardan en el propio booking
   // (la tabla customers global queda para una etapa posterior). Nullable porque

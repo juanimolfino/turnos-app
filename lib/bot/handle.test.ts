@@ -104,7 +104,16 @@ describe("handleIncomingMessage (Fase 6 — reservar)", () => {
   it("eligió turno + nombre → reserva y confirma con código (teléfono = id del canal)", async () => {
     extraerIntencion.mockResolvedValue(conIntencion);
     extraerAccionReserva.mockResolvedValue({ tipo: "reservar", lugar: "Pádel Central", hora: "19:00", cancha: null, nombre: "Juan Pérez" });
-    crearReservaBot.mockResolvedValue({ ok: true, bookingId: "bk1", bookingCode: "HYS324" });
+    const reservaOk = {
+      ok: true,
+      bookingId: "bk1",
+      bookingCode: "HYS324",
+      status: "confirmado",
+      paymentMode: "none",
+      amountToCharge: 0,
+      heldUntil: null,
+    };
+    crearReservaBot.mockResolvedValue(reservaOk);
 
     await handleIncomingMessage(msg("Juan Pérez"));
 
@@ -113,7 +122,7 @@ describe("handleIncomingMessage (Fase 6 — reservar)", () => {
       startTime: "19:00", endTime: "20:30",
       customerName: "Juan Pérez", customerPhone: "123",
     });
-    expect(confirmarReservaTexto).toHaveBeenCalledWith(turno, "Juan Pérez", "HYS324");
+    expect(confirmarReservaTexto).toHaveBeenCalledWith(turno, "Juan Pérez", reservaOk);
     expect(send).toHaveBeenCalledWith("123", "CONFIRMADA HYS324");
   });
 
