@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 
 const mocks = vi.hoisted(() => ({
   buildAuthorizationUrl: vi.fn(),
+  disconnectCredentials: vi.fn(),
   exchangeCode: vi.fn(),
   getUser: vi.fn(),
   getUserByAuthId: vi.fn(),
@@ -16,6 +17,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 vi.mock("@/lib/db/queries", () => ({
+  disconnectClubMercadoPago: mocks.disconnectCredentials,
   getUserByAuthId: mocks.getUserByAuthId,
   upsertClubMercadoPagoCredentials: mocks.upsertCredentials,
 }));
@@ -34,6 +36,10 @@ describe("Mercado Pago OAuth onboarding", () => {
     vi.clearAllMocks();
     mocks.getUser.mockResolvedValue({ data: { user: { id: "auth_admin" } } });
     mocks.getUserByAuthId.mockResolvedValue({ id: "admin_1", clubId: "club_123" });
+    mocks.disconnectCredentials.mockResolvedValue({
+      disconnected: true,
+      club: { id: "club_123", paymentMode: "none", requiresPayment: false },
+    });
     mocks.buildAuthorizationUrl.mockReturnValue("https://auth.mercadopago.com/authorization?state=abc");
     mocks.exchangeCode.mockResolvedValue({
       accessToken: "APP_USR-secret-access-token",
@@ -103,5 +109,20 @@ describe("Mercado Pago OAuth onboarding", () => {
     expect(response.headers.get("location")).toBe("https://example.com/ajustes?mp=error");
     expect(mocks.exchangeCode).not.toHaveBeenCalled();
     expect(mocks.upsertCredentials).not.toHaveBeenCalled();
+  });
+
+  it("desvincular borra credenciales y devuelve estado no conectado sin dejar pagos activos", async () => {
+    const { POST } = await import("./oauth/disconnect/route");
+
+    const response = await POST();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.disconnectCredentials).toHaveBeenCalledWith("club_123");
+    expect(body).toEqual({
+      mercadoPago: { connected: false },
+      club: { paymentMode: "none", requiresPayment: false },
+    });
+    expect(JSON.stringify(body)).not.toContain("APP_USR");
   });
 });

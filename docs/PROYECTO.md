@@ -112,11 +112,20 @@ reservar. Para cancelar, el bot exige **código + mismo teléfono del canal**: e
 identifica la reserva y el teléfono evita que alguien cancele una reserva ajena por
 adivinar o probar códigos.
 
-### Pagos (diseñado, onboarding OAuth iniciado en Fase 7)
+### Pagos (diseñado, configuración iniciada en Fase 7)
 
 El pago es **opcional y configurable por cada club**: puede pedir 0% (solo reservar,
 pagar en el lugar), 25% (una seña) o 100% (pago completo). El MVP arranca con el caso
 0%: la reserva se confirma directo, sin pago online.
+
+Desde `/ajustes`, el admin configura la política de cobro del club:
+- `payment_mode='none'`: 0%, no requiere pago online.
+- `payment_mode='partial'`: seña; el porcentaje vive en `deposit_pct` (ej. 25 = "1 jugador de 4").
+- `payment_mode='full'`: 100% del turno.
+
+El precio del turno vive en cada `court.price` (pesos argentinos, entero), porque distintas
+canchas del mismo club pueden costar distinto. El monto a cobrar se calcula de forma
+determinística: `none → 0`, `partial → price * deposit_pct / 100`, `full → price`.
 
 El modelo es **marketplace**: cada club cobra a **su propia cuenta de Mercado Pago** (no
 hay una cuenta central que recibe todo). La Fase 7 arranca por onboarding: desde
@@ -132,6 +141,14 @@ Los tokens del club se guardan en `club_mercadopago_credentials` (server-side): 
 loggean. Reconectar Mercado Pago hace upsert sobre la misma fila del club. La columna
 legacy `clubs.mercadopago_access_token` queda para compatibilidad histórica; el onboarding
 OAuth nuevo no la expone en el panel.
+
+El admin también puede **desvincular Mercado Pago** desde `/ajustes`. La UI exige una
+confirmación explícita y avisa que el club deja de poder cobrar por el bot, que las nuevas
+reservas que requieran pago no funcionarán hasta reconectar, y que las reservas ya pagadas
+no se afectan porque la plata ya está en la cuenta de MP del club. Al desvincular, se borra
+la fila de `club_mercadopago_credentials` y se fuerza `payment_mode='none'` /
+`requires_payment=false` en la misma transacción, para que ningún club quede pidiendo pago
+sin tener MP conectado.
 
 El uso de esos tokens queda para pasos siguientes: el jugador confirma → se re-chequea
 disponibilidad → la reserva pasa a **hold** (queda bloqueada para los demás) → se genera
@@ -296,19 +313,21 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
 
 ### `clubs` 🤖 — cada lugar/cancha
 `id` · `name` · `timezone` · `plan` · `address` · `city` · `neighborhood` (barrio/zona) ·
-`phone` · `requires_payment` (bool) · `payment_deadline_hours` · `mercadopago_access_token` (legacy) ·
-`api_key` (auth del bot) · `created_at`
+`phone` · `requires_payment` (legacy/sync) · `payment_mode` (`none`/`partial`/`full`) ·
+`deposit_pct` · `payment_deadline_hours` · `mercadopago_access_token` (legacy) · `api_key`
+(auth del bot) · `created_at`
 
 ### `club_mercadopago_credentials` — credenciales OAuth de MP por club
 `club_id` · `mercadopago_user_id` · `access_token` · `refresh_token` · `public_key` ·
 `scope` · `live_mode` · `expires_at` · `connected_at` · `updated_at`
 - Una fila por club conectado. Reconectar reemplaza tokens y metadatos.
+- Desvincular MP borra la fila y apaga pagos online del club (`payment_mode='none'`).
 - Tokens server-side únicamente: no se devuelven en `/api/clubs/settings`, no se pasan al
   cliente y no se loggean.
 - El uso para crear preferencias / links de pago del bot queda para pasos siguientes.
 
 ### `courts` 🤖 — canchas de cada club
-`id` · `club_id` · `sport_id` · `name` · `surface` · `sort_order` · `active`
+`id` · `club_id` · `sport_id` · `name` · `surface` · `price` (ARS) · `sort_order` · `active`
 
 ### `bookings` 🤖 — **tabla clave: ocupación y reservas**
 `id` · `club_id` · `court_id` · `date` (YYYY-MM-DD) · `start_time` · `end_time` (HH:MM) ·
@@ -418,7 +437,8 @@ GET /api/public/bookings/[id]/confirm   (callback de MercadoPago)
 - `POST /api/auth/ensure-profile` — crea perfil para superadmin
 - `GET/POST/PATCH /api/courts` — canchas
 - `POST/DELETE /api/agenda/block` — bloques de agenda
-- `GET/POST /api/clubs/settings` — datos del club, genera `api_key`
+- `GET/POST /api/clubs/settings` — datos del club, precio/modo de pago, genera `api_key`
+- `POST /api/mercadopago/oauth/disconnect` — desvincula MP del club y fuerza pago online apagado
 - `GET /api/superadmin/clubs` — listado para el panel
 
 ---

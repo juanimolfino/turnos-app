@@ -71,8 +71,11 @@ export default async function AjustesPage() {
     neighborhood: club?.neighborhood,
     phone: club?.phone,
     requiresPayment: club?.requiresPayment,
+    paymentMode: club?.paymentMode,
+    depositPct: club?.depositPct,
     paymentDeadlineHours: club?.paymentDeadlineHours,
     apiKey: club?.apiKey,
+    courts: allCourts.map((court) => ({ id: court.id, name: court.name, price: court.price })),
     mercadoPago: mercadoPagoStatus,
   }} />;
 }

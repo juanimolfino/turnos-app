@@ -102,10 +102,31 @@ token permanente, plantillas para mensajes proactivos).
 ## Próxima fase grande
 
 ### Fase 7 — Pagos (Mercado Pago, marketplace)
-Onboarding OAuth del club: hecho en el Paso 1. Cada club puede conectar/reconectar su cuenta de
-Mercado Pago desde `/ajustes`; los tokens quedan server-side en `club_mercadopago_credentials`.
+Onboarding OAuth del club: hecho en el Paso 1. Configuración de precio/modo de pago y
+desvinculación de Mercado Pago: hecho en el Paso 2. Cada club puede conectar/reconectar su cuenta
+de Mercado Pago desde `/ajustes`; los tokens quedan server-side en `club_mercadopago_credentials`.
+El precio vive por cancha (`courts.price`) y el modo vive por club (`clubs.payment_mode` /
+`clubs.deposit_pct`). Al desvincular MP, el club queda automáticamente en `payment_mode='none'`.
 
 Pendiente de la fase grande: usar esos tokens para crear preferencias/link de pago del bot, flujo
 hold → link de pago → webhook confirma → reservado, hold con expiración de ~10 min, comisión de
 plataforma configurable desde superadmin (hoy 0%), prueba E2E y cancelación CON refund (política
 24/48hs). Se planifica paso a paso por ser la parte que toca dinero.
+
+
+
+### Refresh automático del token de Mercado Pago
+El access_token de MP que se guarda al conectar un club vence a los 180 días (6 meses). Hoy NO hay
+lógica que lo renueve usando el refresh_token (que sí se guarda). Sin esto, los pagos de un club
+dejan de funcionar de golpe a los 6 meses de haberse conectado, sin aviso. Pendiente: implementar
+la renovación automática del token (usar el refresh_token para pedir uno nuevo antes/cuando vence,
+y actualizar club_mercadopago_credentials). Prioridad: media — no urgente (hay 6 meses), pero es
+una bomba de tiempo silenciosa si se olvida.
+
+### Robustecer la asociación club↔cuenta de MP en el OAuth
+Hoy, al volver del OAuth de MP, el club se resuelve desde la sesión del admin logueado (no desde el
+state, que solo valida CSRF). Funciona bien en el caso normal, pero si la sesión se perdiera durante
+el flujo (admin tardó mucho, otra pestaña, etc.) el callback podría fallar o asociar mal. Pendiente:
+vigilar este caso cuando haya varios clubs conectando en paralelo; evaluar codificar el club de forma
+segura en el flujo en vez de depender solo de la sesión. Prioridad: baja para el MVP (un club a la
+vez), revisar antes de escalar.

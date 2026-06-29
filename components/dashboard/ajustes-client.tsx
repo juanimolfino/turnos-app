@@ -36,6 +36,7 @@ const PLANTILLA = [
 ];
 
 type Tab = "plantilla" | "clases" | "fijos" | "eventos" | "miclub";
+type PaymentMode = "none" | "partial" | "full";
 
 interface ClubSettings {
   address?: string | null;
@@ -43,8 +44,11 @@ interface ClubSettings {
   neighborhood?: string | null;
   phone?: string | null;
   requiresPayment?: boolean;
+  paymentMode?: PaymentMode;
+  depositPct?: number;
   paymentDeadlineHours?: number;
   apiKey?: string | null;
+  courts?: { id: string; name: string; price: number }[];
   mercadoPago?: {
     connected: boolean;
     mercadoPagoUserId?: string | null;
@@ -90,16 +94,21 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
   const [city, setCity] = useState(initial.city ?? "");
   const [neighborhood, setNeighborhood] = useState(initial.neighborhood ?? "");
   const [phone, setPhone] = useState(initial.phone ?? "");
-  const [requiresPayment, setRequiresPayment] = useState(initial.requiresPayment ?? false);
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>(initial.paymentMode ?? (initial.requiresPayment ? "full" : "none"));
+  const [depositPct, setDepositPct] = useState(String(initial.depositPct ?? 25));
+  const [courtPrices, setCourtPrices] = useState(() => (initial.courts ?? []).map((court) => ({ ...court, price: String(court.price ?? 0) })));
   const [deadlineHours, setDeadlineHours] = useState(String(initial.paymentDeadlineHours ?? 24));
   const [apiKey, setApiKey] = useState(initial.apiKey ?? "");
+  const [mercadoPago, setMercadoPago] = useState(initial.mercadoPago ?? { connected: false });
   const [saving, setSaving] = useState(false);
   const [genning, setGenning] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [showDisconnectModal, setShowDisconnectModal] = useState(false);
+  const [disconnectConfirm, setDisconnectConfirm] = useState("");
   const [saved, setSaved] = useState(false);
   const mpStatus = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("mp");
   const [error, setError] = useState(mpStatus === "error" ? "No se pudo conectar Mercado Pago. Intentá de nuevo." : "");
   const notice = mpStatus === "connected" ? "Mercado Pago conectado" : "";
-  const mercadoPago = initial.mercadoPago ?? { connected: false };
 
   async function save() {
     setSaving(true); setError(""); setSaved(false);
@@ -112,8 +121,13 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
           city: city || null,
           neighborhood: neighborhood || null,
           phone: phone || null,
-          requiresPayment,
+          paymentMode,
+          depositPct: parseInt(depositPct) || 25,
           paymentDeadlineHours: parseInt(deadlineHours) || 24,
+          courtPrices: courtPrices.map((court) => ({
+            courtId: court.id,
+            price: parseInt(court.price) || 0,
+          })),
         }),
       });
       if (!res.ok) { const d = await res.json(); setError(d.error ?? "Error al guardar"); return; }
@@ -121,6 +135,21 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
       setTimeout(() => setSaved(false), 3000);
     } catch { setError("Error de conexión"); }
     finally { setSaving(false); }
+  }
+
+  async function disconnectMercadoPago() {
+    setDisconnecting(true); setError("");
+    try {
+      const res = await fetch("/api/mercadopago/oauth/disconnect", { method: "POST" });
+      if (!res.ok) { const d = await res.json(); setError(d.error ?? "No se pudo desvincular Mercado Pago"); return; }
+      setMercadoPago({ connected: false });
+      setPaymentMode("none");
+      setShowDisconnectModal(false);
+      setDisconnectConfirm("");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch { setError("Error de conexión"); }
+    finally { setDisconnecting(false); }
   }
 
   async function generateKey() {
@@ -163,24 +192,60 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
       <div style={{ background: "#FCFBF8", border: "1px solid #E7E1D6", borderRadius: 16, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: "#221F1B", letterSpacing: ".04em", textTransform: "uppercase" }}>Pagos y Mercado Pago</div>
 
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: "#221F1B" }}>Requerir pago para confirmar reservas</div>
-            <div style={{ fontSize: 12.5, color: "#928B7E", marginTop: 2 }}>Preparado para la fase de cobro online del bot</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 12 }}>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: "#6B6660", letterSpacing: ".04em" }}>MODO DE PAGO</label>
+              <select
+                value={paymentMode}
+                onChange={(e) => setPaymentMode(e.target.value as PaymentMode)}
+                style={{
+                  padding: "10px 12px", borderRadius: 9, border: "1px solid #E0DACE",
+                  fontSize: 13.5, background: "#FCFBF8", color: "#221F1B", outline: "none", fontFamily: "inherit",
+                }}
+              >
+                <option value="none">Sin pago online (0%)</option>
+                <option value="partial">Seña parcial</option>
+                <option value="full">Pago completo (100%)</option>
+              </select>
+            </div>
+            {paymentMode === "partial" && (
+              <div style={{ width: isMobile ? "100%" : 180 }}>
+                <Field label="% DE SEÑA" value={depositPct} onChange={setDepositPct} placeholder="25" type="number" />
+              </div>
+            )}
           </div>
-          <button onClick={() => setRequiresPayment(!requiresPayment)} style={{
-            width: 44, height: 26, borderRadius: 999,
-            background: requiresPayment ? "#C96442" : "#D0C9BF",
-            border: "none", cursor: "pointer", position: "relative", transition: "background .2s", flexShrink: 0,
-          }}>
-            <span style={{
-              position: "absolute", top: 3, left: requiresPayment ? 21 : 3, width: 20, height: 20,
-              borderRadius: "50%", background: "#fff", transition: "left .2s", display: "block"
-            }} />
-          </button>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#6B6660", letterSpacing: ".04em" }}>PRECIO POR CANCHA</div>
+            {courtPrices.length === 0 ? (
+              <div style={{ fontSize: 13, color: "#928B7E", border: "1px dashed #D6CEC0", borderRadius: 10, padding: 12 }}>Creá canchas desde Agenda semanal para configurar precios.</div>
+            ) : (
+              courtPrices.map((court) => (
+                <div key={court.id} style={{ display: "flex", alignItems: "center", gap: 10, flexDirection: isMobile ? "column" : "row" }}>
+                  <div style={{ flex: 1, width: isMobile ? "100%" : "auto", fontSize: 13.5, fontWeight: 600, color: "#221F1B" }}>{court.name}</div>
+                  <div style={{ width: isMobile ? "100%" : 180 }}>
+                    <Field
+                      label="PRECIO ARS"
+                      value={court.price}
+                      onChange={(value) => setCourtPrices((current) => current.map((item) => item.id === court.id ? { ...item, price: value } : item))}
+                      placeholder="100"
+                      type="number"
+                    />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {paymentMode !== "none" && !mercadoPago.connected && (
+            <div style={{ background: "#FCEEE9", border: "1px solid #F1D3CB", borderRadius: 10, padding: "10px 12px", fontSize: 13, color: "#B23A28" }}>
+              Para pedir pago online primero conectá Mercado Pago. El servidor también bloquea guardar este estado.
+            </div>
+          )}
         </div>
 
-        {requiresPayment && (
+        {paymentMode !== "none" && (
           <Field label="Horas límite para pagar" value={deadlineHours} onChange={setDeadlineHours} placeholder="24" type="number" />
         )}
 
@@ -195,15 +260,55 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
                 : "Conectá la cuenta del club para poder cobrar a nombre del club en una fase posterior."}
             </div>
           </div>
-          <a href="/api/mercadopago/oauth/start" style={{
-            display: "inline-flex", justifyContent: "center", alignItems: "center",
-            background: "#221F1B", color: "#fff", borderRadius: 9, padding: "10px 16px",
-            fontWeight: 700, fontSize: 13, textDecoration: "none", whiteSpace: "nowrap",
-          }}>
-            {mercadoPago.connected ? "Reconectar Mercado Pago" : "Conectar Mercado Pago"}
-          </a>
+          <div style={{ display: "flex", gap: 8, flexDirection: isMobile ? "column" : "row", width: isMobile ? "100%" : "auto" }}>
+            <a href="/api/mercadopago/oauth/start" style={{
+              display: "inline-flex", justifyContent: "center", alignItems: "center",
+              background: "#221F1B", color: "#fff", borderRadius: 9, padding: "10px 16px",
+              fontWeight: 700, fontSize: 13, textDecoration: "none", whiteSpace: "nowrap",
+            }}>
+              {mercadoPago.connected ? "Reconectar Mercado Pago" : "Conectar Mercado Pago"}
+            </a>
+            {mercadoPago.connected && (
+              <button onClick={() => setShowDisconnectModal(true)} style={{
+                background: "#fff", color: "#B23A28", border: "1px solid #F1D3CB", borderRadius: 9,
+                padding: "10px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+              }}>
+                Desvincular Mercado Pago
+              </button>
+            )}
+          </div>
         </div>
       </div>
+
+      {showDisconnectModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(34,31,27,.35)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}>
+          <div style={{ width: "100%", maxWidth: 520, background: "#FCFBF8", border: "1px solid #E7E1D6", borderRadius: 14, padding: 20, boxShadow: "0 18px 45px rgba(0,0,0,.18)", display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#221F1B" }}>Desvincular Mercado Pago</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 13.5, color: "#4B4640", lineHeight: 1.45 }}>
+              <div>Al desvincular, el club dejará de poder cobrar por el bot.</div>
+              <div>Las nuevas reservas que requieran pago no van a funcionar hasta reconectar Mercado Pago.</div>
+              <div>Las reservas ya pagadas no se ven afectadas: la plata ya está en la cuenta de Mercado Pago del club.</div>
+              <div>Para evitar un estado inconsistente, el modo de pago se va a cambiar a &quot;Sin pago online&quot;.</div>
+            </div>
+            <Field label='ESCRIBÍ "DESVINCULAR" PARA CONFIRMAR' value={disconnectConfirm} onChange={setDisconnectConfirm} placeholder="DESVINCULAR" />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexDirection: isMobile ? "column" : "row" }}>
+              <button onClick={() => { setShowDisconnectModal(false); setDisconnectConfirm(""); }} disabled={disconnecting} style={{
+                background: "#fff", border: "1px solid #E0DACE", borderRadius: 9, padding: "10px 16px",
+                fontSize: 13, fontWeight: 700, cursor: disconnecting ? "not-allowed" : "pointer", fontFamily: "inherit",
+              }}>
+                Cancelar
+              </button>
+              <button onClick={disconnectMercadoPago} disabled={disconnecting || disconnectConfirm !== "DESVINCULAR"} style={{
+                background: "#B23A28", color: "#fff", border: "none", borderRadius: 9, padding: "10px 16px",
+                fontSize: 13, fontWeight: 800, cursor: disconnecting || disconnectConfirm !== "DESVINCULAR" ? "not-allowed" : "pointer",
+                fontFamily: "inherit", opacity: disconnecting || disconnectConfirm !== "DESVINCULAR" ? 0.55 : 1,
+              }}>
+                {disconnecting ? "Desvinculando…" : "Confirmar desvinculación"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ background: "#FCFBF8", border: "1px solid #E7E1D6", borderRadius: 16, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: "#221F1B", letterSpacing: ".04em", textTransform: "uppercase" }}>API Key del bot</div>

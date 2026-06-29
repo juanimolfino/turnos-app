@@ -1,6 +1,6 @@
 import { and, count, desc, eq, isNotNull, sql, lt, gt, gte, lte, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { clubs, courts, sports, professors, credits, jobs, subscriptions, transactions, users, bookings, customers, clubMercadoPagoCredentials, type JobType, type Role } from "@/lib/db/schema";
+import { clubs, courts, sports, professors, credits, jobs, subscriptions, transactions, users, bookings, customers, clubMercadoPagoCredentials, type JobType, type PaymentMode, type Role } from "@/lib/db/schema";
 import { sendPurchaseConfirmationEmail, sendWelcomeEmail } from "@/lib/email/send";
 import type { User } from "@supabase/supabase-js";
 import { randomBytes, randomUUID } from "crypto";
@@ -271,12 +271,26 @@ export async function updateClub(id: string, data: {
   neighborhood?: string | null;
   phone?: string | null;
   requiresPayment?: boolean;
+  paymentMode?: PaymentMode;
+  depositPct?: number;
   paymentDeadlineHours?: number;
   mercadopagoAccessToken?: string | null;
 }) {
   const db = getDb();
   const [updated] = await db.update(clubs).set(data).where(eq(clubs.id, id)).returning();
   return updated;
+}
+
+export async function updateClubCourtPrices(clubId: string, courtPrices: { courtId: string; price: number }[]) {
+  const db = getDb();
+  return db.transaction(async (tx) => {
+    for (const courtPrice of courtPrices) {
+      await tx
+        .update(courts)
+        .set({ price: courtPrice.price })
+        .where(and(eq(courts.id, courtPrice.courtId), eq(courts.clubId, clubId)));
+    }
+  });
 }
 
 export async function getClubMercadoPagoConnectionStatus(clubId: string) {
@@ -343,6 +357,31 @@ export async function upsertClubMercadoPagoCredentials(clubId: string, data: {
     });
 
   return row;
+}
+
+export async function disconnectClubMercadoPago(clubId: string) {
+  const db = getDb();
+  return db.transaction(async (tx) => {
+    const deleted = await tx
+      .delete(clubMercadoPagoCredentials)
+      .where(eq(clubMercadoPagoCredentials.clubId, clubId))
+      .returning({ clubId: clubMercadoPagoCredentials.clubId });
+
+    const [club] = await tx
+      .update(clubs)
+      .set({
+        requiresPayment: false,
+        paymentMode: "none",
+      })
+      .where(eq(clubs.id, clubId))
+      .returning({
+        id: clubs.id,
+        paymentMode: clubs.paymentMode,
+        requiresPayment: clubs.requiresPayment,
+      });
+
+    return { disconnected: deleted.length > 0, club };
+  });
 }
 
 /**

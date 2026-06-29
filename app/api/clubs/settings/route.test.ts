@@ -4,9 +4,11 @@ import { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({
   generateApiKey: vi.fn(),
   getClubById: vi.fn(),
+  getClubMercadoPagoConnectionStatus: vi.fn(),
   getUser: vi.fn(),
   getUserByAuthId: vi.fn(),
   updateClub: vi.fn(),
+  updateClubCourtPrices: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -18,8 +20,10 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/db/queries", () => ({
   generateApiKey: mocks.generateApiKey,
   getClubById: mocks.getClubById,
+  getClubMercadoPagoConnectionStatus: mocks.getClubMercadoPagoConnectionStatus,
   getUserByAuthId: mocks.getUserByAuthId,
   updateClub: mocks.updateClub,
+  updateClubCourtPrices: mocks.updateClubCourtPrices,
 }));
 
 const clubRow = {
@@ -30,6 +34,8 @@ const clubRow = {
   neighborhood: "Centro",
   phone: "123",
   requiresPayment: false,
+  paymentMode: "none",
+  depositPct: 25,
   paymentDeadlineHours: 24,
   apiKey: "ck_public_admin_value",
   mercadopagoAccessToken: "APP_USR-secret-token",
@@ -41,6 +47,7 @@ describe("club settings API", () => {
     mocks.getUser.mockResolvedValue({ data: { user: { id: "auth_admin" } } });
     mocks.getUserByAuthId.mockResolvedValue({ id: "admin_1", clubId: "club_123" });
     mocks.getClubById.mockResolvedValue(clubRow);
+    mocks.getClubMercadoPagoConnectionStatus.mockResolvedValue({ connected: false });
     mocks.updateClub.mockResolvedValue(clubRow);
   });
 
@@ -71,5 +78,48 @@ describe("club settings API", () => {
     expect(mocks.updateClub).toHaveBeenCalledWith("club_123", { phone: "456" });
     expect(body.club.mercadopagoAccessToken).toBeUndefined();
     expect(JSON.stringify(body)).not.toContain("APP_USR");
+  });
+
+  it("rechaza pedir pago online si Mercado Pago no está conectado", async () => {
+    const { POST } = await import("./route");
+    const request = new NextRequest("https://example.com/api/clubs/settings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ paymentMode: "full" }),
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toBe("Conectá Mercado Pago antes de pedir pago online.");
+    expect(mocks.updateClub).not.toHaveBeenCalled();
+  });
+
+  it("guarda modo de pago y precios cuando Mercado Pago está conectado", async () => {
+    mocks.getClubMercadoPagoConnectionStatus.mockResolvedValue({ connected: true });
+    mocks.updateClub.mockResolvedValue({ ...clubRow, paymentMode: "partial", depositPct: 25, requiresPayment: true });
+    const { POST } = await import("./route");
+    const request = new NextRequest("https://example.com/api/clubs/settings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        paymentMode: "partial",
+        depositPct: 25,
+        courtPrices: [{ courtId: "11111111-1111-4111-8111-111111111111", price: 100 }],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(mocks.updateClub).toHaveBeenCalledWith("club_123", {
+      paymentMode: "partial",
+      depositPct: 25,
+      requiresPayment: true,
+    });
+    expect(mocks.updateClubCourtPrices).toHaveBeenCalledWith("club_123", [
+      { courtId: "11111111-1111-4111-8111-111111111111", price: 100 },
+    ]);
   });
 });

@@ -1,6 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   integer,
   jsonb,
   pgEnum,
@@ -28,6 +29,7 @@ export const bookingStatusEnum = pgEnum("booking_status", ["confirmado", "cancel
 export const eventKindEnum = pgEnum("event_kind", ["americano", "torneo", "clinica"]);
 export const eventStatusEnum = pgEnum("event_status", ["inscripcion_abierta", "programado", "finalizado", "cancelado"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pagado", "senado", "impago"]);
+export const paymentModeEnum = pgEnum("payment_mode", ["none", "partial", "full"]);
 // Origen de la reserva: cargada desde el panel del admin, o creada por el bot (Fase 6).
 export const bookingOriginEnum = pgEnum("booking_origin", ["admin", "bot"]);
 export const notifChannelEnum = pgEnum("notif_channel", ["whatsapp", "email"]);
@@ -46,11 +48,15 @@ export const clubs = pgTable("clubs", {
   neighborhood: text("neighborhood"),
   phone: text("phone"),
   requiresPayment: boolean("requires_payment").default(false).notNull(),
+  paymentMode: paymentModeEnum("payment_mode").default("none").notNull(),
+  depositPct: integer("deposit_pct").default(25).notNull(),
   paymentDeadlineHours: integer("payment_deadline_hours").default(24).notNull(),
   mercadopagoAccessToken: text("mercadopago_access_token"),
   apiKey: text("api_key").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => ({
+  depositPctRange: check("clubs_deposit_pct_range", sql`${table.depositPct} >= 1 AND ${table.depositPct} <= 100`),
+}));
 
 export const clubMercadoPagoCredentials = pgTable("club_mercadopago_credentials", {
   clubId: uuid("club_id").references(() => clubs.id, { onDelete: "cascade" }).primaryKey(),
@@ -77,9 +83,12 @@ export const courts = pgTable("courts", {
   sportId: uuid("sport_id").references(() => sports.id).notNull(),
   name: text("name").notNull(),
   surface: text("surface"),
+  price: integer("price").default(0).notNull(),
   sortOrder: integer("sort_order").default(0).notNull(),
   active: boolean("active").default(true).notNull(),
-});
+}, (table) => ({
+  priceNonNegative: check("courts_price_non_negative", sql`${table.price} >= 0`),
+}));
 
 export const customers = pgTable("customers", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -311,6 +320,7 @@ export type Booking = typeof bookings.$inferSelect;
 export type BookingType = typeof bookingTypeEnum.enumValues[number];
 export type BookingStatus = typeof bookingStatusEnum.enumValues[number];
 export type BookingOrigin = typeof bookingOriginEnum.enumValues[number];
+export type PaymentMode = typeof paymentModeEnum.enumValues[number];
 export type Event = typeof events.$inferSelect;
 export type RecurringRule = typeof recurringRules.$inferSelect;
 export type BotConversation = typeof botConversations.$inferSelect;
