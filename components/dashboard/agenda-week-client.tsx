@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Plus, Settings2, X, Trash2, Pencil } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-is-mobile";
-import { bookingTypeLabel } from "@/lib/bookings/labels";
+import { bookingPanelLabel, bookingTypeLabel } from "@/lib/bookings/labels";
 
 type BlockType = "simple" | "clase" | "fijo" | "americano" | "torneo" | "bloqueo";
 
@@ -16,6 +16,7 @@ interface Block {
   startTime: string;
   endTime: string;
   type: string;
+  status: string;
   blockGroupId: string | null;
   notes: string | null;
   label: string | null;
@@ -37,10 +38,25 @@ const TYPE_META: Record<BlockType, { label: string; short: string; bg: string; b
   torneo:    { label: bookingTypeLabel("torneo"),    short: "Torneo",    bg: "#F7EFD9", bd: "#EBDFBF", fg: "#8A6D1F" },
   bloqueo:   { label: bookingTypeLabel("bloqueo"),   short: "Cerrado",   bg: "#EFECE6", bd: "#DED8CC", fg: "#8A8377" },
 };
+const PENDING_PAYMENT_META = {
+  label: "Pendiente de pago",
+  short: "En espera",
+  bg: "#FFF6E0",
+  bd: "#D9A93B",
+  fg: "#795C12",
+};
 // Mapea el tipo guardado (incluye el legacy "evento") a su metadata visual.
 function metaFor(type: string) {
   if (type === "evento") return TYPE_META.americano;
   return TYPE_META[type as BlockType] ?? TYPE_META.bloqueo;
+}
+function metaForBlock(block: Block) {
+  if (block.status === "pendiente") return PENDING_PAYMENT_META;
+  return metaFor(block.type);
+}
+function blockGridTitle(block: Block, meta: { short: string }) {
+  if (block.status === "pendiente") return meta.short;
+  return block.label ?? meta.short;
 }
 const TYPES: BlockType[] = ["simple", "clase", "fijo", "americano", "torneo", "bloqueo"];
 const DAY_NAMES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
@@ -337,7 +353,7 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
                     />
                   );
                 }
-                const meta = metaFor(block.type);
+                const meta = metaForBlock(block);
                 const isFirst = block.startTime >= slot.start && block.startTime < slot.end
                   || (slot.start === slots[0].start && toMin(block.startTime) < gridStart);
                 return (
@@ -347,14 +363,14 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
                     style={{
                       borderLeft: "1px solid #EFEAE0",
                       background: meta.bg,
-                      borderTop: isFirst ? `2px solid ${meta.bd}` : "none",
+                      borderTop: isFirst ? `2px ${block.status === "pendiente" ? "dashed" : "solid"} ${meta.bd}` : "none",
                       cursor: "pointer", padding: isFirst ? "3px 5px" : 0, minHeight: 34,
                       textAlign: "left", overflow: "hidden",
                     }}
                   >
                     {isFirst && (
                       <span style={{ display: "block", fontSize: 11, fontWeight: 700, color: meta.fg, lineHeight: 1.15 }}>
-                        {block.label ?? meta.short}
+                        {blockGridTitle(block, meta)}
                       </span>
                     )}
                     {isFirst && (
@@ -372,6 +388,10 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
 
       {/* Leyenda */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 12, height: 12, borderRadius: 3, background: PENDING_PAYMENT_META.bg, border: `1px dashed ${PENDING_PAYMENT_META.bd}` }} />
+          <span style={{ fontSize: 12, color: "#6B6660" }}>{PENDING_PAYMENT_META.label}</span>
+        </div>
         {TYPES.map((t) => (
           <div key={t} style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ width: 12, height: 12, borderRadius: 3, background: TYPE_META[t].bg, border: `1px solid ${TYPE_META[t].bd}` }} />
@@ -480,14 +500,14 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
 
       {/* ── Modal: ver/eliminar bloque ── */}
       {viewBlock && (() => {
-        const meta = metaFor(viewBlock.type);
+        const meta = metaForBlock(viewBlock);
         const courtName = courts.find((c) => c.id === viewBlock.courtId)?.name ?? "Cancha";
         return (
           <Modal onClose={() => setViewBlock(null)} title="Bloque">
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ padding: "4px 10px", borderRadius: 999, background: meta.bg, color: meta.fg, fontWeight: 700, fontSize: 12.5 }}>
-                  {meta.label}
+                  {bookingPanelLabel(viewBlock.type, viewBlock.status)}
                 </span>
                 {viewBlock.label && <span style={{ fontSize: 14, fontWeight: 600, color: "#221F1B" }}>{viewBlock.label}</span>}
               </div>

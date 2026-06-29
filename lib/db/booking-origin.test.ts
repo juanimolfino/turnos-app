@@ -1,9 +1,17 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // Mock de getDb: captura los values() de cada insert para verificar `origin`.
-const state = vi.hoisted(() => ({ inserts: [] as Record<string, unknown>[] }));
+const state = vi.hoisted(() => ({
+  inserts: [] as Record<string, unknown>[],
+  selectRows: [] as Record<string, unknown>[],
+}));
 vi.mock("@/lib/db", () => ({
   getDb: () => ({
+    select: () => ({
+      from: () => ({
+        where: () => Promise.resolve(state.selectRows),
+      }),
+    }),
     insert: () => ({
       values: (v: Record<string, unknown>) => {
         state.inserts.push(v);
@@ -15,12 +23,13 @@ vi.mock("@/lib/db", () => ({
   }),
 }));
 
-import { createBooking, createAgendaBlocks, normalizeEndTime } from "@/lib/db/queries";
+import { createBooking, createAgendaBlocks, getWeekAgenda, normalizeEndTime } from "@/lib/db/queries";
 import { computeAvailability } from "@/lib/bookings/availability";
 
 describe("origin en creación de bookings", () => {
   beforeEach(() => {
     state.inserts = [];
+    state.selectRows = [];
   });
 
   it("createBooking (panel) setea origin='admin' por defecto", async () => {
@@ -61,7 +70,10 @@ describe("normalizeEndTime", () => {
 });
 
 describe("end_time='24:00' nunca se persiste", () => {
-  beforeEach(() => { state.inserts = []; });
+  beforeEach(() => {
+    state.inserts = [];
+    state.selectRows = [];
+  });
 
   it("createBooking que termina a medianoche guarda '23:59'", async () => {
     await createBooking({
@@ -77,6 +89,36 @@ describe("end_time='24:00' nunca se persiste", () => {
       startTime: "20:00", endTime: "24:00",
     });
     expect(state.inserts[0].endTime).toBe("23:59");
+  });
+});
+
+describe("getWeekAgenda", () => {
+  it("devuelve el status para que el panel distinga holds pendientes", async () => {
+    state.selectRows = [
+      {
+        id: "bk1",
+        courtId: "ct1",
+        date: "2026-06-27",
+        startTime: "18:00",
+        endTime: "19:30",
+        type: "simple",
+        status: "pendiente",
+        notes: null,
+        blockGroupId: null,
+        customerId: null,
+        professorId: null,
+      },
+    ];
+
+    const rows = await getWeekAgenda("club1", "2026-06-27", "2026-06-27");
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        id: "bk1",
+        type: "simple",
+        status: "pendiente",
+      }),
+    ]);
   });
 });
 

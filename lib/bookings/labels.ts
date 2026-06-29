@@ -15,3 +15,15 @@ export const BOOKING_TYPE_LABELS: Record<string, string> = {
 export function bookingTypeLabel(type: string): string {
   return BOOKING_TYPE_LABELS[type] ?? "Cerrado";
 }
+
+export function bookingStatusLabel(status: string): string {
+  if (status === "pendiente") return "Pendiente de pago";
+  if (status === "confirmado") return "Confirmado";
+  if (status === "cancelado") return "Cancelado";
+  return status;
+}
+
+export function bookingPanelLabel(type: string, status: string): string {
+  if (status === "pendiente") return bookingStatusLabel(status);
+  return bookingTypeLabel(type);
+}

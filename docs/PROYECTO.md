@@ -348,6 +348,9 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
 - **Regla de disponibilidad**: una cancha está **libre** en un rango si NO hay ningún
   booking con `status != cancelado` que se superponga (`start < rangoFin && end > rangoInicio`).
   Un hold `pendiente` ocupa igual que una confirmada hasta que se cancele o expire.
+- **Presentación en agenda**: el panel del admin muestra `status='pendiente'` como
+  **"Pendiente de pago" / "En espera"**, con estilo visual distinto de una reserva
+  `confirmado`. Sigue ocupando la grilla porque es provisorio, no libre.
 - Lo que carga el dueño en /agenda y lo que reserva el bot viven **todo acá**.
 
 ### `customers` — jugadores/clientes del club (legacy / panel)

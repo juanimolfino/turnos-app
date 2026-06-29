@@ -587,7 +587,7 @@ export async function getWeekAgenda(clubId: string, startDate: string, endDate: 
     .map((r) => ({
       id: r.id, courtId: r.courtId, date: r.date,
       startTime: r.startTime, endTime: r.endTime, type: r.type,
-      blockGroupId: r.blockGroupId, notes: r.notes,
+      status: r.status, blockGroupId: r.blockGroupId, notes: r.notes,
       label: r.professorId ? profMap[r.professorId] ?? null : r.customerId ? custMap[r.customerId] ?? null : null,
     }));
 }

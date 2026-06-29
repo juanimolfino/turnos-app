@@ -4,13 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useIsMobile } from "@/hooks/use-is-mobile";
+import { bookingPanelLabel } from "@/lib/bookings/labels";
 import { nowInTz } from "@/lib/tz";
 
 interface Court { id: string; name: string; }
 interface Block {
   id: string; courtId: string; date: string;
   startTime: string; endTime: string; type: string;
-  blockGroupId: string | null; notes: string | null; label: string | null;
+  status: string; blockGroupId: string | null; notes: string | null; label: string | null;
 }
 interface Props {
   courts: Court[];
@@ -20,11 +21,12 @@ interface Props {
   timezone: string;
 }
 
-type StatusKey = "libre" | "simple" | "clase" | "fijo" | "americano" | "torneo" | "bloqueo";
+type StatusKey = "libre" | "simple" | "pendiente" | "clase" | "fijo" | "americano" | "torneo" | "bloqueo";
 
 const STATUS: Record<StatusKey, { bg: string; bd: string; fg: string; dot: string; label: string }> = {
   libre:     { bg: "#E9F3EA", bd: "#CFE6D2", fg: "#2F7D4E", dot: "#3E9B63", label: "Libre" },
   simple:    { bg: "#FFFFFF", bd: "#E7E1D6", fg: "#7A746A", dot: "#B8B0A2", label: "Reservado" },
+  pendiente: { bg: "#FFF6E0", bd: "#D9A93B", fg: "#795C12", dot: "#D9A93B", label: "Pendiente de pago" },
   clase:     { bg: "#EAF0F8", bd: "#D3DEF0", fg: "#3D5C93", dot: "#5B7FBE", label: "Clase" },
   fijo:      { bg: "#F1EAF7", bd: "#E2D4EF", fg: "#6B4E9E", dot: "#8A6BC4", label: "Turno fijo" },
   americano: { bg: "#FBEBE2", bd: "#F2D6C5", fg: "#B0572C", dot: "#C96442", label: "Americano" },
@@ -35,6 +37,10 @@ function statusOf(type: string): StatusKey {
   if (type === "evento") return "americano";
   return (["simple", "clase", "fijo", "americano", "torneo", "bloqueo"] as StatusKey[]).includes(type as StatusKey)
     ? (type as StatusKey) : "bloqueo";
+}
+function statusOfBlock(block: Block): StatusKey {
+  if (block.status === "pendiente") return "pendiente";
+  return statusOf(block.type);
 }
 
 const SEMAFORO = {
@@ -99,11 +105,11 @@ export function AgendaDayClient({ courts, blocks, date, clubName, timezone }: Pr
       const free = cells.filter((c) => !c.block).length;
       const total = cells.length;
       const level = free === total ? "green" : free === 0 ? "red" : "amber";
-      const evt = cells.find((c) => c.block && (statusOf(c.block.type) === "americano" || statusOf(c.block.type) === "torneo"));
+      const evt = cells.find((c) => c.block && (statusOfBlock(c.block) === "americano" || statusOfBlock(c.block) === "torneo"));
       const allSame = total > 1 && cells.every((c) => c.block && c.block.blockGroupId && c.block.blockGroupId === cells[0].block!.blockGroupId);
       segs.push({
         start, end, cells, free, total, level,
-        eventLabel: evt?.block ? (evt.block.label ?? STATUS[statusOf(evt.block.type)].label) : undefined,
+        eventLabel: evt?.block ? (evt.block.label ?? STATUS[statusOfBlock(evt.block)].label) : undefined,
         merged: allSame ? cells[0].block : null,
       });
     }
@@ -177,6 +183,7 @@ export function AgendaDayClient({ courts, blocks, date, clubName, timezone }: Pr
         {[
           { dot: STATUS.libre.dot, label: "Libre" },
           { dot: STATUS.simple.dot, label: "Reservado" },
+          { dot: STATUS.pendiente.dot, label: "Pendiente de pago" },
           { dot: STATUS.clase.dot, label: "Clase" },
           { dot: STATUS.fijo.dot, label: "Turno fijo" },
           { dot: STATUS.americano.dot, label: "Americano / torneo" },
@@ -247,7 +254,7 @@ export function AgendaDayClient({ courts, blocks, date, clubName, timezone }: Pr
                     ) : (
                       <div style={{ flex: 1, display: "flex", gap: 8 }}>
                         {visibleCells.map((cell) => {
-                          const sk = cell.block ? statusOf(cell.block.type) : "libre";
+                          const sk = cell.block ? statusOfBlock(cell.block) : "libre";
                           const st = STATUS[sk];
                           return (
                             <div
@@ -255,7 +262,7 @@ export function AgendaDayClient({ courts, blocks, date, clubName, timezone }: Pr
                               onClick={() => cell.block && setDetail(cell.block)}
                               style={{
                                 flex: 1, minWidth: 0, cursor: cell.block ? "pointer" : "default", background: st.bg,
-                                border: `1px solid ${st.bd}`, borderRadius: 10, padding: "10px",
+                                border: `1px ${sk === "pendiente" ? "dashed" : "solid"} ${st.bd}`, borderRadius: 10, padding: "10px",
                                 minHeight: isMobile ? 58 : 72, display: "flex", flexDirection: "column", gap: 4, justifyContent: "center",
                               }}
                             >
@@ -285,7 +292,7 @@ export function AgendaDayClient({ courts, blocks, date, clubName, timezone }: Pr
 
       {/* Detalle */}
       {detail && (() => {
-        const st = STATUS[statusOf(detail.type)];
+        const st = STATUS[statusOfBlock(detail)];
         const courtName = courts.find((c) => c.id === detail.courtId)?.name ?? "Cancha";
         return (
           <div onClick={() => setDetail(null)} style={{
@@ -297,7 +304,7 @@ export function AgendaDayClient({ courts, blocks, date, clubName, timezone }: Pr
               padding: "18px 18px 24px", boxShadow: "0 20px 50px -12px rgba(0,0,0,.35)",
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                <span style={{ padding: "4px 10px", borderRadius: 999, background: st.bg, color: st.fg, fontWeight: 700, fontSize: 12.5 }}>{st.label}</span>
+                <span style={{ padding: "4px 10px", borderRadius: 999, background: st.bg, color: st.fg, fontWeight: 700, fontSize: 12.5 }}>{bookingPanelLabel(detail.type, detail.status)}</span>
                 {detail.label && <span style={{ fontSize: 15, fontWeight: 700, color: "#221F1B" }}>{detail.label}</span>}
               </div>
               <div style={{ fontSize: 14, color: "#54504A" }}>{courtName} · {detail.startTime} – {detail.endTime}</div>
@@ -316,19 +323,19 @@ export function AgendaDayClient({ courts, blocks, date, clubName, timezone }: Pr
 }
 
 function MergedBand({ block, start, end, courtCount, onClick }: { block: Block; start: string; end: string; courtCount: number; onClick: () => void }) {
-  const sk = statusOf(block.type);
+  const sk = statusOfBlock(block);
   const st = STATUS[sk];
   const hatched = sk === "clase";
   return (
     <div onClick={onClick} style={{
       flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: 2,
       padding: "12px 16px", borderRadius: 10, cursor: "pointer",
-      color: st.fg, border: `1px solid ${st.bd}`,
+      color: st.fg, border: `1px ${sk === "pendiente" ? "dashed" : "solid"} ${st.bd}`,
       background: hatched
         ? "repeating-linear-gradient(45deg,#EAF0F8,#EAF0F8 11px,#E1E9F6 11px,#E1E9F6 22px)"
         : st.bg,
     }}>
-      <span style={{ fontSize: 13.5, fontWeight: 700 }}>{block.label ?? st.label}</span>
+      <span style={{ fontSize: 13.5, fontWeight: 700 }}>{sk === "pendiente" ? st.label : block.label ?? st.label}</span>
       <span style={{ fontSize: 12, opacity: 0.85 }}>
         {block.notes ? `${block.notes} · ` : ""}{start} – {end} · las {courtCount} canchas
       </span>

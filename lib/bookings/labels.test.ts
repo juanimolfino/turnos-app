@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bookingTypeLabel } from "@/lib/bookings/labels";
+import { bookingPanelLabel, bookingStatusLabel, bookingTypeLabel } from "@/lib/bookings/labels";
 
 describe("bookingTypeLabel", () => {
   it("muestra 'Reservado' para type='simple' (no 'Turno libre')", () => {
@@ -17,5 +17,11 @@ describe("bookingTypeLabel", () => {
 
   it("tipo desconocido → fallback 'Cerrado'", () => {
     expect(bookingTypeLabel("loquesea")).toBe("Cerrado");
+  });
+
+  it("muestra los holds pendientes como 'Pendiente de pago' en el panel", () => {
+    expect(bookingStatusLabel("pendiente")).toBe("Pendiente de pago");
+    expect(bookingPanelLabel("simple", "pendiente")).toBe("Pendiente de pago");
+    expect(bookingPanelLabel("simple", "confirmado")).toBe("Reservado");
   });
 });
