@@ -23,6 +23,22 @@ describe("extraerAccionCancelacion", () => {
     expect(extraerAccionCancelacion(history)).toEqual({ tipo: "cancelar", bookingCode: "HYS324" });
   });
 
+  it("no confunde una confirmación de reserva con un pedido de código para cancelar", () => {
+    const history = [
+      {
+        role: "assistant" as const,
+        content: "¡Listo! Te reservé. Tu código de reserva es VCB675 — guardalo para cancelar.",
+      },
+      { role: "user" as const, content: "Quiero reservar otro" },
+    ];
+
+    expect(extraerAccionCancelacion(history)).toEqual({ tipo: "ninguna" });
+  });
+
+  it("un código suelto no cancela si no pidió cancelar ni el bot pidió código", () => {
+    expect(extraerAccionCancelacion([{ role: "user", content: "HYS324" }])).toEqual({ tipo: "ninguna" });
+  });
+
   it("marca código inválido cuando está intentando cancelar", () => {
     expect(extraerAccionCancelacion([{ role: "user", content: "cancelar HYS32" }])).toEqual({
       tipo: "codigo_invalido",
