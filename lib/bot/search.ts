@@ -5,7 +5,7 @@ import { getClubAvailability } from "@/lib/bookings/availability";
 import type { Intent } from "@/lib/bot/intent";
 
 // Búsqueda de disponibilidad para el bot. Reúne los HECHOS (lugares y horarios
-// libres reales) para que la IA solo los redacte, sin inventar.
+// libres reales) que después se formatean de manera determinística.
 //
 // Filtro de ciudad: configurable por la env var BOT_CITY.
 //  - Sin definir (MVP single-pueblo, ej. Bolívar) → busca en TODOS los clubs.
