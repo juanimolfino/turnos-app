@@ -26,3 +26,7 @@ export function getMercadoPagoPayment() {
   if (!payment) payment = new Payment(getMercadoPagoClient());
   return payment;
 }
+
+export function getMercadoPagoPaymentForAccessToken(accessToken: string) {
+  return new Payment(new MercadoPagoConfig({ accessToken }));
+}

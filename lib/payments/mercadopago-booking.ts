@@ -73,7 +73,7 @@ export async function createBookingPaymentPreference(
       club_id: input.clubId,
       payment_mode: input.paymentMode,
     },
-    notification_url: `${baseUrl}/api/mercadopago/webhook?source_news=webhooks`,
+    notification_url: `${baseUrl}/api/mercadopago/webhook?source_news=webhooks&booking_id=${encodeURIComponent(input.bookingId)}`,
     expires: true,
     expiration_date_to: input.heldUntil.toISOString(),
   };

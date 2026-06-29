@@ -64,7 +64,7 @@ describe("createBookingPaymentPreference", () => {
     expect(mocks.createPreference).toHaveBeenCalledWith({
       body: expect.objectContaining({
         external_reference: "booking:bk-1",
-        notification_url: "https://turnos.example/api/mercadopago/webhook?source_news=webhooks",
+        notification_url: "https://turnos.example/api/mercadopago/webhook?source_news=webhooks&booking_id=bk-1",
         back_urls: {
           success: "https://turnos.example/pago/resultado?status=success",
           failure: "https://turnos.example/pago/resultado?status=failure",

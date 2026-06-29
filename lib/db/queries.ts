@@ -717,14 +717,149 @@ export async function getBookingById(bookingId: string) {
   });
 }
 
-export async function confirmBookingPayment(bookingId: string) {
+export async function getBookingPaymentContext(bookingId: string) {
   const db = getDb();
-  const [updated] = await db
-    .update(bookings)
-    .set({ status: "confirmado", paymentStatus: "pagado" })
-    .where(eq(bookings.id, bookingId))
-    .returning();
-  return updated;
+  const [row] = await db
+    .select({
+      id: bookings.id,
+      clubId: bookings.clubId,
+      courtId: bookings.courtId,
+      date: bookings.date,
+      startTime: bookings.startTime,
+      endTime: bookings.endTime,
+      status: bookings.status,
+      origin: bookings.origin,
+      price: bookings.price,
+      paymentStatus: bookings.paymentStatus,
+      heldUntil: bookings.heldUntil,
+      mpPreferenceId: bookings.mpPreferenceId,
+      mpPaymentId: bookings.mpPaymentId,
+      paymentReviewReason: bookings.paymentReviewReason,
+      customerName: bookings.customerName,
+      customerPhone: bookings.customerPhone,
+      bookingCode: bookings.bookingCode,
+      clubName: clubs.name,
+      clubPaymentMode: clubs.paymentMode,
+      courtName: courts.name,
+      mercadoPagoAccessToken: clubMercadoPagoCredentials.accessToken,
+    })
+    .from(bookings)
+    .innerJoin(clubs, eq(bookings.clubId, clubs.id))
+    .innerJoin(courts, eq(bookings.courtId, courts.id))
+    .leftJoin(clubMercadoPagoCredentials, eq(bookings.clubId, clubMercadoPagoCredentials.clubId))
+    .where(eq(bookings.id, bookingId));
+
+  return row ?? null;
+}
+
+export type BookingPaymentConfirmationResult =
+  | { status: "confirmed"; booking: NonNullable<Awaited<ReturnType<typeof getBookingPaymentContext>>> }
+  | { status: "already_processed"; booking: NonNullable<Awaited<ReturnType<typeof getBookingPaymentContext>>> }
+  | { status: "not_found" }
+  | { status: "not_confirmed"; reason: "not_pending" | "hold_expired" | "amount_mismatch"; booking: NonNullable<Awaited<ReturnType<typeof getBookingPaymentContext>>> };
+
+export async function confirmBotHoldPayment(input: {
+  bookingId: string;
+  mpPaymentId: string;
+  paymentStatus: "senado" | "pagado";
+  paidAmount: number | null;
+  now?: Date;
+}): Promise<BookingPaymentConfirmationResult> {
+  const db = getDb();
+  const now = input.now ?? new Date();
+
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({
+        id: bookings.id,
+        clubId: bookings.clubId,
+        courtId: bookings.courtId,
+        date: bookings.date,
+        startTime: bookings.startTime,
+        endTime: bookings.endTime,
+        status: bookings.status,
+        origin: bookings.origin,
+        price: bookings.price,
+        paymentStatus: bookings.paymentStatus,
+        heldUntil: bookings.heldUntil,
+        mpPreferenceId: bookings.mpPreferenceId,
+        mpPaymentId: bookings.mpPaymentId,
+        paymentReviewReason: bookings.paymentReviewReason,
+        customerName: bookings.customerName,
+        customerPhone: bookings.customerPhone,
+        bookingCode: bookings.bookingCode,
+        clubName: clubs.name,
+        clubPaymentMode: clubs.paymentMode,
+        courtName: courts.name,
+        mercadoPagoAccessToken: clubMercadoPagoCredentials.accessToken,
+      })
+      .from(bookings)
+      .innerJoin(clubs, eq(bookings.clubId, clubs.id))
+      .innerJoin(courts, eq(bookings.courtId, courts.id))
+      .leftJoin(clubMercadoPagoCredentials, eq(bookings.clubId, clubMercadoPagoCredentials.clubId))
+      .where(eq(bookings.id, input.bookingId))
+      .for("update");
+
+    if (!current) return { status: "not_found" };
+    if (current.mpPaymentId === input.mpPaymentId) return { status: "already_processed", booking: current };
+    if (current.mpPaymentId) return { status: "already_processed", booking: current };
+
+    const expectedAmount = current.price ?? 0;
+    if (input.paidAmount != null && expectedAmount > 0 && Math.round(input.paidAmount) < expectedAmount) {
+      const [updated] = await tx
+        .update(bookings)
+        .set({ mpPaymentId: input.mpPaymentId, paymentReviewReason: "amount_mismatch" })
+        .where(eq(bookings.id, input.bookingId))
+        .returning();
+      return {
+        status: "not_confirmed",
+        reason: "amount_mismatch",
+        booking: { ...current, ...updated, clubName: current.clubName, courtName: current.courtName, mercadoPagoAccessToken: current.mercadoPagoAccessToken },
+      };
+    }
+
+    if (current.status !== "pendiente") {
+      const [updated] = await tx
+        .update(bookings)
+        .set({ mpPaymentId: input.mpPaymentId, paymentReviewReason: "not_pending" })
+        .where(eq(bookings.id, input.bookingId))
+        .returning();
+      return {
+        status: "not_confirmed",
+        reason: "not_pending",
+        booking: { ...current, ...updated, clubName: current.clubName, courtName: current.courtName, mercadoPagoAccessToken: current.mercadoPagoAccessToken },
+      };
+    }
+
+    if (!current.heldUntil || current.heldUntil.getTime() <= now.getTime()) {
+      const [updated] = await tx
+        .update(bookings)
+        .set({ mpPaymentId: input.mpPaymentId, paymentReviewReason: "hold_expired" })
+        .where(eq(bookings.id, input.bookingId))
+        .returning();
+      return {
+        status: "not_confirmed",
+        reason: "hold_expired",
+        booking: { ...current, ...updated, clubName: current.clubName, courtName: current.courtName, mercadoPagoAccessToken: current.mercadoPagoAccessToken },
+      };
+    }
+
+    const [updated] = await tx
+      .update(bookings)
+      .set({
+        status: "confirmado",
+        paymentStatus: input.paymentStatus,
+        mpPaymentId: input.mpPaymentId,
+        paymentReviewReason: null,
+      })
+      .where(eq(bookings.id, input.bookingId))
+      .returning();
+
+    return {
+      status: "confirmed",
+      booking: { ...current, ...updated, clubName: current.clubName, courtName: current.courtName, mercadoPagoAccessToken: current.mercadoPagoAccessToken },
+    };
+  });
 }
 
 export async function saveBookingMercadoPagoPreference(bookingId: string, preferenceId: string) {

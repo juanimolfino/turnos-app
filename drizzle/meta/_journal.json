@@ -134,6 +134,13 @@
       "when": 1782746198393,
       "tag": "0018_supreme_ezekiel_stane",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1782752513789,
+      "tag": "0019_wooden_living_lightning",
+      "breakpoints": true
     }
   ]
 }

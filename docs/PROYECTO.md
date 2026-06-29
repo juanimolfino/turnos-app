@@ -156,9 +156,10 @@ con `held_until = now() + 10 minutos`, `payment_status='impago'` y el monto a co
 `bookings.price`. Ese hold queda bloqueando el turno porque la disponibilidad ignora solo
 `cancelado`. En el siguiente paso del mismo flujo, el bot genera una preferencia de Checkout
 Pro con el `access_token` del club, guarda `bookings.mp_preference_id` y manda el `init_point`
-por el canal. La confirmación real del pago queda a cargo del webhook de MP; la página de
-retorno `/pago/resultado` es solo visual/UX. Falta liberar automáticamente holds vencidos si
-no paga.
+por el canal. La confirmación real del pago la hace el webhook de MP: valida firma HMAC,
+consulta el pago real con el token del club, confirma solo holds vigentes y es idempotente por
+`mp_payment_id`. La página de retorno `/pago/resultado` es solo visual/UX. Falta liberar
+automáticamente holds vencidos si no paga.
 
 La plataforma podrá cobrar una **comisión configurable por club** (un *marketplace fee*),
 manejada desde la cuenta de superadmin. En el MVP arranca en 0%, pero la lógica se diseña
@@ -337,7 +338,7 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
 `id` · `club_id` · `court_id` · `date` (YYYY-MM-DD) · `start_time` · `end_time` (HH:MM) ·
 `type` · `status` · `customer_id` · `professor_id` · `event_id` · `recurring_rule_id` ·
 `block_group_id` · `price` · `payment_status` · `held_until` · `mp_preference_id` ·
-`notes` · `created_at`
+`mp_payment_id` · `payment_review_reason` · `notes` · `created_at`
 - **`type`**: `simple` (reserva de jugador / del bot) · `clase` · `fijo` · `americano` ·
   `torneo` · `bloqueo` · `evento` (legacy). *(`flex` fue retirado: lo reemplazó `simple`.)*
 - **`origin`**: `admin` (cargado en el panel) · `bot` (creado por el bot)
@@ -347,6 +348,10 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
   reservas confirmadas o sin pago no lo usan.
 - **`mp_preference_id`**: id de la preferencia de Mercado Pago creada para un hold del bot.
   Nullable: reservas sin pago o confirmadas directas no lo usan.
+- **`mp_payment_id`**: id del pago de Mercado Pago ya procesado para esta reserva. Único e
+  idempotente: si MP reintenta el mismo webhook, no se confirma dos veces.
+- **`payment_review_reason`**: motivo por el cual un pago aprobado no confirmó la reserva y
+  requiere revisión manual/refund (ej. `hold_expired`, `not_pending`, `amount_mismatch`).
 - **`customer_name` / `customer_phone`**: datos del cliente del bot (sin login); las
   reservas del admin pueden no tenerlos.
 - **`booking_code`**: código tipo aerolínea (3 letras + 3 números, ej `HYS324`), único,
@@ -470,8 +475,8 @@ Clubs DEMO que crea el seed (api_key entre paréntesis):
   (`neighborhood`) sirve como zona. Mejor evolución: agregar `lat`/`lng` al club y
   ordenar por **distancia real** a la ubicación que comparte el jugador por WhatsApp.
 - **Pagos**: el onboarding OAuth de Mercado Pago conecta cada club y guarda tokens
-  server-side; el bot ya usa esos tokens para crear links de pago de holds. Falta webhook
-  definitivo, expiración automática y prueba E2E.
+  server-side; el bot ya usa esos tokens para crear links de pago de holds y el webhook
+  confirma pagos aprobados de holds vigentes. Falta expiración automática y prueba E2E.
 - **`opening_hours`**: darle UI por club (hoy se usa un default).
 
 ---
@@ -509,6 +514,9 @@ desde datos reales.
   `resolverTurno`, `confirmarReservaTexto`.
 - `../payments/mercadopago-booking.ts` — crea preferencias de Checkout Pro para holds del bot
   usando el token del club; guarda `mp_preference_id`.
+- `../mercadopago/webhook-signature.ts` — valida la firma HMAC-SHA256 de webhooks MP con
+  `MERCADOPAGO_WEBHOOK_SECRET`.
+- `payment-confirmation.ts` — template determinístico y envío Telegram cuando el pago acredita.
 - `extraer-cancelacion.ts` — detecta si el usuario quiere cancelar y extrae/valida el
   `booking_code` sin meter lógica en adaptadores.
 - `cancelar.ts` — motor de cancelación por código: busca reserva del bot, valida teléfono,
@@ -536,6 +544,25 @@ desde datos reales.
    muestra lugar, cancha, día, hora, monto, link real de MP y avisa que tiene ~10 minutos para
    pagar o el turno se libera. Si MP falla al crear la preferencia, el hold se cancela y el bot
    avisa que no quedó reservado.
+
+### Webhook de pago de Mercado Pago (Fase 7 Paso 5)
+1. MP llama `POST /api/mercadopago/webhook?data.id=<paymentId>&booking_id=<bookingId>`.
+2. Antes de procesar, el endpoint valida `x-signature` y `x-request-id` con
+   `MERCADOPAGO_WEBHOOK_SECRET`: manifest `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`,
+   HMAC-SHA256 y comparación en tiempo constante.
+3. Con `booking_id`, busca la reserva y el `access_token` del club en
+   `club_mercadopago_credentials`; consulta el pago real en la API de MP con ese token.
+4. Verifica que `external_reference` devuelto por MP sea `booking:<bookingId>`.
+5. Solo si el pago está `approved`, la reserva sigue `status='pendiente'`, el hold no expiró
+   y el monto coincide, actualiza la reserva a `status='confirmado'`. Si el modo era `partial`,
+   deja `payment_status='senado'`; si era `full`, `payment_status='pagado'`.
+6. Guarda `mp_payment_id` para idempotencia. Reintentos del mismo pago responden 200 sin
+   volver a confirmar ni reenviar mensajes.
+7. Si el pago aprobado llega tarde (`held_until` vencido), la reserva ya no está pendiente o
+   el monto no coincide, NO confirma: guarda `mp_payment_id` y `payment_review_reason` para
+   revisión/refund manual.
+8. Si confirma, avisa al cliente por Telegram con template determinístico: lugar, cancha,
+   día, hora, pago acreditado, `booking_code` y cómo cancelar.
 
 ### Flujo de cancelación del bot (Fase 6.5) — código + teléfono
 1. El usuario pide cancelar y pasa su `booking_code` (ej. `HYS324`). Si no lo pasa, el bot
@@ -576,10 +603,11 @@ desde datos reales.
 ### Decisiones y alcance
 - Reserva del bot sin pago (`payment_mode='none'`) = **simple / bot / confirmado / impago**.
 - Reserva del bot con pago (`partial`/`full`) = **simple / bot / pendiente / impago** con
-  `held_until`, monto a cobrar, `mp_preference_id` y link de pago real de MP.
+  `held_until`, monto a cobrar, `mp_preference_id` y link de pago real de MP; cuando el
+  webhook acredita, pasa a **confirmado / señado** o **confirmado / pagado**.
 - La página `/pago/resultado` no confirma pagos ni cambia reservas; solo orienta al jugador
-  después de volver de Mercado Pago. La fuente de verdad será el webhook del paso siguiente.
+  después de volver de Mercado Pago. La fuente de verdad es el webhook firmado de MP.
 - Nombre/teléfono se guardan **en el booking** (no en `customers`): la tabla global de clientes
   queda para una etapa posterior.
-- **Fase futura:** webhook definitivo de Mercado Pago / expiración automática de holds /
-  refunds / `customers` global / búsqueda por distancia (lat/lng).
+- **Fase futura:** expiración automática de holds / refunds automáticos / `customers` global /
+  búsqueda por distancia (lat/lng).

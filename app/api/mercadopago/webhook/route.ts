@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
-import { InvalidWebhookSignatureError, WebhookSignatureValidator } from "mercadopago";
-import { addCredits } from "@/lib/db/queries";
-import { getMercadoPagoPayment } from "@/lib/mercadopago/client";
+import { avisarPagoAcreditadoPorTelegram } from "@/lib/bot/payment-confirmation";
+import {
+  addCredits,
+  confirmBotHoldPayment,
+  getBookingPaymentContext,
+} from "@/lib/db/queries";
+import { getMercadoPagoPayment, getMercadoPagoPaymentForAccessToken } from "@/lib/mercadopago/client";
+import { verifyMercadoPagoWebhookSignature } from "@/lib/mercadopago/webhook-signature";
 import { getCreditPack } from "@/lib/stripe/pricing";
 
 type MercadoPagoWebhookBody = {
@@ -16,41 +21,140 @@ function parseExternalReference(externalReference?: string | null) {
   return { userId, packId };
 }
 
+function parseBookingReference(externalReference?: string | null) {
+  const [kind, bookingId] = String(externalReference ?? "").split(":");
+  if (kind !== "booking" || !bookingId) return null;
+  return { bookingId };
+}
+
+function isPaymentEvent(body: MercadoPagoWebhookBody) {
+  return body.type === "payment" || Boolean(body.action?.startsWith("payment."));
+}
+
+function bookingPaymentStatus(paymentMode: unknown, fallbackMode: string) {
+  const mode = paymentMode === "partial" || paymentMode === "full" ? paymentMode : fallbackMode;
+  return mode === "partial" ? "senado" : "pagado";
+}
+
 export async function POST(request: Request) {
   const url = new URL(request.url);
-  const body = (await request.json().catch(() => ({}))) as MercadoPagoWebhookBody;
-  const dataId = url.searchParams.get("data.id") ?? String(body.data?.id ?? "");
+  const dataId = url.searchParams.get("data.id") ?? "";
 
   if (!dataId) return NextResponse.json({ error: "Missing payment id" }, { status: 400 });
   if (!process.env.MERCADOPAGO_WEBHOOK_SECRET) {
     return NextResponse.json({ error: "MERCADOPAGO_WEBHOOK_SECRET is required" }, { status: 500 });
   }
 
-  try {
-    WebhookSignatureValidator.validate({
-      xSignature: request.headers.get("x-signature"),
-      xRequestId: request.headers.get("x-request-id"),
-      dataId,
-      secret: process.env.MERCADOPAGO_WEBHOOK_SECRET,
-      toleranceSeconds: 300
+  const validSignature = verifyMercadoPagoWebhookSignature({
+    signature: request.headers.get("x-signature"),
+    requestId: request.headers.get("x-request-id"),
+    dataId,
+    secret: process.env.MERCADOPAGO_WEBHOOK_SECRET,
+  });
+  if (!validSignature) return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
+
+  const body = (await request.json().catch(() => ({}))) as MercadoPagoWebhookBody;
+  if (!isPaymentEvent(body)) return NextResponse.json({ received: true, ignored: true });
+
+  const bookingIdHint = url.searchParams.get("booking_id");
+  let booking = bookingIdHint ? await getBookingPaymentContext(bookingIdHint) : null;
+  let payment = null as Awaited<ReturnType<ReturnType<typeof getMercadoPagoPayment>["get"]>> | null;
+
+  if (bookingIdHint) {
+    if (!booking) {
+      console.warn("[mp webhook] booking_id de notification_url no existe", { bookingId: bookingIdHint, paymentId: dataId });
+      return NextResponse.json({ received: true, kind: "booking", missingBooking: true });
+    }
+    if (!booking.mercadoPagoAccessToken) {
+      console.warn("[mp webhook] booking sin credencial de Mercado Pago", { bookingId: bookingIdHint, paymentId: dataId });
+      return NextResponse.json({ received: true, kind: "booking", missingCredentials: true });
+    }
+    payment = await getMercadoPagoPaymentForAccessToken(booking.mercadoPagoAccessToken).get({ id: dataId });
+  } else {
+    payment = await getMercadoPagoPayment().get({ id: dataId });
+  }
+
+  const bookingReference = parseBookingReference(payment.external_reference);
+  if (bookingReference) {
+    if (booking && booking.id !== bookingReference.bookingId) {
+      console.warn("[mp webhook] external_reference no coincide con booking_id de notification_url", {
+        bookingId: booking.id,
+        externalReference: payment.external_reference,
+        paymentId: payment.id ?? dataId,
+      });
+      return NextResponse.json({ received: true, kind: "booking", referenceMismatch: true });
+    }
+
+    if (!booking) {
+      booking = await getBookingPaymentContext(bookingReference.bookingId);
+      if (!booking) {
+        console.warn("[mp webhook] external_reference apunta a reserva inexistente", {
+          bookingId: bookingReference.bookingId,
+          paymentId: payment.id ?? dataId,
+        });
+        return NextResponse.json({ received: true, kind: "booking", missingBooking: true });
+      }
+      if (!booking.mercadoPagoAccessToken) {
+        console.warn("[mp webhook] reserva sin credencial de Mercado Pago", {
+          bookingId: bookingReference.bookingId,
+          paymentId: payment.id ?? dataId,
+        });
+        return NextResponse.json({ received: true, kind: "booking", missingCredentials: true });
+      }
+
+      payment = await getMercadoPagoPaymentForAccessToken(booking.mercadoPagoAccessToken).get({ id: dataId });
+      const verifiedReference = parseBookingReference(payment.external_reference);
+      if (verifiedReference?.bookingId !== booking.id) {
+        console.warn("[mp webhook] pago verificado con token del club no coincide con la reserva", {
+          bookingId: booking.id,
+          externalReference: payment.external_reference,
+          paymentId: payment.id ?? dataId,
+        });
+        return NextResponse.json({ received: true, kind: "booking", referenceMismatch: true });
+      }
+    }
+
+    if (payment.status !== "approved") {
+      return NextResponse.json({ received: true, kind: "booking", status: payment.status ?? "unknown" });
+    }
+
+    const result = await confirmBotHoldPayment({
+      bookingId: booking.id,
+      mpPaymentId: String(payment.id ?? dataId),
+      paymentStatus: bookingPaymentStatus(payment.metadata?.payment_mode, booking.clubPaymentMode),
+      paidAmount: typeof payment.transaction_amount === "number" ? payment.transaction_amount : null,
     });
-  } catch (error) {
-    const message = error instanceof InvalidWebhookSignatureError ? error.reason : "Invalid webhook signature";
-    return NextResponse.json({ error: message }, { status: 400 });
+
+    if (result.status === "confirmed") {
+      const { mercadoPagoAccessToken: _token, ...safeBooking } = result.booking;
+      await avisarPagoAcreditadoPorTelegram(safeBooking).catch((error) => {
+        console.error("[mp webhook] reserva confirmada pero falló el aviso al cliente", {
+          bookingId: result.booking.id,
+          paymentId: payment?.id ?? dataId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+      return NextResponse.json({ received: true, kind: "booking", confirmed: true });
+    }
+
+    if (result.status === "not_confirmed") {
+      console.warn("[mp webhook] pago aprobado no confirmó la reserva; requiere revisión/refund", {
+        bookingId: result.booking.id,
+        paymentId: payment.id ?? dataId,
+        reason: result.reason,
+      });
+      return NextResponse.json({ received: true, kind: "booking", confirmed: false, reason: result.reason });
+    }
+
+    return NextResponse.json({
+      received: true,
+      kind: "booking",
+      alreadyProcessed: result.status === "already_processed",
+    });
   }
 
-  if (body.type !== "payment" && !body.action?.startsWith("payment.")) {
-    return NextResponse.json({ received: true, ignored: true });
-  }
-
-  const payment = await getMercadoPagoPayment().get({ id: dataId });
   if (payment.status !== "approved") {
     return NextResponse.json({ received: true, status: payment.status ?? "unknown" });
-  }
-
-  // Booking payments are acknowledged here, but confirmation is Paso 5.
-  if (String(payment.external_reference ?? "").startsWith("booking:")) {
-    return NextResponse.json({ received: true, kind: "booking", confirmationPending: true });
   }
 
   const reference = parseExternalReference(payment.external_reference);
@@ -71,7 +175,7 @@ export async function POST(request: Request) {
     currency: payment.currency_id,
     amountCents: typeof payment.transaction_amount === "number" ? Math.round(payment.transaction_amount * 100) : null,
     status: payment.status,
-    statusDetail: payment.status_detail
+    statusDetail: payment.status_detail,
   }, `mp_payment:${payment.id}`);
 
   return NextResponse.json({ received: true });

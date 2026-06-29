@@ -111,10 +111,17 @@ Hold del bot para clubes con pago: hecho en el Paso 3. La reserva queda `pendien
 `held_until` y monto calculado, y bloquea el turno.
 Link de pago del bot: hecho en el Paso 4. Para holds, el bot crea una preferencia de Checkout Pro
 con el token del club, guarda `mp_preference_id` y manda el link al jugador.
+Webhook de confirmación: hecho en el Paso 5. Valida firma HMAC, consulta el pago real con el token
+del club, confirma solo holds vigentes y guarda `mp_payment_id` para idempotencia.
 
-Pendiente de la fase grande: webhook confirma → reservado, expiración automática de holds vencidos,
-comisión de plataforma configurable desde superadmin (hoy 0%), prueba E2E y cancelación CON refund
-(política 24/48hs). Se planifica paso a paso por ser la parte que toca dinero.
+Pendiente de la fase grande: expiración automática de holds vencidos, comisión de plataforma
+configurable desde superadmin (hoy 0%), prueba E2E y cancelación CON refund (política 24/48hs).
+Se planifica paso a paso por ser la parte que toca dinero.
+
+### Refund automático de pagos tardíos
+Si un pago llega aprobado después de que el hold expiró, el webhook NO confirma la reserva y deja
+`payment_review_reason='hold_expired'` para revisión manual. Pendiente: automatizar el refund en MP
+para estos casos y notificar claramente al cliente/admin cuando ocurra.
 
 ### UI superadmin para marketplace fee
 La lógica de comisión ya existe vía `PLATFORM_FEE_PCT` y arranca en 0 para el MVP. Pendiente:
