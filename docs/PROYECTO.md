@@ -139,8 +139,8 @@ Los tokens del club se guardan en `club_mercadopago_credentials` (server-side): 
 `mercadopago_user_id`, `access_token`, `refresh_token`, `expires_at`, `scope`,
 `public_key`, `live_mode`, `connected_at`, `updated_at`. No se muestran al cliente ni se
 loggean. Reconectar Mercado Pago hace upsert sobre la misma fila del club. La columna
-legacy `clubs.mercadopago_access_token` queda para compatibilidad histórica; el onboarding
-OAuth nuevo no la expone en el panel.
+legacy `clubs.mercadopago_access_token` fue retirada: la única fuente de verdad del token
+del club es `club_mercadopago_credentials`.
 
 El admin también puede **desvincular Mercado Pago** desde `/ajustes`. La UI exige una
 confirmación explícita y avisa que el club deja de poder cobrar por el bot, que las nuevas
@@ -315,8 +315,7 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
 ### `clubs` 🤖 — cada lugar/cancha
 `id` · `name` · `timezone` · `plan` · `address` · `city` · `neighborhood` (barrio/zona) ·
 `phone` · `requires_payment` (legacy/sync) · `payment_mode` (`none`/`partial`/`full`) ·
-`deposit_pct` · `payment_deadline_hours` · `mercadopago_access_token` (legacy) · `api_key`
-(auth del bot) · `created_at`
+`deposit_pct` · `payment_deadline_hours` · `api_key` (auth del bot) · `created_at`
 
 ### `club_mercadopago_credentials` — credenciales OAuth de MP por club
 `club_id` · `mercadopago_user_id` · `access_token` · `refresh_token` · `public_key` ·
@@ -355,7 +354,6 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
 
 ### `customers` — jugadores/clientes del club (legacy / panel)
 `id` · `club_id` · `name` · `phone` · `email` · `notes` · `created_at`
-- La usa el endpoint **legacy** `/api/public/bookings` (find-or-create por teléfono).
 - **El bot NO usa esta tabla:** guarda `customer_name`/`customer_phone` directo en el
   `booking`. La tabla global de clientes queda para una **etapa futura**.
 
@@ -413,22 +411,6 @@ GET /api/public/availability?date=YYYY-MM-DD[&api_key=...][&city=...][&start=HH:
   "availableSlots": [ { "start":"20:00","end":"21:30",
       "freeCourts":[{"id","name"}], "totalCourts":3 } ]
 } ] }
-```
-
-### Reservar un turno
-```
-POST /api/public/bookings   (header x-api-key)
-body: { courtId, date, startTime, endTime, customerName, customerPhone, notes? }
-```
-- (Endpoint **legacy**) Crea/encuentra un `customer` por teléfono e inserta un `booking`
-  `type: "simple"`. **Ojo:** el **bot** (`lib/bot/reservar.ts`) NO usa este endpoint ni la
-  tabla `customers` — guarda `customer_name`/`customer_phone` directo en el booking.
-- Si el club tiene `requires_payment`: queda `status: "pendiente"` y, si hay token de
-  MercadoPago, devuelve `paymentUrl`. Si no, `status: "confirmado"`.
-
-### Confirmar pago
-```
-GET /api/public/bookings/[id]/confirm   (callback de MercadoPago)
 ```
 
 > El modelo es consistente: las reservas de jugadores son `bookings` `type: simple`;

@@ -38,7 +38,6 @@ const clubRow = {
   depositPct: 25,
   paymentDeadlineHours: 24,
   apiKey: "ck_public_admin_value",
-  mercadopagoAccessToken: "APP_USR-secret-token",
 };
 
 describe("club settings API", () => {
@@ -51,14 +50,14 @@ describe("club settings API", () => {
     mocks.updateClub.mockResolvedValue(clubRow);
   });
 
-  it("GET no expone el access token de Mercado Pago", async () => {
+  it("GET no expone tokens de Mercado Pago", async () => {
     const { GET } = await import("./route");
 
     const response = await GET();
     const body = await response.json();
 
-    expect(body.club.mercadopagoAccessToken).toBeUndefined();
-    expect(JSON.stringify(body)).not.toContain("APP_USR-secret-token");
+    expect(JSON.stringify(body)).not.toContain("accessToken");
+    expect(JSON.stringify(body)).not.toContain("APP_USR");
   });
 
   it("POST ignora tokens y tampoco los expone en la respuesta", async () => {
@@ -68,7 +67,7 @@ describe("club settings API", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         phone: "456",
-        mercadopagoAccessToken: "APP_USR-client-should-not-set-this",
+        accessToken: "APP_USR-client-should-not-set-this",
       }),
     });
 
@@ -76,7 +75,7 @@ describe("club settings API", () => {
     const body = await response.json();
 
     expect(mocks.updateClub).toHaveBeenCalledWith("club_123", { phone: "456" });
-    expect(body.club.mercadopagoAccessToken).toBeUndefined();
+    expect(body.club.accessToken).toBeUndefined();
     expect(JSON.stringify(body)).not.toContain("APP_USR");
   });
 

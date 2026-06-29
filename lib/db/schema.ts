@@ -51,7 +51,6 @@ export const clubs = pgTable("clubs", {
   paymentMode: paymentModeEnum("payment_mode").default("none").notNull(),
   depositPct: integer("deposit_pct").default(25).notNull(),
   paymentDeadlineHours: integer("payment_deadline_hours").default(24).notNull(),
-  mercadopagoAccessToken: text("mercadopago_access_token"),
   apiKey: text("api_key").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({

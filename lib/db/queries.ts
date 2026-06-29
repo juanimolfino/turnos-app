@@ -274,7 +274,6 @@ export async function updateClub(id: string, data: {
   paymentMode?: PaymentMode;
   depositPct?: number;
   paymentDeadlineHours?: number;
-  mercadopagoAccessToken?: string | null;
 }) {
   const db = getDb();
   const [updated] = await db.update(clubs).set(data).where(eq(clubs.id, id)).returning();
