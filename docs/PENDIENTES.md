@@ -132,3 +132,11 @@ el flujo (admin tardó mucho, otra pestaña, etc.) el callback podría fallar o 
 vigilar este caso cuando haya varios clubs conectando en paralelo; evaluar codificar el club de forma
 segura en el flujo en vez de depender solo de la sesión. Prioridad: baja para el MVP (un club a la
 vez), revisar antes de escalar.
+
+
+### Notificación de nueva reserva en el panel del admin
+Cuando entra una reserva nueva (del bot) mientras el admin tiene la agenda abierta, hoy no se
+entera hasta que refresca. Idea: un aviso/toast tipo "Cayó una nueva reserva, actualizá para verla"
+(o que se actualice sola). Aplica a reservas confirmadas y a holds que se confirman. Evaluar
+implementación: polling simple cada X segundos, o realtime (Supabase Realtime). Prioridad: media —
+mejora de UX para el dueño, no bloquea el circuito de pagos. Va después de cerrar pagos.
