@@ -13,6 +13,12 @@ import type { Intent } from "@/lib/bot/intent";
 // canchas con id+nombre: el id se usa para reservar (Fase 6); el nombre, para mostrar.
 export type SlotLibre = { start: string; end: string; canchas: { id: string; name: string }[] };
 export type LugarDisponibilidad = { clubId: string; lugar: string; barrio: string | null; slots: SlotLibre[] };
+type ClubSearchRow = {
+  id: string;
+  name: string;
+  neighborhood: string | null;
+  city: string | null;
+};
 
 /**
  * Traduce la hora pedida a una ventana de búsqueda.
@@ -45,6 +51,37 @@ async function resolverSportId(db: ReturnType<typeof getDb>, sport: string | nul
   return row?.id ?? null;
 }
 
+function norm(text: string | null | undefined): string {
+  return (text ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim();
+}
+
+function matchesText(value: string | null | undefined, requested: string): boolean {
+  const a = norm(value);
+  const b = norm(requested);
+  return Boolean(a && b && (a.includes(b) || b.includes(a)));
+}
+
+function filtrarClubesPorPedido(clubList: ClubSearchRow[], intent: Intent): ClubSearchRow[] {
+  const clubPedido = intent.club?.trim();
+  if (clubPedido) return clubList.filter((club) => matchesText(club.name, clubPedido));
+
+  const zonaPedida = intent.zone?.trim();
+  if (!zonaPedida) return clubList;
+
+  const byZone = clubList.filter(
+    (club) => matchesText(club.neighborhood, zonaPedida) || matchesText(club.city, zonaPedida),
+  );
+  if (byZone.length) return byZone;
+
+  // Fallback defensivo: si el extractor clasificó un nombre de club como zone,
+  // igual respetamos que el usuario pidió un lugar concreto.
+  return clubList.filter((club) => matchesText(club.name, zonaPedida));
+}
+
 /**
  * Devuelve la disponibilidad real agrupada POR LUGAR (club) para la fecha y el
  * deporte pedidos. Reusa getClubAvailability (no reimplementa el cálculo). Solo
@@ -65,11 +102,12 @@ export async function buscarDisponibilidad(intent: Intent, userText: string): Pr
   const clubList = botCity
     ? await db.select().from(clubs).where(ilike(clubs.city, `%${botCity}%`))
     : await db.select().from(clubs);
+  const clubesFiltrados = filtrarClubesPorPedido(clubList, intent);
 
   const { start, end } = interpretarFranja(userText, intent);
 
   const out: LugarDisponibilidad[] = [];
-  for (const club of clubList) {
+  for (const club of clubesFiltrados) {
     const avail = await getClubAvailability(club.id, intent.date, { start, end, sportId });
     const slots = (avail?.slots ?? []).map((s) => ({
       start: s.start,

@@ -85,6 +85,16 @@ describe("handleIncomingMessage (Fase 6 — reservar)", () => {
     expect(crearReservaBot).not.toHaveBeenCalled();
   });
 
+  it("si nombra un club pero falta día → pregunta el día conservando ese club", async () => {
+    extraerIntencion.mockResolvedValue({ date: null, time: null, zone: null, club: "Pádel Central", sport: "padel" });
+
+    await handleIncomingMessage(msg("qué hay en Pádel Central"));
+
+    expect(generarRespuesta).not.toHaveBeenCalled();
+    expect(buscarDisponibilidad).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith("123", "¿Para qué día querés ver turnos en Pádel Central?");
+  });
+
   it("explorando (acción 'ninguna') → redacta la oferta, no reserva", async () => {
     extraerIntencion.mockResolvedValue(conIntencion);
     await handleIncomingMessage(msg("el sábado a las 19"));

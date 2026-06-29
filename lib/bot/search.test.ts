@@ -49,6 +49,7 @@ const intent = (over: Partial<Intent> = {}): Intent => ({
   date: "2026-06-27",
   time: null,
   zone: null,
+  club: null,
   sport: "padel",
   ...over,
 });
@@ -139,6 +140,50 @@ describe("buscarDisponibilidad", () => {
     expect(res).toHaveLength(1);
     expect(res[0].lugar).toBe("Pádel Central");
     expect(res[0].slots[0].canchas).toEqual([{ id: "y", name: "Cancha 2" }]);
+  });
+
+  it("si el usuario pide un club concreto, solo busca disponibilidad en ese club", async () => {
+    getClubAvailability.mockImplementation(async (clubId: string) =>
+      clubId === "pc"
+        ? { window: {}, slots: [{ start: "18:00", end: "19:30", freeCourts: [{ id: "pc-1", name: "Cancha 1" }], totalCourts: 1 }] }
+        : { window: {}, slots: [{ start: "18:00", end: "19:30", freeCourts: [{ id: "lb-1", name: "Cancha 1" }], totalCourts: 1 }] },
+    );
+
+    const res = await buscarDisponibilidad(intent({ club: "Padel Central" }), "qué hay en Padel Central el sábado");
+
+    expect(getClubAvailability).toHaveBeenCalledTimes(1);
+    expect(getClubAvailability).toHaveBeenCalledWith("pc", "2026-06-27", { start: null, end: null, sportId: "sport-padel" });
+    expect(res).toEqual([
+      { clubId: "pc", lugar: "Pádel Central", barrio: "Belgrano", slots: [{ start: "18:00", end: "19:30", canchas: [{ id: "pc-1", name: "Cancha 1" }] }] },
+    ]);
+  });
+
+  it("si el modelo puso el nombre del club en zone, lo usa como fallback de club", async () => {
+    getClubAvailability.mockImplementation(async (clubId: string) =>
+      clubId === "pc"
+        ? { window: {}, slots: [{ start: "18:00", end: "19:30", freeCourts: [{ id: "pc-1", name: "Cancha 1" }], totalCourts: 1 }] }
+        : { window: {}, slots: [] },
+    );
+
+    const res = await buscarDisponibilidad(intent({ zone: "Pádel Central" }), "qué hay en Pádel Central el sábado");
+
+    expect(getClubAvailability).toHaveBeenCalledTimes(1);
+    expect(getClubAvailability).toHaveBeenCalledWith("pc", "2026-06-27", { start: null, end: null, sportId: "sport-padel" });
+    expect(res[0].lugar).toBe("Pádel Central");
+  });
+
+  it("si el usuario pide una zona, filtra por barrio o ciudad", async () => {
+    getClubAvailability.mockImplementation(async (clubId: string) =>
+      clubId === "c2"
+        ? { window: {}, slots: [{ start: "18:00", end: "19:30", freeCourts: [{ id: "lb-1", name: "Cancha 1" }], totalCourts: 1 }] }
+        : { window: {}, slots: [] },
+    );
+
+    const res = await buscarDisponibilidad(intent({ zone: "Rosario" }), "qué hay en Rosario el sábado");
+
+    expect(getClubAvailability).toHaveBeenCalledTimes(1);
+    expect(getClubAvailability).toHaveBeenCalledWith("c2", "2026-06-27", { start: null, end: null, sportId: "sport-padel" });
+    expect(res[0].lugar).toBe("La Bombonera");
   });
 
   it("no recorta horarios disponibles por lugar", async () => {

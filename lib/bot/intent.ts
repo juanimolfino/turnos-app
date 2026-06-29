@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { ChatTurn } from "@/lib/bot/brain";
 
 // Extracción de intención: convierte la conversación en datos estructurados
-// { date, time, zone, sport }. Standalone y agnóstica al canal; todavía NO está
+// { date, time, zone, club, sport }. Standalone y agnóstica al canal; todavía NO está
 // cableada al flujo del bot (eso es Fase 5). Tolerante a fallos: ante error de
 // API o salida inválida del modelo devuelve todos los campos en null (el bot
 // repregunta). Esa tolerancia aplica a parseo conversacional, NO a reservas/pagos.
@@ -21,12 +21,13 @@ export const IntentSchema = z.object({
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "hora debe ser HH:MM 24h")
     .nullable(),
   zone: z.string().nullable(),
+  club: z.string().nullable().default(null),
   sport: z.string().nullable(),
 });
 
 export type Intent = z.infer<typeof IntentSchema>;
 
-const EMPTY: Intent = { date: null, time: null, zone: null, sport: null };
+const EMPTY: Intent = { date: null, time: null, zone: null, club: null, sport: null };
 
 let client: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -64,9 +65,10 @@ Devolvé EXCLUSIVAMENTE un objeto JSON (sin texto adicional, sin markdown) con e
 - "date": la fecha pedida en formato YYYY-MM-DD. Resolvé referencias relativas ("hoy", "mañana", "el sábado", "el próximo viernes") a fecha absoluta usando la fecha de hoy de arriba. Si el usuario no mencionó día, null.
 - "time": la hora en formato HH:MM de 24 horas. Normalizá ("8 pm" → "20:00", "18hs" → "18:00", "8 y media" → "08:30"). Si no mencionó hora, null.
 - "zone": la zona, barrio o ciudad mencionada, tal cual la dijo el usuario. Si no mencionó, null.
+- "club": el lugar/club/cancha comercial específico mencionado por el usuario (ej. "Pádel Central", "cancha de test"). Si el usuario pide "solo en X", "en X", "me gusta X" o "qué hay en X", poné X acá. Si no mencionó un club concreto, null.
 - "sport": el deporte. Hoy solo existe "padel"; si no se menciona otro, usá "padel".
 
-Reglas: NO inventes valores. Si un dato no aparece en la conversación, poné null (excepto sport, que por defecto es "padel"). Respondé solo el JSON.`;
+Reglas: NO inventes valores. No confundas club con barrio: "Belgrano"/"Centro" suelen ser zone; "Pádel Central"/"La Esquina Pádel" suelen ser club. Si un dato no aparece en la conversación, poné null (excepto sport, que por defecto es "padel"). Respondé solo el JSON.`;
 }
 
 export async function extraerIntencion(
@@ -96,7 +98,7 @@ export async function extraerIntencion(
     // Strings vacíos → null antes de validar (algunos modelos devuelven "" en
     // vez de null para campos ausentes).
     const obj = JSON.parse(raw) as Record<string, unknown>;
-    for (const k of ["date", "time", "zone", "sport"]) {
+    for (const k of ["date", "time", "zone", "club", "sport"]) {
       if (obj[k] === "") obj[k] = null;
     }
 

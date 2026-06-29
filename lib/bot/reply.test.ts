@@ -4,7 +4,7 @@ import { formatearDisponibilidadTexto, redactarRespuesta, horariosPermitidos, ho
 import type { Intent } from "@/lib/bot/intent";
 import type { LugarDisponibilidad } from "@/lib/bot/search";
 
-const intent: Intent = { date: "2026-06-27", time: "18:00", zone: "Bolívar", sport: "padel" };
+const intent: Intent = { date: "2026-06-27", time: "18:00", zone: "Bolívar", club: null, sport: "padel" };
 
 describe("redactarRespuesta", () => {
   it("enumera todos los horarios recibidos, incluso más de 8 en el mismo lugar", async () => {

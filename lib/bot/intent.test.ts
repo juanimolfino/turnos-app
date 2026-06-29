@@ -16,7 +16,7 @@ import { extraerIntencion, IntentSchema } from "@/lib/bot/intent";
 // Jueves 25/06/2026 (mediodía BA). mañana = viernes 26; el sábado = 27.
 const REF = new Date("2026-06-25T12:00:00-03:00");
 
-const EMPTY = { date: null, time: null, zone: null, sport: null };
+const EMPTY = { date: null, time: null, zone: null, club: null, sport: null };
 
 const modelReturns = (obj: unknown) => ({
   choices: [{ message: { content: JSON.stringify(obj) } }],
@@ -29,7 +29,7 @@ function lastSystemPrompt(): string {
 describe("extraerIntencion", () => {
   it("consolida día, hora y zona dichos en mensajes distintos", async () => {
     create.mockImplementation(async () =>
-      modelReturns({ date: "2026-06-27", time: "18:00", zone: "Bolívar", sport: "padel" }),
+      modelReturns({ date: "2026-06-27", time: "18:00", zone: "Bolívar", club: null, sport: "padel" }),
     );
     const history: ChatTurn[] = [
       { role: "user", content: "quiero una cancha el sábado" },
@@ -44,6 +44,7 @@ describe("extraerIntencion", () => {
       date: "2026-06-27",
       time: "18:00",
       zone: "Bolívar",
+      club: null,
       sport: "padel",
     });
 
@@ -65,7 +66,7 @@ describe("extraerIntencion", () => {
 
   it("'mañana' resuelve al día siguiente del referenceDate", async () => {
     create.mockImplementation(async () =>
-      modelReturns({ date: "2026-06-26", time: null, zone: null, sport: "padel" }),
+      modelReturns({ date: "2026-06-26", time: null, zone: null, club: null, sport: "padel" }),
     );
     const intent = await extraerIntencion([{ role: "user", content: "mañana" }], REF);
     expect(intent.date).toBe("2026-06-26"); // viernes 26
@@ -73,7 +74,7 @@ describe("extraerIntencion", () => {
 
   it("'el sábado' resuelve al sábado correcto", async () => {
     create.mockImplementation(async () =>
-      modelReturns({ date: "2026-06-27", time: null, zone: null, sport: "padel" }),
+      modelReturns({ date: "2026-06-27", time: null, zone: null, club: null, sport: "padel" }),
     );
     const intent = await extraerIntencion([{ role: "user", content: "el sábado" }], REF);
     expect(intent.date).toBe("2026-06-27"); // sábado 27
@@ -81,7 +82,7 @@ describe("extraerIntencion", () => {
 
   it("normaliza la hora a HH:MM 24h ('8 pm' → '20:00')", async () => {
     create.mockImplementation(async () =>
-      modelReturns({ date: null, time: "20:00", zone: null, sport: "padel" }),
+      modelReturns({ date: null, time: "20:00", zone: null, club: null, sport: "padel" }),
     );
     const intent = await extraerIntencion([{ role: "user", content: "a las 8 pm" }], REF);
     expect(intent.time).toBe("20:00");
@@ -89,26 +90,42 @@ describe("extraerIntencion", () => {
 
   it("campos no mencionados → null (y sport default 'padel')", async () => {
     create.mockImplementation(async () =>
-      modelReturns({ date: null, time: null, zone: null, sport: null }),
+      modelReturns({ date: null, time: null, zone: null, club: null, sport: null }),
     );
     const intent = await extraerIntencion([{ role: "user", content: "hola" }], REF);
-    expect(intent).toEqual({ date: null, time: null, zone: null, sport: "padel" });
+    expect(intent).toEqual({ date: null, time: null, zone: null, club: null, sport: "padel" });
   });
 
   it("trata strings vacíos del modelo como null", async () => {
     create.mockImplementation(async () =>
-      modelReturns({ date: "", time: "", zone: "", sport: "" }),
+      modelReturns({ date: "", time: "", zone: "", club: "", sport: "" }),
     );
     const intent = await extraerIntencion([{ role: "user", content: "hola" }], REF);
-    expect(intent).toEqual({ date: null, time: null, zone: null, sport: "padel" });
+    expect(intent).toEqual({ date: null, time: null, zone: null, club: null, sport: "padel" });
+  });
+
+  it("extrae un club concreto separado de la zona", async () => {
+    create.mockImplementation(async () =>
+      modelReturns({ date: "2026-06-27", time: null, zone: null, club: "Pádel Central", sport: "padel" }),
+    );
+
+    const intent = await extraerIntencion([{ role: "user", content: "qué hay en Pádel Central el sábado" }], REF);
+
+    expect(intent).toEqual({
+      date: "2026-06-27",
+      time: null,
+      zone: null,
+      club: "Pádel Central",
+      sport: "padel",
+    });
   });
 
   it("salida con formato inválido → todos null, sin crashear", async () => {
     create.mockImplementation(async () =>
-      modelReturns({ date: "mañana", time: "8pm", zone: "Bolívar", sport: "padel" }),
+      modelReturns({ date: "mañana", time: "8pm", zone: "Bolívar", club: null, sport: "padel" }),
     );
     const intent = await extraerIntencion([{ role: "user", content: "x" }], REF);
-    expect(intent).toEqual({ date: null, time: null, zone: null, sport: null });
+    expect(intent).toEqual({ date: null, time: null, zone: null, club: null, sport: null });
   });
 
   it("JSON no parseable → todos null, sin crashear", async () => {
@@ -116,7 +133,7 @@ describe("extraerIntencion", () => {
       choices: [{ message: { content: "no soy json" } }],
     }));
     const intent = await extraerIntencion([{ role: "user", content: "x" }], REF);
-    expect(intent).toEqual({ date: null, time: null, zone: null, sport: null });
+    expect(intent).toEqual({ date: null, time: null, zone: null, club: null, sport: null });
   });
 
   it("error de la API → todos null, sin crashear", async () => {
@@ -124,13 +141,14 @@ describe("extraerIntencion", () => {
       throw new Error("rate limit");
     });
     const intent = await extraerIntencion([{ role: "user", content: "x" }], REF);
-    expect(intent).toEqual({ date: null, time: null, zone: null, sport: null });
+    expect(intent).toEqual({ date: null, time: null, zone: null, club: null, sport: null });
   });
 
   it("IntentSchema acepta nulls y rechaza formatos malos", () => {
-    expect(IntentSchema.safeParse({ date: null, time: null, zone: null, sport: null }).success).toBe(true);
+    expect(IntentSchema.safeParse({ date: null, time: null, zone: null, club: null, sport: null }).success).toBe(true);
+    expect(IntentSchema.safeParse({ date: "2026-06-27", time: "18:00", zone: "Bolívar", club: "Pádel Central", sport: "padel" }).success).toBe(true);
     expect(IntentSchema.safeParse({ date: "2026-06-27", time: "18:00", zone: "Bolívar", sport: "padel" }).success).toBe(true);
-    expect(IntentSchema.safeParse({ date: "27/06", time: null, zone: null, sport: null }).success).toBe(false);
-    expect(IntentSchema.safeParse({ date: null, time: "25:00", zone: null, sport: null }).success).toBe(false);
+    expect(IntentSchema.safeParse({ date: "27/06", time: null, zone: null, club: null, sport: null }).success).toBe(false);
+    expect(IntentSchema.safeParse({ date: null, time: "25:00", zone: null, club: null, sport: null }).success).toBe(false);
   });
 });

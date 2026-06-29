@@ -59,11 +59,11 @@ hoy, y sumar WhatsApp después es agregar un adaptador, sin tocar el cerebro ya 
 
 #### La IA es para que sea humano, no para que decida
 El bot usa un modelo de lenguaje para **conversar de forma natural** (entender "el
-sábado a la tarde", redactar como un asistente del pueblo). Pero la IA **nunca inventa
-datos**: la disponibilidad, los horarios y las reservas salen de la base, y la IA solo
-los expresa en palabras. Posicionamiento: es **"el asistente de pádel del pueblo"**, no
-un formulario de reservas — un asistente que hoy reserva y mañana podrá responder
-precios, direcciones y más.
+sábado a la tarde", "solo en Pádel Central", "quiero ese"). Pero la IA **nunca inventa
+datos**: la disponibilidad, los horarios y las reservas salen de la base. La IA extrae
+la intención del jugador y la app formatea los datos reales de manera determinística.
+Posicionamiento: es **"el asistente de pádel del pueblo"**, no un formulario de reservas
+— un asistente que hoy reserva y mañana podrá responder precios, direcciones y más.
 
 #### El dueño carga la agenda; el dato tiene que ser verdad
 Todo el producto depende de que los dueños mantengan su agenda al día en el `/admin`. Si
@@ -487,7 +487,9 @@ Clubs DEMO que crea el seed (api_key entre paréntesis):
 
 Bot conversacional del pueblo (MVP: Bolívar). Hoy **Telegram**; WhatsApp después.
 Agnóstico al canal: la lógica vive detrás de `handleIncomingMessage(IncomingMessage)`
-y los canales son adaptadores en `lib/bot/channels/`. Redacción con OpenAI.
+y los canales son adaptadores en `lib/bot/channels/`. La IA extrae intención
+conversacional; las respuestas de disponibilidad se formatean de manera determinística
+desde datos reales.
 
 ### Glosario
 - **lugar / club**: espacio físico (ej. "Pádel Central").
@@ -501,10 +503,13 @@ y los canales son adaptadores en `lib/bot/channels/`. Redacción con OpenAI.
 
 ### Módulos (`lib/bot/`)
 - `memory.ts` — historial de conversación (tabla `bot_conversations`, últimos ~10 mensajes).
-- `intent.ts` — `extraerIntencion` → `{ date, time, zone, sport }` (resuelve fechas relativas en tz BA).
+- `intent.ts` — `extraerIntencion` → `{ date, time, zone, club, sport }` (resuelve fechas relativas en tz BA).
 - `search.ts` — `buscarDisponibilidad`: clubs del pueblo (env `BOT_CITY`; sin setear = todos) →
-  reúsa `getClubAvailability`, agrupa por lugar; `interpretarFranja` (tarde→16:00, etc.).
-- `reply.ts` — `redactarRespuesta`: la IA redacta **solo sobre los datos reales** (no inventa horarios).
+  si el usuario nombró un `club` concreto, filtra a ese lugar; si nombró `zone`, filtra por
+  barrio/ciudad; si no, cruza todos. Reúsa `getClubAvailability`, agrupa por lugar;
+  `interpretarFranja` (tarde→16:00, etc.).
+- `reply.ts` — `redactarRespuesta`: enumera de forma determinística los datos reales
+  recibidos (no resume ni inventa horarios).
 - `extraer-reserva.ts` — `extraerAccionReserva`: decide si el usuario eligió un turno y/o dio su nombre.
 - `reservar.ts` — motor: `crearReservaBot` (atómico, anti-doble-booking), `generarBookingCode`,
   `resolverTurno`, `confirmarReservaTexto`.
@@ -514,7 +519,9 @@ y los canales son adaptadores en `lib/bot/channels/`. Redacción con OpenAI.
   cancela suave (`status='cancelado'`) y responde con templates determinísticos.
 
 ### Flujo de reserva del bot (Fase 6 + hold Fase 7) — end to end
-1. El usuario busca y el bot ofrece turnos concretos por lugar (búsqueda ya existente).
+1. El usuario busca y el bot ofrece turnos concretos por lugar. Si el usuario pide un
+   club específico ("qué hay en Pádel Central"), el bot responde solo sobre ese club; si
+   pide una zona/barrio, filtra por esa zona; si no acota, muestra la oferta cruzada.
 2. El usuario elige un turno → el bot pide **nombre y apellido** ("¿A nombre de quién?").
    El **teléfono sale del canal** (Telegram: `userId`); no se pide por chat.
 3. Al dar el nombre, **antes de escribir** se re-verifica que el turno siga libre (**capa B**).

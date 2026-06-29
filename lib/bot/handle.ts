@@ -59,7 +59,10 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
   let respuesta: string;
   if (!intent.date || !intent.sport) {
     // Falta info esencial para buscar → repreguntamos de forma natural.
-    respuesta = await generarRespuesta(msg.text, history);
+    // Si ya nombró un club, preservamos esa preferencia en la repregunta.
+    respuesta = intent.club && !intent.date
+      ? `¿Para qué día querés ver turnos en ${intent.club}?`
+      : await generarRespuesta(msg.text, history);
   } else {
     const lugares = await buscarDisponibilidad(intent, msg.text);
     const accion = await extraerAccionReserva(convo, lugares);
