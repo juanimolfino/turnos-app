@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   addCredits: vi.fn(),
+  confirmBookingPayment: vi.fn(),
   createPreference: vi.fn(),
   ensureUserProfile: vi.fn(),
   getPayment: vi.fn(),
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/db/queries", () => ({
   addCredits: mocks.addCredits,
+  confirmBookingPayment: mocks.confirmBookingPayment,
   ensureUserProfile: mocks.ensureUserProfile
 }));
 
@@ -201,6 +203,31 @@ describe("Mercado Pago webhook route", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ received: true, status: "pending" });
     expect(mocks.addCredits).not.toHaveBeenCalled();
+  });
+
+  it("acknowledges booking payments without confirming the reservation yet", async () => {
+    mocks.getPayment.mockResolvedValue({
+      id: 123,
+      status: "approved",
+      external_reference: "booking:bk-1",
+    });
+    const { POST } = await import("./webhook/route");
+    const request = new Request("https://example.com/api/mercadopago/webhook?data.id=123", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-request-id": "request_123",
+        "x-signature": "ts=1,v1=signature",
+      },
+      body: JSON.stringify({ type: "payment", data: { id: "123" } }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ received: true, kind: "booking", confirmationPending: true });
+    expect(mocks.addCredits).not.toHaveBeenCalled();
+    expect(mocks.confirmBookingPayment).not.toHaveBeenCalled();
   });
 
   it("ignores non-payment webhook events", async () => {

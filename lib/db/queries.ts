@@ -317,6 +317,16 @@ export async function getClubMercadoPagoConnectionStatus(clubId: string) {
     : { connected: false as const };
 }
 
+export async function getClubMercadoPagoCredentialsForServer(clubId: string) {
+  return getDb().query.clubMercadoPagoCredentials.findFirst({
+    where: eq(clubMercadoPagoCredentials.clubId, clubId),
+    columns: {
+      clubId: true,
+      accessToken: true,
+    },
+  });
+}
+
 export async function upsertClubMercadoPagoCredentials(clubId: string, data: {
   mercadoPagoUserId?: string | null;
   accessToken: string;
@@ -714,6 +724,26 @@ export async function confirmBookingPayment(bookingId: string) {
     .set({ status: "confirmado", paymentStatus: "pagado" })
     .where(eq(bookings.id, bookingId))
     .returning();
+  return updated;
+}
+
+export async function saveBookingMercadoPagoPreference(bookingId: string, preferenceId: string) {
+  const db = getDb();
+  const [updated] = await db
+    .update(bookings)
+    .set({ mpPreferenceId: preferenceId })
+    .where(eq(bookings.id, bookingId))
+    .returning({ id: bookings.id, mpPreferenceId: bookings.mpPreferenceId });
+  return updated;
+}
+
+export async function cancelBotHoldAfterPaymentError(bookingId: string) {
+  const db = getDb();
+  const [updated] = await db
+    .update(bookings)
+    .set({ status: "cancelado" })
+    .where(and(eq(bookings.id, bookingId), eq(bookings.origin, "bot"), eq(bookings.status, "pendiente")))
+    .returning({ id: bookings.id, status: bookings.status });
   return updated;
 }
 

@@ -109,11 +109,17 @@ El precio vive por cancha (`courts.price`) y el modo vive por club (`clubs.payme
 `clubs.deposit_pct`). Al desvincular MP, el club queda automáticamente en `payment_mode='none'`.
 Hold del bot para clubes con pago: hecho en el Paso 3. La reserva queda `pendiente`, con
 `held_until` y monto calculado, y bloquea el turno.
+Link de pago del bot: hecho en el Paso 4. Para holds, el bot crea una preferencia de Checkout Pro
+con el token del club, guarda `mp_preference_id` y manda el link al jugador.
 
-Pendiente de la fase grande: usar esos tokens para crear preferencias/link de pago del bot, webhook
-confirma → reservado, expiración automática de holds vencidos, comisión de plataforma configurable
-desde superadmin (hoy 0%), prueba E2E y cancelación CON refund (política 24/48hs). Se planifica
-paso a paso por ser la parte que toca dinero.
+Pendiente de la fase grande: webhook confirma → reservado, expiración automática de holds vencidos,
+comisión de plataforma configurable desde superadmin (hoy 0%), prueba E2E y cancelación CON refund
+(política 24/48hs). Se planifica paso a paso por ser la parte que toca dinero.
+
+### UI superadmin para marketplace fee
+La lógica de comisión ya existe vía `PLATFORM_FEE_PCT` y arranca en 0 para el MVP. Pendiente:
+construir una UI de superadmin para configurar esa comisión sin tocar variables de entorno, y
+decidir si será global o por club antes de abrir pagos reales a escala.
 
 
 

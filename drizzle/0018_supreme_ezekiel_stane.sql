@@ -1,0 +1,1 @@
+ALTER TABLE "bookings" ADD COLUMN "mp_preference_id" text;

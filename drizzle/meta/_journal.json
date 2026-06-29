@@ -127,6 +127,13 @@
       "when": 1782744761296,
       "tag": "0017_spooky_squirrel_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1782746198393,
+      "tag": "0018_supreme_ezekiel_stane",
+      "breakpoints": true
     }
   ]
 }

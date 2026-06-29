@@ -154,8 +154,11 @@ El hold ya está introducido en el bot para clubes con `payment_mode='partial'` 
 el jugador confirma → se re-chequea disponibilidad → se crea una reserva `status='pendiente'`
 con `held_until = now() + 10 minutos`, `payment_status='impago'` y el monto a cobrar en
 `bookings.price`. Ese hold queda bloqueando el turno porque la disponibilidad ignora solo
-`cancelado`. Pasos siguientes: generar el link de pago de MP de ese club, confirmar por
-webhook si paga y liberar automáticamente holds vencidos si no paga.
+`cancelado`. En el siguiente paso del mismo flujo, el bot genera una preferencia de Checkout
+Pro con el `access_token` del club, guarda `bookings.mp_preference_id` y manda el `init_point`
+por el canal. La confirmación real del pago queda a cargo del webhook de MP; la página de
+retorno `/pago/resultado` es solo visual/UX. Falta liberar automáticamente holds vencidos si
+no paga.
 
 La plataforma podrá cobrar una **comisión configurable por club** (un *marketplace fee*),
 manejada desde la cuenta de superadmin. En el MVP arranca en 0%, pero la lógica se diseña
@@ -324,7 +327,8 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
 - Desvincular MP borra la fila y apaga pagos online del club (`payment_mode='none'`).
 - Tokens server-side únicamente: no se devuelven en `/api/clubs/settings`, no se pasan al
   cliente y no se loggean.
-- El uso para crear preferencias / links de pago del bot queda para pasos siguientes.
+- El bot usa el `access_token` de esta tabla para crear preferencias / links de pago de
+  reservas con hold. Es la única fuente de verdad del token de MP del club.
 
 ### `courts` 🤖 — canchas de cada club
 `id` · `club_id` · `sport_id` · `name` · `surface` · `price` (ARS) · `sort_order` · `active`
@@ -332,7 +336,8 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
 ### `bookings` 🤖 — **tabla clave: ocupación y reservas**
 `id` · `club_id` · `court_id` · `date` (YYYY-MM-DD) · `start_time` · `end_time` (HH:MM) ·
 `type` · `status` · `customer_id` · `professor_id` · `event_id` · `recurring_rule_id` ·
-`block_group_id` · `price` · `payment_status` · `held_until` · `notes` · `created_at`
+`block_group_id` · `price` · `payment_status` · `held_until` · `mp_preference_id` ·
+`notes` · `created_at`
 - **`type`**: `simple` (reserva de jugador / del bot) · `clase` · `fijo` · `americano` ·
   `torneo` · `bloqueo` · `evento` (legacy). *(`flex` fue retirado: lo reemplazó `simple`.)*
 - **`origin`**: `admin` (cargado en el panel) · `bot` (creado por el bot)
@@ -340,6 +345,8 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
 - **`payment_status`**: `pagado` · `senado` · `impago`
 - **`held_until`**: vencimiento del hold para reservas del bot que esperan pago. Nullable:
   reservas confirmadas o sin pago no lo usan.
+- **`mp_preference_id`**: id de la preferencia de Mercado Pago creada para un hold del bot.
+  Nullable: reservas sin pago o confirmadas directas no lo usan.
 - **`customer_name` / `customer_phone`**: datos del cliente del bot (sin login); las
   reservas del admin pueden no tenerlos.
 - **`booking_code`**: código tipo aerolínea (3 letras + 3 números, ej `HYS324`), único,
@@ -463,7 +470,8 @@ Clubs DEMO que crea el seed (api_key entre paréntesis):
   (`neighborhood`) sirve como zona. Mejor evolución: agregar `lat`/`lng` al club y
   ordenar por **distancia real** a la ubicación que comparte el jugador por WhatsApp.
 - **Pagos**: el onboarding OAuth de Mercado Pago conecta cada club y guarda tokens
-  server-side. Falta usar esos tokens para crear pagos del bot y probar E2E.
+  server-side; el bot ya usa esos tokens para crear links de pago de holds. Falta webhook
+  definitivo, expiración automática y prueba E2E.
 - **`opening_hours`**: darle UI por club (hoy se usa un default).
 
 ---
@@ -484,7 +492,8 @@ desde datos reales.
 - **origin**: `admin` (panel) o `bot` (lo creó el bot).
 - **status**: `confirmado` / `pendiente` (espera pago) / `cancelado`.
 - **payment_status**: `impago` / `senado` (seña) / `pagado`.
-- **hold**: reserva en espera de pago (status `pendiente`). Concepto para Fase 7; hoy no se usa.
+- **hold**: reserva en espera de pago (status `pendiente`). Bloquea el turno mientras el
+  jugador paga por Mercado Pago o hasta que se cancele/expire.
 
 ### Módulos (`lib/bot/`)
 - `memory.ts` — historial de conversación (tabla `bot_conversations`, últimos ~10 mensajes).
@@ -498,6 +507,8 @@ desde datos reales.
 - `extraer-reserva.ts` — `extraerAccionReserva`: decide si el usuario eligió un turno y/o dio su nombre.
 - `reservar.ts` — motor: `crearReservaBot` (atómico, anti-doble-booking), `generarBookingCode`,
   `resolverTurno`, `confirmarReservaTexto`.
+- `../payments/mercadopago-booking.ts` — crea preferencias de Checkout Pro para holds del bot
+  usando el token del club; guarda `mp_preference_id`.
 - `extraer-cancelacion.ts` — detecta si el usuario quiere cancelar y extrae/valida el
   `booking_code` sin meter lógica en adaptadores.
 - `cancelar.ts` — motor de cancelación por código: busca reserva del bot, valida teléfono,
@@ -517,9 +528,14 @@ desde datos reales.
    - `partial` / `full`: crea un **hold** `type='simple'`, `origin='bot'`,
      `status='pendiente'`, `payment_status='impago'`, `held_until=now()+10min`, con el monto
      calculado en `price` (`partial`: `court.price * deposit_pct / 100`; `full`: `court.price`).
-5. El bot responde con un template determinístico. Para `none` confirma la reserva; para holds
-   avisa que la reserva es provisoria, muestra el monto a pagar y aclara que el link de pago se
-   suma en el próximo paso. No inventa links.
+5. Para holds, el motor crea una preferencia de MP con el **access token del club**:
+   `external_reference='booking:<bookingId>'`, `notification_url=/api/mercadopago/webhook`,
+   `back_urls` a `/pago/resultado`, expiración alineada al hold y `marketplace_fee` calculado
+   desde `PLATFORM_FEE_PCT` (0 en MVP). Guarda `mp_preference_id`.
+6. El bot responde con un template determinístico. Para `none` confirma la reserva; para holds
+   muestra lugar, cancha, día, hora, monto, link real de MP y avisa que tiene ~10 minutos para
+   pagar o el turno se libera. Si MP falla al crear la preferencia, el hold se cancela y el bot
+   avisa que no quedó reservado.
 
 ### Flujo de cancelación del bot (Fase 6.5) — código + teléfono
 1. El usuario pide cancelar y pasa su `booking_code` (ej. `HYS324`). Si no lo pasa, el bot
@@ -560,8 +576,10 @@ desde datos reales.
 ### Decisiones y alcance
 - Reserva del bot sin pago (`payment_mode='none'`) = **simple / bot / confirmado / impago**.
 - Reserva del bot con pago (`partial`/`full`) = **simple / bot / pendiente / impago** con
-  `held_until` y monto a cobrar. El link de pago y webhook todavía no están implementados.
+  `held_until`, monto a cobrar, `mp_preference_id` y link de pago real de MP.
+- La página `/pago/resultado` no confirma pagos ni cambia reservas; solo orienta al jugador
+  después de volver de Mercado Pago. La fuente de verdad será el webhook del paso siguiente.
 - Nombre/teléfono se guardan **en el booking** (no en `customers`): la tabla global de clientes
   queda para una etapa posterior.
-- **Fase futura:** link de MercadoPago / expiración automática de holds / refunds /
-  `customers` global / búsqueda por distancia (lat/lng).
+- **Fase futura:** webhook definitivo de Mercado Pago / expiración automática de holds /
+  refunds / `customers` global / búsqueda por distancia (lat/lng).

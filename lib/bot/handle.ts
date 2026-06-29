@@ -83,10 +83,16 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
           customerName: accion.nombre,
           customerPhone: msg.userId,
         });
-        respuesta = res.ok
-          ? confirmarReservaTexto(turno, accion.nombre, res)
-          : "Uy, ese turno se acaba de ocupar 😕. " +
+        if (res.ok) {
+          respuesta = confirmarReservaTexto(turno, accion.nombre, res);
+        } else if (res.error === "PAGO_NO_DISPONIBLE") {
+          respuesta =
+            "No pude generar el link de pago, así que liberé el turno y no quedó reservado. Probá de nuevo en unos minutos o elegí otro horario.";
+        } else {
+          respuesta =
+            "Uy, ese turno se acaba de ocupar 😕. " +
             (await redactarRespuesta({ history, userText: msg.text, intent, lugares }));
+        }
       }
     } else {
       // Sigue explorando → redactamos la oferta sobre los datos reales.

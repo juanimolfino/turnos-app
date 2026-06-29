@@ -122,6 +122,8 @@ describe("handleIncomingMessage (Fase 6 — reservar)", () => {
       paymentMode: "none",
       amountToCharge: 0,
       heldUntil: null,
+      paymentInitPoint: null,
+      mpPreferenceId: null,
     };
     crearReservaBot.mockResolvedValue(reservaOk);
 
@@ -146,6 +148,18 @@ describe("handleIncomingMessage (Fase 6 — reservar)", () => {
     expect(confirmarReservaTexto).not.toHaveBeenCalled();
     expect(redactarRespuesta).toHaveBeenCalled(); // re-ofrece opciones
     expect(send).toHaveBeenCalledWith("123", expect.stringContaining("se acaba de ocupar"));
+  });
+
+  it("si falla Mercado Pago, avisa y no deja el hold como reservado", async () => {
+    extraerIntencion.mockResolvedValue(conIntencion);
+    extraerAccionReserva.mockResolvedValue({ tipo: "reservar", lugar: "Pádel Central", hora: "19:00", cancha: null, nombre: "Juan Pérez" });
+    crearReservaBot.mockResolvedValue({ ok: false, error: "PAGO_NO_DISPONIBLE" });
+
+    await handleIncomingMessage(msg("Juan Pérez"));
+
+    expect(confirmarReservaTexto).not.toHaveBeenCalled();
+    expect(redactarRespuesta).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith("123", expect.stringContaining("liberé el turno"));
   });
 
   it("eligió pero el turno no resuelve (ya no está en la oferta) → re-ofrece, no reserva", async () => {

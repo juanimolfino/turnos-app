@@ -18,6 +18,10 @@ export function getMercadoPagoPreference() {
   return preference;
 }
 
+export function getMercadoPagoPreferenceForAccessToken(accessToken: string) {
+  return new Preference(new MercadoPagoConfig({ accessToken }));
+}
+
 export function getMercadoPagoPayment() {
   if (!payment) payment = new Payment(getMercadoPagoClient());
   return payment;

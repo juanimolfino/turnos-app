@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { InvalidWebhookSignatureError, WebhookSignatureValidator } from "mercadopago";
-import { addCredits, confirmBookingPayment } from "@/lib/db/queries";
+import { addCredits } from "@/lib/db/queries";
 import { getMercadoPagoPayment } from "@/lib/mercadopago/client";
 import { getCreditPack } from "@/lib/stripe/pricing";
 
@@ -48,11 +48,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true, status: payment.status ?? "unknown" });
   }
 
-  // Handle booking payment (external_reference = "booking:<bookingId>")
+  // Booking payments are acknowledged here, but confirmation is Paso 5.
   if (String(payment.external_reference ?? "").startsWith("booking:")) {
-    const bookingId = String(payment.external_reference).slice(8);
-    if (bookingId) await confirmBookingPayment(bookingId);
-    return NextResponse.json({ received: true, kind: "booking" });
+    return NextResponse.json({ received: true, kind: "booking", confirmationPending: true });
   }
 
   const reference = parseExternalReference(payment.external_reference);

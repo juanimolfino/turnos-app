@@ -3,6 +3,8 @@ import { getDb } from "@/lib/db";
 import { bookings, clubs, courts, type PaymentMode } from "@/lib/db/schema";
 import type { LugarDisponibilidad } from "@/lib/bot/search";
 import { calculateBookingPaymentAmount } from "@/lib/payments/amount";
+import { createBookingPaymentPreference } from "@/lib/payments/mercadopago-booking";
+import { cancelBotHoldAfterPaymentError } from "@/lib/db/queries";
 
 // Motor de reserva del bot (Fase 6). Crea bookings type='simple', origin='bot'.
 // Anti-doble-booking en DOS capas:
@@ -30,8 +32,10 @@ export type ReservaResult =
       paymentMode: PaymentMode;
       amountToCharge: number;
       heldUntil: Date | null;
+      paymentInitPoint: string | null;
+      mpPreferenceId: string | null;
     }
-  | { ok: false; error: "SLOT_NO_DISPONIBLE" };
+  | { ok: false; error: "SLOT_NO_DISPONIBLE" | "PAGO_NO_DISPONIBLE" };
 
 // Alfabeto sin caracteres ambiguos (sin I/O en letras, sin 0/1 en números).
 const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -69,6 +73,8 @@ export async function crearReservaBot(input: ReservaInput): Promise<ReservaResul
       paymentMode: clubs.paymentMode,
       depositPct: clubs.depositPct,
       courtPrice: courts.price,
+      clubName: clubs.name,
+      courtName: courts.name,
     })
     .from(courts)
     .innerJoin(clubs, eq(courts.clubId, clubs.id))
@@ -126,7 +132,7 @@ export async function crearReservaBot(input: ReservaInput): Promise<ReservaResul
         })
         .returning({ id: bookings.id, bookingCode: bookings.bookingCode });
 
-      return {
+      const result: Extract<ReservaResult, { ok: true }> = {
         ok: true,
         bookingId: booking.id,
         bookingCode: booking.bookingCode!,
@@ -134,7 +140,43 @@ export async function crearReservaBot(input: ReservaInput): Promise<ReservaResul
         paymentMode: settings.paymentMode,
         amountToCharge,
         heldUntil,
+        paymentInitPoint: null,
+        mpPreferenceId: null,
       };
+
+      if (status === "pendiente" && settings.paymentMode !== "none") {
+        try {
+          const payment = await createBookingPaymentPreference({
+            bookingId: booking.id,
+            bookingCode: booking.bookingCode!,
+            clubId: input.clubId,
+            clubName: settings.clubName,
+            courtName: settings.courtName,
+            date: input.date,
+            startTime: input.startTime,
+            amount: amountToCharge,
+            paymentMode: settings.paymentMode,
+            heldUntil: heldUntil!,
+          });
+          result.paymentInitPoint = payment.initPoint;
+          result.mpPreferenceId = payment.preferenceId;
+        } catch (err) {
+          await cancelBotHoldAfterPaymentError(booking.id).catch((cancelErr) => {
+            console.error("[bot] no se pudo cancelar hold tras error de Mercado Pago", {
+              bookingId: booking.id,
+              error: cancelErr instanceof Error ? cancelErr.message : String(cancelErr),
+            });
+          });
+          console.error("[bot] no se pudo generar preferencia de Mercado Pago", {
+            bookingId: booking.id,
+            clubId: input.clubId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          return { ok: false, error: "PAGO_NO_DISPONIBLE" };
+        }
+      }
+
+      return result;
     } catch (err) {
       const code = pgErrorCode(err);
       if (code === EXCLUSION_VIOLATION) return { ok: false, error: "SLOT_NO_DISPONIBLE" }; // capa A
@@ -220,7 +262,7 @@ export function confirmarReservaTexto(turno: Turno, nombre: string, reserva: Ext
       maximumFractionDigits: 0,
     }).format(reserva.amountToCharge);
 
-    return `¡Listo, ${nombre}! Te reservé provisoriamente en ${turno.clubName} (${turno.courtName}) el ${fecha} a las ${turno.startTime}. Para confirmarla tenés que pagar ${monto} (${tipoPago}). Tu código de reserva es ${reserva.bookingCode}. El link de pago se suma en el próximo paso; por ahora el turno queda en hold.`;
+    return `¡Listo, ${nombre}! Te reservé provisoriamente en ${turno.clubName} (${turno.courtName}) el ${fecha} a las ${turno.startTime}. Para confirmarla tenés que pagar ${monto} (${tipoPago}) acá: ${reserva.paymentInitPoint}. Tenés aproximadamente ${HOLD_MINUTES} minutos; si no pagás, el turno se libera. Tu código de reserva es ${reserva.bookingCode}.`;
   }
 
   return `¡Listo, ${nombre}! Te reservé en ${turno.clubName} (${turno.courtName}) el ${fecha} a las ${turno.startTime}. Tu código de reserva es ${reserva.bookingCode} — guardalo para cancelar.`;
