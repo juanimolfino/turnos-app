@@ -5,6 +5,7 @@ import { jobs, users, type JobType } from "@/lib/db/schema";
 import { markJobDone, markJobProcessing, refundJobCredits } from "@/lib/db/queries";
 import { sendJobReadyEmail } from "@/lib/email/send";
 import { releaseJobSlot } from "@/lib/redis/rate-limit";
+import { expireBotHolds } from "@/lib/bookings/expire-holds";
 import { inngest } from "./client";
 import { eq } from "drizzle-orm";
 
@@ -46,5 +47,17 @@ export const runAiJob = inngest.createFunction(
     } finally {
       await step.run("release concurrency slot", async () => releaseJobSlot(job.userId));
     }
+  }
+);
+
+export const expireBotHoldsJob = inngest.createFunction(
+  {
+    id: "expire-bot-holds",
+    retries: 0
+  },
+  { cron: "* * * * *" },
+  async ({ step }) => {
+    const result = await step.run("release expired bot holds", async () => expireBotHolds());
+    return result;
   }
 );

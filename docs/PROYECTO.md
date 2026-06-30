@@ -160,8 +160,8 @@ por el canal. La confirmación real del pago la hace el webhook de MP: valida fi
 consulta el pago real con el token del club, confirma solo holds vigentes y es idempotente por
 `mp_payment_id`. La página de retorno `/pago/resultado` es solo visual/UX: ante retorno exitoso
 de MP muestra un acuse neutro ("pago recibido, estamos confirmando") porque el webhook puede
-tardar unos segundos más en acreditar la reserva. Falta liberar automáticamente holds vencidos
-si no paga.
+tardar unos segundos más en acreditar la reserva. Los holds vencidos se liberan automáticamente
+por Inngest.
 
 La plataforma podrá cobrar una **comisión configurable por club** (un *marketplace fee*),
 manejada desde la cuenta de superadmin. En el MVP arranca en 0%, pero la lógica se diseña
@@ -547,6 +547,25 @@ desde datos reales.
    pagar o el turno se libera. Si MP falla al crear la preferencia, el hold se cancela y el bot
    avisa que no quedó reservado.
 
+### Expiración automática de holds (Fase 7 Paso 6)
+1. La lógica vive en `lib/bookings/expire-holds.ts` y no depende de Inngest: busca reservas
+   `origin='bot'`, `status='pendiente'`, `held_until IS NOT NULL` y `held_until < now()`.
+2. Las libera con cancelación suave (`status='cancelado'`), no borra filas. Al quedar canceladas,
+   dejan de bloquear disponibilidad porque la regla de disponibilidad ignora solo `cancelado`.
+3. No toca reservas confirmadas, holds vigentes ni reservas creadas desde el panel (`origin='admin'`).
+4. El update es atómico y filtra por `status='pendiente'`: si el webhook confirmó primero, el job
+   ya no matchea esa fila; si el job canceló primero, el webhook encuentra una reserva no pendiente
+   y cae en el flujo ya existente de pago tardío/revisión (`payment_review_reason='not_pending'`
+   o `hold_expired` según el caso). Ambos caminos usan la fila de `bookings` como punto de
+   sincronización, así no se confirma y cancela la misma reserva a la vez.
+5. Inngest registra `expire-bot-holds` en `/api/inngest` con cron `* * * * *` (cada minuto). Para
+   activarlo en Vercel falta crear la cuenta/proyecto de Inngest y cargar `INNGEST_EVENT_KEY` y
+   `INNGEST_SIGNING_KEY`.
+6. Hasta que Inngest esté activo, se puede probar manualmente con:
+   `POST /api/admin/expire-holds`, enviando `x-expire-holds-secret: <EXPIRE_HOLDS_SECRET>` o
+   `Authorization: Bearer <EXPIRE_HOLDS_SECRET>`. Ese endpoint solo ejecuta la misma lógica de
+   liberación y devuelve `{ released, bookingIds }`.
+
 ### Webhook de pago de Mercado Pago (Fase 7 Paso 5)
 1. MP llama `POST /api/mercadopago/webhook?data.id=<paymentId>&booking_id=<bookingId>`; si
    `data.id` no viene en la URL, se toma de `body.data.id`. Ese valor es el id del pago, no
@@ -613,11 +632,12 @@ desde datos reales.
 - Reserva del bot con pago (`partial`/`full`) = **simple / bot / pendiente / impago** con
   `held_until`, monto a cobrar, `mp_preference_id` y link de pago real de MP; cuando el
   webhook acredita, pasa a **confirmado / señado** o **confirmado / pagado**.
+- Si el hold vence sin pago, el job `expire-bot-holds` lo pasa a **cancelado / impago** y libera
+  el turno. El registro queda para auditoría.
 - La página `/pago/resultado` no confirma pagos ni cambia reservas; solo orienta al jugador
   después de volver de Mercado Pago. En éxito no afirma estado final de reserva: muestra que el
   pago fue recibido y que la confirmación llega por Telegram. La fuente de verdad es el webhook
   firmado de MP.
 - Nombre/teléfono se guardan **en el booking** (no en `customers`): la tabla global de clientes
   queda para una etapa posterior.
-- **Fase futura:** expiración automática de holds / refunds automáticos / `customers` global /
-  búsqueda por distancia (lat/lng).
+- **Fase futura:** refunds automáticos / `customers` global / búsqueda por distancia (lat/lng).
