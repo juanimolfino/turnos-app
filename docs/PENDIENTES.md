@@ -114,7 +114,7 @@ con el token del club, guarda `mp_preference_id` y manda el link al jugador.
 Webhook de confirmación: hecho en el Paso 5. Valida firma HMAC, consulta el pago real con el token
 del club, confirma solo holds vigentes y guarda `mp_payment_id` para idempotencia.
 Expiración automática de holds: hecha en el Paso 6. La lógica `expireBotHolds` cancela suave holds
-vencidos del bot y está registrada en Inngest cada minuto.
+vencidos del bot y está registrada en Inngest cada 5 minutos.
 
 Pendiente de la fase grande: crear la cuenta/proyecto de Inngest y cargar `INNGEST_EVENT_KEY` /
 `INNGEST_SIGNING_KEY` en Vercel para activar el cron; cargar `EXPIRE_HOLDS_SECRET` si se quiere usar

@@ -558,9 +558,9 @@ desde datos reales.
    y cae en el flujo ya existente de pago tardío/revisión (`payment_review_reason='not_pending'`
    o `hold_expired` según el caso). Ambos caminos usan la fila de `bookings` como punto de
    sincronización, así no se confirma y cancela la misma reserva a la vez.
-5. Inngest registra `expire-bot-holds` en `/api/inngest` con cron `* * * * *` (cada minuto). Para
-   activarlo en Vercel falta crear la cuenta/proyecto de Inngest y cargar `INNGEST_EVENT_KEY` y
-   `INNGEST_SIGNING_KEY`.
+5. Inngest registra `expire-bot-holds` en `/api/inngest` con cron `*/5 * * * *` (cada 5 minutos).
+   Para activarlo en Vercel falta crear la cuenta/proyecto de Inngest y cargar `INNGEST_EVENT_KEY`
+   y `INNGEST_SIGNING_KEY`.
 6. Hasta que Inngest esté activo, se puede probar manualmente con:
    `POST /api/admin/expire-holds`, enviando `x-expire-holds-secret: <EXPIRE_HOLDS_SECRET>` o
    `Authorization: Bearer <EXPIRE_HOLDS_SECRET>`. Ese endpoint solo ejecuta la misma lógica de
