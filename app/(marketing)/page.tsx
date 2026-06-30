@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { Logo } from "@/components/ui/logo";
 import { useIsMobile } from "@/hooks/use-is-mobile";
@@ -80,27 +81,21 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Court illustration */}
+        {/* Hero image */}
         <div style={{
           position: "relative", aspectRatio: "4/3", borderRadius: 18, overflow: "hidden",
-          background: "linear-gradient(160deg,#2F7D4E,#214f36)",
+          background: "#E7E1D6",
           boxShadow: "0 24px 56px -22px rgba(33,79,54,.6)",
           border: "1px solid rgba(255,255,255,.12)"
         }}>
-          <div style={{ position: "absolute", top: "13%", bottom: "13%", left: "18%", right: "18%", border: "3px solid rgba(255,255,255,.82)", borderRadius: 3 }} />
-          <div style={{ position: "absolute", top: "13%", bottom: "13%", left: "50%", width: 3, background: "rgba(255,255,255,.82)", transform: "translateX(-50%)" }} />
-          <div style={{ position: "absolute", left: "18%", right: "18%", top: "34%", height: 2, background: "rgba(255,255,255,.55)" }} />
-          <div style={{ position: "absolute", left: "18%", right: "18%", bottom: "34%", height: 2, background: "rgba(255,255,255,.55)" }} />
-          <div style={{ position: "absolute", top: "13%", bottom: "13%", left: "33.5%", width: 2, background: "rgba(255,255,255,.4)" }} />
-          <div style={{ position: "absolute", top: "13%", bottom: "13%", right: "33.5%", width: 2, background: "rgba(255,255,255,.4)" }} />
-          <div style={{
-            position: "absolute", left: 14, bottom: 14,
-            background: "rgba(0,0,0,.4)", color: "rgba(255,255,255,.92)",
-            fontFamily: "'Space Mono', monospace", fontSize: 11,
-            padding: "5px 10px", borderRadius: 7
-          }}>
-            {"// reemplazá con foto real de la cancha"}
-          </div>
+          <Image
+            src="/portada-app-turnos.jpg"
+            alt="Vista de la app de turnos para clubes"
+            fill
+            priority
+            sizes={isMobile ? "100vw" : "560px"}
+            style={{ objectFit: "cover" }}
+          />
         </div>
       </div>
 
