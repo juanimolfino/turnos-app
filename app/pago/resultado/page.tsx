@@ -1,7 +1,7 @@
 const messages = {
   success: {
     title: "¡Pago recibido!",
-    text: "Volvé a Telegram: te mandamos la confirmación ahí.",
+    text: "Estamos confirmando tu reserva. Te enviamos la confirmación por Telegram en unos segundos.",
   },
   pending: {
     title: "Pago pendiente",
@@ -13,15 +13,47 @@ const messages = {
   },
 };
 
+type PaymentResultStatus = keyof typeof messages;
+type SearchParamValue = string | string[] | undefined;
+
+function valuesOf(value: SearchParamValue) {
+  return Array.isArray(value) ? value : value ? [value] : [];
+}
+
+export function resolvePaymentResultStatus(searchParams: {
+  status?: SearchParamValue;
+  collection_status?: SearchParamValue;
+  payment_status?: SearchParamValue;
+}): PaymentResultStatus {
+  const values = [
+    ...valuesOf(searchParams.status),
+    ...valuesOf(searchParams.collection_status),
+    ...valuesOf(searchParams.payment_status),
+  ].map((value) => value.toLowerCase());
+
+  if (values.some((value) => value === "success" || value === "approved" || value === "accredited")) {
+    return "success";
+  }
+  if (values.some((value) => value === "failure" || value === "rejected" || value === "cancelled" || value === "cancelled_by_user")) {
+    return "failure";
+  }
+  if (values.some((value) => value === "pending" || value === "in_process" || value === "in_mediation")) {
+    return "pending";
+  }
+  return "pending";
+}
+
 export default async function PaymentResultPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{
+    status?: SearchParamValue;
+    collection_status?: SearchParamValue;
+    payment_status?: SearchParamValue;
+  }>;
 }) {
-  const { status } = await searchParams;
-  const message = status === "success" || status === "pending" || status === "failure"
-    ? messages[status]
-    : messages.pending;
+  const params = await searchParams;
+  const message = messages[resolvePaymentResultStatus(params)];
 
   return (
     <main style={{

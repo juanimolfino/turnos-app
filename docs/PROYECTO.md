@@ -158,8 +158,10 @@ con `held_until = now() + 10 minutos`, `payment_status='impago'` y el monto a co
 Pro con el `access_token` del club, guarda `bookings.mp_preference_id` y manda el `init_point`
 por el canal. La confirmación real del pago la hace el webhook de MP: valida firma HMAC,
 consulta el pago real con el token del club, confirma solo holds vigentes y es idempotente por
-`mp_payment_id`. La página de retorno `/pago/resultado` es solo visual/UX. Falta liberar
-automáticamente holds vencidos si no paga.
+`mp_payment_id`. La página de retorno `/pago/resultado` es solo visual/UX: ante retorno exitoso
+de MP muestra un acuse neutro ("pago recibido, estamos confirmando") porque el webhook puede
+tardar unos segundos más en acreditar la reserva. Falta liberar automáticamente holds vencidos
+si no paga.
 
 La plataforma podrá cobrar una **comisión configurable por club** (un *marketplace fee*),
 manejada desde la cuenta de superadmin. En el MVP arranca en 0%, pero la lógica se diseña
@@ -612,7 +614,9 @@ desde datos reales.
   `held_until`, monto a cobrar, `mp_preference_id` y link de pago real de MP; cuando el
   webhook acredita, pasa a **confirmado / señado** o **confirmado / pagado**.
 - La página `/pago/resultado` no confirma pagos ni cambia reservas; solo orienta al jugador
-  después de volver de Mercado Pago. La fuente de verdad es el webhook firmado de MP.
+  después de volver de Mercado Pago. En éxito no afirma estado final de reserva: muestra que el
+  pago fue recibido y que la confirmación llega por Telegram. La fuente de verdad es el webhook
+  firmado de MP.
 - Nombre/teléfono se guardan **en el booking** (no en `customers`): la tabla global de clientes
   queda para una etapa posterior.
 - **Fase futura:** expiración automática de holds / refunds automáticos / `customers` global /
