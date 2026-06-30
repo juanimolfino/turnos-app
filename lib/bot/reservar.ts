@@ -5,6 +5,7 @@ import type { LugarDisponibilidad } from "@/lib/bot/search";
 import { calculateBookingPaymentAmount } from "@/lib/payments/amount";
 import { createBookingPaymentPreference } from "@/lib/payments/mercadopago-booking";
 import { cancelBotHoldAfterPaymentError } from "@/lib/db/queries";
+import { cancellationPolicyText } from "@/lib/bot/cancellation-policy-text";
 
 // Motor de reserva del bot (Fase 6). Crea bookings type='simple', origin='bot'.
 // Anti-doble-booking en DOS capas:
@@ -34,6 +35,8 @@ export type ReservaResult =
       heldUntil: Date | null;
       paymentInitPoint: string | null;
       mpPreferenceId: string | null;
+      refundEnabled: boolean;
+      refundCutoffHours: number;
     }
   | { ok: false; error: "SLOT_NO_DISPONIBLE" | "PAGO_NO_DISPONIBLE" };
 
@@ -75,6 +78,8 @@ export async function crearReservaBot(input: ReservaInput): Promise<ReservaResul
       courtPrice: courts.price,
       clubName: clubs.name,
       courtName: courts.name,
+      refundEnabled: clubs.refundEnabled,
+      refundCutoffHours: clubs.refundCutoffHours,
     })
     .from(courts)
     .innerJoin(clubs, eq(courts.clubId, clubs.id))
@@ -142,6 +147,8 @@ export async function crearReservaBot(input: ReservaInput): Promise<ReservaResul
         heldUntil,
         paymentInitPoint: null,
         mpPreferenceId: null,
+        refundEnabled: settings.refundEnabled,
+        refundCutoffHours: settings.refundCutoffHours,
       };
 
       if (status === "pendiente" && settings.paymentMode !== "none") {
@@ -261,9 +268,20 @@ export function confirmarReservaTexto(turno: Turno, nombre: string, reserva: Ext
       currency: "ARS",
       maximumFractionDigits: 0,
     }).format(reserva.amountToCharge);
+    const politica = cancellationPolicyText({
+      paymentMode: reserva.paymentMode,
+      refundEnabled: reserva.refundEnabled,
+      refundCutoffHours: reserva.refundCutoffHours,
+    });
 
-    return `¡Listo, ${nombre}! Te reservé provisoriamente en ${turno.clubName} (${turno.courtName}) el ${fecha} a las ${turno.startTime}. Para confirmarla tenés que pagar ${monto} (${tipoPago}) acá: ${reserva.paymentInitPoint}. Tenés aproximadamente ${HOLD_MINUTES} minutos; si no pagás, el turno se libera. Tu código de reserva es ${reserva.bookingCode}.`;
+    return `¡Listo, ${nombre}! Te reservé provisoriamente en ${turno.clubName} (${turno.courtName}) el ${fecha} a las ${turno.startTime}. Para confirmarla tenés que pagar ${monto} (${tipoPago}) acá: ${reserva.paymentInitPoint}. Tenés aproximadamente ${HOLD_MINUTES} minutos; si no pagás, el turno se libera. Tu código de reserva es ${reserva.bookingCode}. ${politica}`;
   }
 
-  return `¡Listo, ${nombre}! Te reservé en ${turno.clubName} (${turno.courtName}) el ${fecha} a las ${turno.startTime}. Tu código de reserva es ${reserva.bookingCode} — guardalo para cancelar.`;
+  const politica = cancellationPolicyText({
+    paymentMode: reserva.paymentMode,
+    refundEnabled: reserva.refundEnabled,
+    refundCutoffHours: reserva.refundCutoffHours,
+  });
+
+  return `¡Listo, ${nombre}! Te reservé en ${turno.clubName} (${turno.courtName}) el ${fecha} a las ${turno.startTime}. Tu código de reserva es ${reserva.bookingCode} — guardalo para cancelar. ${politica}`;
 }

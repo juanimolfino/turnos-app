@@ -185,6 +185,28 @@ describe("handleIncomingMessage (Fase 6 — reservar)", () => {
     expect(send).toHaveBeenCalledWith("123", "CANCELADA");
   });
 
+  it("confirmación explícita de cancelación sin refund → cancela con flag explícito", async () => {
+    getHistory.mockResolvedValue([
+      {
+        role: "assistant",
+        content:
+          "Podemos cancelar tu reserva HYS324, pero por la política de Pádel Central no se realiza la devolución del dinero. Si querés cancelarla igual, respondé: confirmo HYS324",
+      },
+    ]);
+    cancelarReservaBotPorCodigo.mockResolvedValue({ ok: true, status: "cancelada_sin_refund", reserva: { bookingCode: "HYS324" } });
+
+    await handleIncomingMessage(msg("confirmo"));
+
+    expect(cancelarReservaBotPorCodigo).toHaveBeenCalledWith({
+      bookingCode: "HYS324",
+      customerPhone: "123",
+      confirmCancelWithoutRefund: true,
+    });
+    expect(extraerAccionCancelacion).not.toHaveBeenCalled();
+    expect(extraerIntencion).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith("123", "CANCELADA");
+  });
+
   it("cancelación sin código → pide el código y no busca disponibilidad", async () => {
     extraerAccionCancelacion.mockReturnValue({ tipo: "pedir_codigo" });
 

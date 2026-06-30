@@ -3,7 +3,15 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // Mock de getDb. preCheck = filas que devuelve la capa B (overlap). insertQueue =
 // comportamiento de cada insert: "ok" | "23P01" (exclusión) | "23505" (unique).
 const state = vi.hoisted(() => ({
-  settings: { paymentMode: "none", depositPct: 25, courtPrice: 1000, clubName: "Pádel Central", courtName: "Cancha 1" },
+  settings: {
+    paymentMode: "none",
+    depositPct: 25,
+    courtPrice: 1000,
+    clubName: "Pádel Central",
+    courtName: "Cancha 1",
+    refundEnabled: false,
+    refundCutoffHours: 24,
+  },
   preCheck: [] as { id: string }[],
   insertQueue: [] as ("ok" | "23P01" | "23505")[],
   insertedValues: [] as Record<string, unknown>[],
@@ -71,7 +79,7 @@ describe("generarBookingCode", () => {
 
 describe("crearReservaBot", () => {
   beforeEach(() => {
-    state.settings = { paymentMode: "none", depositPct: 25, courtPrice: 1000, clubName: "Pádel Central", courtName: "Cancha 1" };
+    state.settings = { paymentMode: "none", depositPct: 25, courtPrice: 1000, clubName: "Pádel Central", courtName: "Cancha 1", refundEnabled: false, refundCutoffHours: 24 };
     state.preCheck = [];
     state.insertQueue = [];
     state.insertedValues = [];
@@ -94,6 +102,8 @@ describe("crearReservaBot", () => {
       heldUntil: null,
       paymentInitPoint: null,
       mpPreferenceId: null,
+      refundEnabled: false,
+      refundCutoffHours: 24,
     });
     expect(state.createPreference).not.toHaveBeenCalled();
 
@@ -110,7 +120,7 @@ describe("crearReservaBot", () => {
   });
 
   it("club partial: crea hold pendiente con held_until y monto de seña", async () => {
-    state.settings = { paymentMode: "partial", depositPct: 25, courtPrice: 1000, clubName: "Pádel Central", courtName: "Cancha 1" };
+    state.settings = { paymentMode: "partial", depositPct: 25, courtPrice: 1000, clubName: "Pádel Central", courtName: "Cancha 1", refundEnabled: true, refundCutoffHours: 24 };
     const now = new Date("2026-06-27T15:00:00.000Z");
 
     const res = await crearReservaBot({ ...input, now });
@@ -125,6 +135,8 @@ describe("crearReservaBot", () => {
       heldUntil: new Date("2026-06-27T15:10:00.000Z"),
       paymentInitPoint: "https://mp.example/pay",
       mpPreferenceId: "pref-1",
+      refundEnabled: true,
+      refundCutoffHours: 24,
     });
     expect(state.createPreference).toHaveBeenCalledWith({
       bookingId: "bk-1",
@@ -147,7 +159,7 @@ describe("crearReservaBot", () => {
   });
 
   it("club full: crea hold pendiente con monto total", async () => {
-    state.settings = { paymentMode: "full", depositPct: 25, courtPrice: 1200, clubName: "Pádel Central", courtName: "Cancha 1" };
+    state.settings = { paymentMode: "full", depositPct: 25, courtPrice: 1200, clubName: "Pádel Central", courtName: "Cancha 1", refundEnabled: false, refundCutoffHours: 24 };
 
     const res = await crearReservaBot({ ...input, now: new Date("2026-06-27T15:00:00.000Z") });
 
@@ -159,6 +171,8 @@ describe("crearReservaBot", () => {
       heldUntil: new Date("2026-06-27T15:10:00.000Z"),
       paymentInitPoint: "https://mp.example/pay",
       mpPreferenceId: "pref-1",
+      refundEnabled: false,
+      refundCutoffHours: 24,
     });
     expect(state.insertedValues[0]).toMatchObject({ status: "pendiente", price: 1200 });
   });
@@ -192,7 +206,7 @@ describe("crearReservaBot", () => {
   });
 
   it("CAPA A: la constraint EXCLUDE sigue aplicando cuando el nuevo booking es hold", async () => {
-    state.settings = { paymentMode: "partial", depositPct: 25, courtPrice: 1000, clubName: "Pádel Central", courtName: "Cancha 1" };
+    state.settings = { paymentMode: "partial", depositPct: 25, courtPrice: 1000, clubName: "Pádel Central", courtName: "Cancha 1", refundEnabled: false, refundCutoffHours: 24 };
     state.insertQueue = ["23P01"];
     const res = await crearReservaBot(input);
     expect(res).toEqual({ ok: false, error: "SLOT_NO_DISPONIBLE" });
@@ -201,7 +215,7 @@ describe("crearReservaBot", () => {
   });
 
   it("si Mercado Pago falla, cancela el hold y devuelve error controlado", async () => {
-    state.settings = { paymentMode: "partial", depositPct: 25, courtPrice: 1000, clubName: "Pádel Central", courtName: "Cancha 1" };
+    state.settings = { paymentMode: "partial", depositPct: 25, courtPrice: 1000, clubName: "Pádel Central", courtName: "Cancha 1", refundEnabled: false, refundCutoffHours: 24 };
     state.createPreference.mockRejectedValue(new Error("MP down"));
 
     const res = await crearReservaBot(input);
@@ -278,12 +292,15 @@ describe("confirmarReservaTexto", () => {
       heldUntil: null,
       paymentInitPoint: null,
       mpPreferenceId: null,
+      refundEnabled: false,
+      refundCutoffHours: 24,
     });
     expect(txt).toContain("Pádel Central");
     expect(txt).toContain("Cancha 1");
     expect(txt).toContain("19:00");
     expect(txt).toContain("HYS324");
     expect(txt).toContain("Juan Pérez");
+    expect(txt).toContain("cancelar");
   });
 
   it("para hold muestra monto, link real y ventana de pago", () => {
@@ -301,6 +318,8 @@ describe("confirmarReservaTexto", () => {
       heldUntil: new Date("2026-06-27T15:10:00.000Z"),
       paymentInitPoint: "https://mp.example/pay",
       mpPreferenceId: "pref-1",
+      refundEnabled: true,
+      refundCutoffHours: 24,
     });
 
     expect(txt).toContain("provisoriamente");
@@ -309,5 +328,7 @@ describe("confirmarReservaTexto", () => {
     expect(txt).toContain("seña");
     expect(txt).toContain("https://mp.example/pay");
     expect(txt).toContain("10 minutos");
+    expect(txt).toContain("24 horas");
+    expect(txt).toContain("recuperar tu seña");
   });
 });

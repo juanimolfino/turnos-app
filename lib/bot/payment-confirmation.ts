@@ -1,4 +1,6 @@
 import { telegramAdapter } from "@/lib/bot/channels/telegram";
+import { cancellationPolicyText } from "@/lib/bot/cancellation-policy-text";
+import type { PaymentMode } from "@/lib/db/schema";
 
 export type PaidBookingForNotification = {
   clubName: string;
@@ -7,6 +9,9 @@ export type PaidBookingForNotification = {
   startTime: string;
   bookingCode: string | null;
   customerPhone: string | null;
+  clubPaymentMode: PaymentMode;
+  refundEnabled: boolean;
+  refundCutoffHours: number;
 };
 
 function formatBookingDate(date: string) {
@@ -24,8 +29,13 @@ function formatBookingDate(date: string) {
 export function pagoAcreditadoTexto(booking: PaidBookingForNotification) {
   const fecha = formatBookingDate(booking.date);
   const code = booking.bookingCode ? ` Tu código de reserva es ${booking.bookingCode}; guardalo para cancelar.` : "";
+  const politica = cancellationPolicyText({
+    paymentMode: booking.clubPaymentMode,
+    refundEnabled: booking.refundEnabled,
+    refundCutoffHours: booking.refundCutoffHours,
+  });
 
-  return `Pago acreditado. Tu reserva en ${booking.clubName} (${booking.courtName}) para el ${fecha} a las ${booking.startTime} quedó confirmada.${code} Si necesitás cancelar, escribime "cancelar" y tu código de reserva.`;
+  return `Pago acreditado. Tu reserva en ${booking.clubName} (${booking.courtName}) para el ${fecha} a las ${booking.startTime} quedó confirmada.${code} ${politica}`;
 }
 
 export async function avisarPagoAcreditadoPorTelegram(booking: PaidBookingForNotification) {

@@ -17,6 +17,19 @@ const adapters: Record<Channel, ChannelAdapter> = {
   telegram: telegramAdapter,
 };
 
+const BOOKING_CODE_RE = /\b([A-Z]{3}[0-9]{3})\b/i;
+
+function extraerConfirmacionCancelacionSinRefund(history: ChatTurn[], userText: string): string | null {
+  if (!/\b(confirmo|confirmar|s[ií]|dale|ok)\b/i.test(userText)) return null;
+  const lastAssistant = [...history].reverse().find((turn) => turn.role === "assistant");
+  if (!lastAssistant) return null;
+  const prompt = lastAssistant.content;
+  if (!/no se realiza la devoluci[oó]n/i.test(prompt) || !/confirmo/i.test(prompt)) return null;
+  const codeFromUser = userText.match(BOOKING_CODE_RE)?.[1]?.toUpperCase();
+  const codeFromPrompt = prompt.match(BOOKING_CODE_RE)?.[1]?.toUpperCase();
+  return codeFromUser ?? codeFromPrompt ?? null;
+}
+
 // Punto de entrada agnóstico al canal. La clave separa hilos por canal+usuario
 // (`telegram:12345`). Flujo:
 //  1) cargar historial y extraer la intención sobre la conversación completa
@@ -31,6 +44,20 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
   const history = await getHistory(key);
   const userTurn: ChatTurn = { role: "user", content: msg.text };
   const convo = [...history, userTurn];
+
+  const confirmacionSinRefund = extraerConfirmacionCancelacionSinRefund(history, msg.text);
+  if (confirmacionSinRefund) {
+    const result = await cancelarReservaBotPorCodigo({
+      bookingCode: confirmacionSinRefund,
+      customerPhone: msg.userId,
+      confirmCancelWithoutRefund: true,
+    });
+    const respuesta = respuestaCancelacionTexto(result);
+    const adapter = adapters[msg.channel];
+    await adapter.send(msg.userId, respuesta);
+    await appendTurns(key, [userTurn, { role: "assistant", content: respuesta }]);
+    return;
+  }
 
   const accionCancelacion = extraerAccionCancelacion(convo);
   if (accionCancelacion.tipo !== "ninguna") {

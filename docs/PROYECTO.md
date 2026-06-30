@@ -157,7 +157,9 @@ Cada club también configura su **política de cancelación/refund** desde `/aju
 
 La decisión se calcula de forma determinística en `lib/payments/refund-policy.ts`, respetando la
 timezone del club. El límite exacto cuenta como válido (`horas_hasta_turno >= refund_cutoff_hours`).
-La mecánica de ejecutar el refund contra Mercado Pago todavía no está implementada; queda para 7B.
+Cuando el cliente cancela una reserva pagada por código, el bot aplica esa política: si corresponde
+refund, procesa el reembolso total en Mercado Pago con el token del club y recién después cancela;
+si no corresponde refund, pide confirmación explícita antes de cancelar sin devolución.
 
 El hold ya está introducido en el bot para clubes con `payment_mode='partial'` o `full`:
 el jugador confirma → se re-chequea disponibilidad → se crea una reserva `status='pendiente'`
@@ -350,7 +352,8 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
 `id` · `club_id` · `court_id` · `date` (YYYY-MM-DD) · `start_time` · `end_time` (HH:MM) ·
 `type` · `status` · `customer_id` · `professor_id` · `event_id` · `recurring_rule_id` ·
 `block_group_id` · `price` · `payment_status` · `held_until` · `mp_preference_id` ·
-`mp_payment_id` · `payment_review_reason` · `notes` · `created_at`
+`mp_payment_id` · `mp_refund_id` · `refund_status` · `payment_review_reason` · `notes` ·
+`created_at`
 - **`type`**: `simple` (reserva de jugador / del bot) · `clase` · `fijo` · `americano` ·
   `torneo` · `bloqueo` · `evento` (legacy). *(`flex` fue retirado: lo reemplazó `simple`.)*
 - **`origin`**: `admin` (cargado en el panel) · `bot` (creado por el bot)
@@ -362,8 +365,13 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
   Nullable: reservas sin pago o confirmadas directas no lo usan.
 - **`mp_payment_id`**: id del pago de Mercado Pago ya procesado para esta reserva. Único e
   idempotente: si MP reintenta el mismo webhook, no se confirma dos veces.
+- **`mp_refund_id`**: id del reembolso de Mercado Pago cuando una cancelación pagada fue
+  devuelta. Único e idempotente: evita reembolsar dos veces la misma reserva.
+- **`refund_status`**: estado operativo del refund (`processing`, `refunded`, `failed`, o un
+  estado devuelto por MP que requiere revisión). No reemplaza `payment_status`.
 - **`payment_review_reason`**: motivo por el cual un pago aprobado no confirmó la reserva y
-  requiere revisión manual/refund (ej. `hold_expired`, `not_pending`, `amount_mismatch`).
+  requiere revisión manual/refund, o por el cual falló un refund (ej. `hold_expired`,
+  `not_pending`, `amount_mismatch`, `refund_failed`, `refund_not_approved`).
 - **`customer_name` / `customer_phone`**: datos del cliente del bot (sin login); las
   reservas del admin pueden no tenerlos.
 - **`booking_code`**: código tipo aerolínea (3 letras + 3 números, ej `HYS324`), único,
@@ -488,7 +496,8 @@ Clubs DEMO que crea el seed (api_key entre paréntesis):
   ordenar por **distancia real** a la ubicación que comparte el jugador por WhatsApp.
 - **Pagos**: el onboarding OAuth de Mercado Pago conecta cada club y guarda tokens
   server-side; el bot ya usa esos tokens para crear links de pago de holds y el webhook
-  confirma pagos aprobados de holds vigentes. Falta expiración automática y prueba E2E.
+  confirma pagos aprobados de holds vigentes. Los holds vencidos expiran por Inngest y la
+  cancelación por código procesa refunds según la política del club. Falta prueba E2E completa.
 - **`opening_hours`**: darle UI por club (hoy se usa un default).
 
 ---
@@ -532,7 +541,8 @@ desde datos reales.
 - `extraer-cancelacion.ts` — detecta si el usuario quiere cancelar y extrae/valida el
   `booking_code` sin meter lógica en adaptadores.
 - `cancelar.ts` — motor de cancelación por código: busca reserva del bot, valida teléfono,
-  cancela suave (`status='cancelado'`) y responde con templates determinísticos.
+  aplica política de refund para reservas pagadas, cancela suave (`status='cancelado'`) y
+  responde con templates determinísticos.
 
 ### Flujo de reserva del bot (Fase 6 + hold Fase 7) — end to end
 1. El usuario busca y el bot ofrece turnos concretos por lugar. Si el usuario pide un
@@ -554,8 +564,8 @@ desde datos reales.
    desde `PLATFORM_FEE_PCT` (0 en MVP). Guarda `mp_preference_id`.
 6. El bot responde con un template determinístico. Para `none` confirma la reserva; para holds
    muestra lugar, cancha, día, hora, monto, link real de MP y avisa que tiene ~10 minutos para
-   pagar o el turno se libera. Si MP falla al crear la preferencia, el hold se cancela y el bot
-   avisa que no quedó reservado.
+   pagar o el turno se libera. En ambos casos incluye la política de cancelación/refund del club.
+   Si MP falla al crear la preferencia, el hold se cancela y el bot avisa que no quedó reservado.
 
 ### Expiración automática de holds (Fase 7 Paso 6)
 1. La lógica vive en `lib/bookings/expire-holds.ts` y no depende de Inngest: busca reservas
@@ -599,7 +609,7 @@ desde datos reales.
    el monto no coincide, NO confirma: guarda `mp_payment_id` y `payment_review_reason` para
    revisión/refund manual.
 8. Si confirma, avisa al cliente por Telegram con template determinístico: lugar, cancha,
-   día, hora, pago acreditado, `booking_code` y cómo cancelar.
+   día, hora, pago acreditado, `booking_code` y la política de cancelación/refund del club.
 
 ### Flujo de cancelación del bot (Fase 6.5) — código + teléfono
 1. El usuario pide cancelar y pasa su `booking_code` (ej. `HYS324`). Si no lo pasa, el bot
@@ -612,9 +622,19 @@ desde datos reales.
 4. Si la reserva ya estaba `cancelado`, avisa que ya estaba cancelada y no escribe nada.
 5. Si el turno ya empezó o quedó en el pasado según la timezone del club, no permite
    cancelarlo desde el bot.
-6. Si pasa las validaciones, cancela suave: actualiza `bookings.status='cancelado'` (no
-   borra la fila). Eso libera el turno porque la disponibilidad ignora bookings cancelados.
-7. La confirmación al usuario es determinística e incluye código, lugar, cancha, día y hora;
+6. Si la reserva está impaga (`payment_status='impago'`), cancela como antes: actualiza
+   `bookings.status='cancelado'` (no borra la fila). Eso libera el turno porque la disponibilidad
+   ignora bookings cancelados.
+7. Si la reserva está pagada (`payment_status='senado'` o `pagado`) y la política del club habilita
+   refund para ese momento, primero ejecuta un refund total en Mercado Pago usando el access token
+   del club desde `club_mercadopago_credentials`. Solo si MP devuelve un refund aprobado marca la
+   reserva como `cancelado`, guarda `mp_refund_id` y `refund_status='refunded'`. Si MP falla, no
+   cancela, deja `refund_status='failed'` / `payment_review_reason` para revisión manual y avisa
+   al cliente que no se pudo procesar.
+8. Si la reserva está pagada pero no corresponde refund, el bot no cancela de una: explica que no
+   habrá devolución y pide confirmación explícita (`confirmo <booking_code>`). Recién con esa
+   confirmación cancela sin refund.
+9. La confirmación al usuario es determinística e incluye código, lugar, cancha, día y hora;
    la IA no redacta datos críticos de la cancelación.
 
 ### Reglas clave
@@ -644,12 +664,14 @@ desde datos reales.
   webhook acredita, pasa a **confirmado / señado** o **confirmado / pagado**.
 - Si el hold vence sin pago, el job `expire-bot-holds` lo pasa a **cancelado / impago** y libera
   el turno. El registro queda para auditoría.
-- La política de refund se configura por club. Hoy solo se guarda y se puede evaluar con el helper
-  de decisión; el procesamiento real del refund en Mercado Pago viene en 7B.
+- La política de refund se configura por club y se aplica cuando el cliente cancela por código.
+  Refund habilitado y dentro del cutoff: reembolso total en MP antes de cancelar. Sin derecho a
+  refund: confirmación explícita antes de cancelar sin devolución.
 - La página `/pago/resultado` no confirma pagos ni cambia reservas; solo orienta al jugador
   después de volver de Mercado Pago. En éxito no afirma estado final de reserva: muestra que el
   pago fue recibido y que la confirmación llega por Telegram. La fuente de verdad es el webhook
   firmado de MP.
 - Nombre/teléfono se guardan **en el booking** (no en `customers`): la tabla global de clientes
   queda para una etapa posterior.
-- **Fase futura:** refunds automáticos / `customers` global / búsqueda por distancia (lat/lng).
+- **Fase futura:** refunds automáticos para pagos tardíos / `customers` global / búsqueda por
+  distancia (lat/lng).

@@ -175,6 +175,8 @@ export const bookings = pgTable("bookings", {
   heldUntil: timestamp("held_until", { withTimezone: true }),
   mpPreferenceId: text("mp_preference_id"),
   mpPaymentId: text("mp_payment_id").unique(),
+  mpRefundId: text("mp_refund_id").unique(),
+  refundStatus: text("refund_status"),
   paymentReviewReason: text("payment_review_reason"),
   notes: text("notes"),
   // Reservas del bot (sin login): nombre/teléfono se guardan en el propio booking

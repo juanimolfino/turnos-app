@@ -117,22 +117,20 @@ Expiración automática de holds: hecha en el Paso 6. La lógica `expireBotHolds
 vencidos del bot y está registrada en Inngest cada 5 minutos.
 Configuración de política de cancelación/refund por club: hecha en el Paso 7A. Cada club define si
 acepta devolución de seña y con cuántas horas de anticipación mínima.
+Cancelación con refund del cliente: hecha en el Paso 7B. Si la política habilita devolución, el bot
+procesa refund total en Mercado Pago antes de cancelar; si no corresponde devolución, pide
+confirmación explícita antes de cancelar sin refund.
 
 Pendiente de la fase grande: crear la cuenta/proyecto de Inngest y cargar `INNGEST_EVENT_KEY` /
 `INNGEST_SIGNING_KEY` en Vercel para activar el cron; cargar `EXPIRE_HOLDS_SECRET` si se quiere usar
 la invocación manual protegida; comisión de plataforma configurable desde superadmin (hoy 0%),
-prueba E2E y mecánica de refund en Mercado Pago (Paso 7B).
+prueba E2E completa de pagos.
 Se planifica paso a paso por ser la parte que toca dinero.
 
 ### Refund automático de pagos tardíos
 Si un pago llega aprobado después de que el hold expiró, el webhook NO confirma la reserva y deja
 `payment_review_reason='hold_expired'` para revisión manual. Pendiente: automatizar el refund en MP
 para estos casos y notificar claramente al cliente/admin cuando ocurra.
-
-### Refund por cancelación del cliente
-La política por club ya existe (`refund_enabled`, `refund_cutoff_hours`) y el helper de decisión
-está testeado. Pendiente Paso 7B: conectar esa decisión con la cancelación real y ejecutar el refund
-en Mercado Pago cuando corresponda.
 
 ### UI superadmin para marketplace fee
 La lógica de comisión ya existe vía `PLATFORM_FEE_PCT` y arranca en 0 para el MVP. Pendiente:
