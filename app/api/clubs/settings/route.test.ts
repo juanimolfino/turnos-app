@@ -36,6 +36,8 @@ const clubRow = {
   requiresPayment: false,
   paymentMode: "none",
   depositPct: 25,
+  refundEnabled: false,
+  refundCutoffHours: 24,
   paymentDeadlineHours: 24,
   apiKey: "ck_public_admin_value",
 };
@@ -120,5 +122,29 @@ describe("club settings API", () => {
     expect(mocks.updateClubCourtPrices).toHaveBeenCalledWith("club_123", [
       { courtId: "11111111-1111-4111-8111-111111111111", price: 100 },
     ]);
+  });
+
+  it("guarda la política de cancelación/refund del club", async () => {
+    mocks.updateClub.mockResolvedValue({ ...clubRow, refundEnabled: true, refundCutoffHours: 48 });
+    const { POST } = await import("./route");
+    const request = new NextRequest("https://example.com/api/clubs/settings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        refundEnabled: true,
+        refundCutoffHours: 48,
+      }),
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.updateClub).toHaveBeenCalledWith("club_123", {
+      refundEnabled: true,
+      refundCutoffHours: 48,
+    });
+    expect(body.club.refundEnabled).toBe(true);
+    expect(body.club.refundCutoffHours).toBe(48);
   });
 });

@@ -50,11 +50,14 @@ export const clubs = pgTable("clubs", {
   requiresPayment: boolean("requires_payment").default(false).notNull(),
   paymentMode: paymentModeEnum("payment_mode").default("none").notNull(),
   depositPct: integer("deposit_pct").default(25).notNull(),
+  refundEnabled: boolean("refund_enabled").default(false).notNull(),
+  refundCutoffHours: integer("refund_cutoff_hours").default(24).notNull(),
   paymentDeadlineHours: integer("payment_deadline_hours").default(24).notNull(),
   apiKey: text("api_key").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   depositPctRange: check("clubs_deposit_pct_range", sql`${table.depositPct} >= 1 AND ${table.depositPct} <= 100`),
+  refundCutoffHoursRange: check("clubs_refund_cutoff_hours_range", sql`${table.refundCutoffHours} >= 1 AND ${table.refundCutoffHours} <= 720`),
 }));
 
 export const clubMercadoPagoCredentials = pgTable("club_mercadopago_credentials", {

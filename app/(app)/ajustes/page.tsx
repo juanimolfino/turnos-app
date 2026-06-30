@@ -73,6 +73,8 @@ export default async function AjustesPage() {
     requiresPayment: club?.requiresPayment,
     paymentMode: club?.paymentMode,
     depositPct: club?.depositPct,
+    refundEnabled: club?.refundEnabled,
+    refundCutoffHours: club?.refundCutoffHours,
     paymentDeadlineHours: club?.paymentDeadlineHours,
     apiKey: club?.apiKey,
     courts: allCourts.map((court) => ({ id: court.id, name: court.name, price: court.price })),

@@ -273,6 +273,8 @@ export async function updateClub(id: string, data: {
   requiresPayment?: boolean;
   paymentMode?: PaymentMode;
   depositPct?: number;
+  refundEnabled?: boolean;
+  refundCutoffHours?: number;
   paymentDeadlineHours?: number;
 }) {
   const db = getDb();

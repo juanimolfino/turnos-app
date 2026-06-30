@@ -141,6 +141,13 @@
       "when": 1782752513789,
       "tag": "0019_wooden_living_lightning",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1782796312760,
+      "tag": "0020_worried_doctor_spectrum",
+      "breakpoints": true
     }
   ]
 }

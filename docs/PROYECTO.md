@@ -150,6 +150,15 @@ la fila de `club_mercadopago_credentials` y se fuerza `payment_mode='none'` /
 `requires_payment=false` en la misma transacción, para que ningún club quede pidiendo pago
 sin tener MP conectado.
 
+Cada club también configura su **política de cancelación/refund** desde `/ajustes`:
+- `refund_enabled=false`: default conservador; la seña no se devuelve al cancelar.
+- `refund_enabled=true`: el cliente tiene derecho a refund solo si cancela con al menos
+  `refund_cutoff_hours` horas de anticipación respecto del inicio del turno.
+
+La decisión se calcula de forma determinística en `lib/payments/refund-policy.ts`, respetando la
+timezone del club. El límite exacto cuenta como válido (`horas_hasta_turno >= refund_cutoff_hours`).
+La mecánica de ejecutar el refund contra Mercado Pago todavía no está implementada; queda para 7B.
+
 El hold ya está introducido en el bot para clubes con `payment_mode='partial'` o `full`:
 el jugador confirma → se re-chequea disponibilidad → se crea una reserva `status='pendiente'`
 con `held_until = now() + 10 minutos`, `payment_status='impago'` y el monto a cobrar en
@@ -321,7 +330,8 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
 ### `clubs` 🤖 — cada lugar/cancha
 `id` · `name` · `timezone` · `plan` · `address` · `city` · `neighborhood` (barrio/zona) ·
 `phone` · `requires_payment` (legacy/sync) · `payment_mode` (`none`/`partial`/`full`) ·
-`deposit_pct` · `payment_deadline_hours` · `api_key` (auth del bot) · `created_at`
+`deposit_pct` · `refund_enabled` · `refund_cutoff_hours` · `payment_deadline_hours` ·
+`api_key` (auth del bot) · `created_at`
 
 ### `club_mercadopago_credentials` — credenciales OAuth de MP por club
 `club_id` · `mercadopago_user_id` · `access_token` · `refresh_token` · `public_key` ·
@@ -440,7 +450,7 @@ GET /api/public/availability?date=YYYY-MM-DD[&api_key=...][&city=...][&start=HH:
 - `POST /api/auth/ensure-profile` — crea perfil para superadmin
 - `GET/POST/PATCH /api/courts` — canchas
 - `POST/DELETE /api/agenda/block` — bloques de agenda
-- `GET/POST /api/clubs/settings` — datos del club, precio/modo de pago, genera `api_key`
+- `GET/POST /api/clubs/settings` — datos del club, precio/modo de pago, política de refund, genera `api_key`
 - `POST /api/mercadopago/oauth/disconnect` — desvincula MP del club y fuerza pago online apagado
 - `GET /api/superadmin/clubs` — listado para el panel
 
@@ -634,6 +644,8 @@ desde datos reales.
   webhook acredita, pasa a **confirmado / señado** o **confirmado / pagado**.
 - Si el hold vence sin pago, el job `expire-bot-holds` lo pasa a **cancelado / impago** y libera
   el turno. El registro queda para auditoría.
+- La política de refund se configura por club. Hoy solo se guarda y se puede evaluar con el helper
+  de decisión; el procesamiento real del refund en Mercado Pago viene en 7B.
 - La página `/pago/resultado` no confirma pagos ni cambia reservas; solo orienta al jugador
   después de volver de Mercado Pago. En éxito no afirma estado final de reserva: muestra que el
   pago fue recibido y que la confirmación llega por Telegram. La fuente de verdad es el webhook

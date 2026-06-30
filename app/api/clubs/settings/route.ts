@@ -18,6 +18,8 @@ const schema = z.object({
   requiresPayment: z.boolean().optional(),
   paymentMode: z.enum(["none", "partial", "full"]).optional(),
   depositPct: z.number().int().min(1).max(100).optional(),
+  refundEnabled: z.boolean().optional(),
+  refundCutoffHours: z.number().int().min(1).max(720).optional(),
   paymentDeadlineHours: z.number().int().min(1).max(168).optional(),
   courtPrices: z.array(z.object({
     courtId: z.string().uuid(),
@@ -38,6 +40,8 @@ function publicClubSettings(club: Awaited<ReturnType<typeof getClubById>>) {
     requiresPayment: club.requiresPayment,
     paymentMode: club.paymentMode,
     depositPct: club.depositPct,
+    refundEnabled: club.refundEnabled,
+    refundCutoffHours: club.refundCutoffHours,
     paymentDeadlineHours: club.paymentDeadlineHours,
     apiKey: club.apiKey,
   };

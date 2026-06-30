@@ -46,6 +46,8 @@ interface ClubSettings {
   requiresPayment?: boolean;
   paymentMode?: PaymentMode;
   depositPct?: number;
+  refundEnabled?: boolean;
+  refundCutoffHours?: number;
   paymentDeadlineHours?: number;
   apiKey?: string | null;
   courts?: { id: string; name: string; price: number }[];
@@ -96,6 +98,8 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
   const [phone, setPhone] = useState(initial.phone ?? "");
   const [paymentMode, setPaymentMode] = useState<PaymentMode>(initial.paymentMode ?? (initial.requiresPayment ? "full" : "none"));
   const [depositPct, setDepositPct] = useState(String(initial.depositPct ?? 25));
+  const [refundEnabled, setRefundEnabled] = useState(Boolean(initial.refundEnabled));
+  const [refundCutoffHours, setRefundCutoffHours] = useState(String(initial.refundCutoffHours ?? 24));
   const [courtPrices, setCourtPrices] = useState(() => (initial.courts ?? []).map((court) => ({ ...court, price: String(court.price ?? 0) })));
   const [deadlineHours, setDeadlineHours] = useState(String(initial.paymentDeadlineHours ?? 24));
   const [apiKey, setApiKey] = useState(initial.apiKey ?? "");
@@ -123,6 +127,8 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
           phone: phone || null,
           paymentMode,
           depositPct: parseInt(depositPct) || 25,
+          refundEnabled,
+          refundCutoffHours: parseInt(refundCutoffHours) || 24,
           paymentDeadlineHours: parseInt(deadlineHours) || 24,
           courtPrices: courtPrices.map((court) => ({
             courtId: court.id,
@@ -248,6 +254,46 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
         {paymentMode !== "none" && (
           <Field label="Horas límite para pagar" value={deadlineHours} onChange={setDeadlineHours} placeholder="24" type="number" />
         )}
+
+        <div style={{ borderTop: "1px solid #E7E1D6", paddingTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#6B6660", letterSpacing: ".04em", textTransform: "uppercase" }}>Política de cancelación</div>
+            <div style={{ fontSize: 12.5, color: "#928B7E", marginTop: 4 }}>
+              Define si el club devuelve la seña cuando un cliente cancela con anticipación.
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 12, flexDirection: isMobile ? "column" : "row" }}>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: "#6B6660", letterSpacing: ".04em" }}>¿ACEPTA DEVOLUCIÓN?</label>
+              <select
+                value={refundEnabled ? "yes" : "no"}
+                onChange={(e) => setRefundEnabled(e.target.value === "yes")}
+                style={{
+                  padding: "10px 12px", borderRadius: 9, border: "1px solid #E0DACE",
+                  fontSize: 13.5, background: "#FCFBF8", color: "#221F1B", outline: "none", fontFamily: "inherit",
+                }}
+              >
+                <option value="no">No, la seña no se devuelve</option>
+                <option value="yes">Sí, con anticipación mínima</option>
+              </select>
+            </div>
+            {refundEnabled && (
+              <div style={{ width: isMobile ? "100%" : 220 }}>
+                <Field label="HORAS DE ANTICIPACIÓN" value={refundCutoffHours} onChange={setRefundCutoffHours} placeholder="24" type="number" />
+              </div>
+            )}
+          </div>
+          {!refundEnabled && (
+            <div style={{ background: "#F4F1EA", border: "1px solid #E0DACE", borderRadius: 10, padding: "10px 12px", fontSize: 13, color: "#6B6660" }}>
+              Los clientes no podrán recuperar la seña al cancelar. La seña funciona como compromiso de asistencia.
+            </div>
+          )}
+          {refundEnabled && (
+            <div style={{ background: "#E9F3EA", border: "1px solid #CFE6D2", borderRadius: 10, padding: "10px 12px", fontSize: 13, color: "#2F7D4E" }}>
+              Estado actual: se devuelve la seña si cancelan con al menos {parseInt(refundCutoffHours) || 24} horas de anticipación.
+            </div>
+          )}
+        </div>
 
         <div style={{ border: "1px solid #E0DACE", background: "#FFFFFF", borderRadius: 12, padding: 14, display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", gap: 12, alignItems: isMobile ? "stretch" : "center" }}>
           <div>
