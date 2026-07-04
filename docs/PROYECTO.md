@@ -246,21 +246,27 @@ Variables de entorno en `.env.local` (Supabase, DATABASE_URL, Resend, MercadoPag
 ### Flujo de alta de un admin (invitación)
 1. El **superadmin** invita un email desde su panel (`/superadmin/admins`).
    - `POST /api/admin/invite` → usa `inviteUserByEmail` de Supabase.
-   - Si el email ya existe en Auth **sin confirmar** (invitación vieja), se borra y se
-     reinvita limpio. Si ya está confirmado, se rechaza (409).
-   - El nombre de la cancha es **opcional** acá (lo puede poner el admin después).
+   - Si el email ya existe en Auth pero **no tiene perfil interno** en `public.users`
+     (link vencido, onboarding interrumpido o sesión perdida antes de terminar), se considera
+     invitación incompleta: se limpia Auth/DB y se reinvita limpio.
+   - Si el email ya tiene perfil interno en `public.users`, es una cuenta activa y se rechaza (409).
+   - El nombre de la cancha puede precargarse como metadata de invitación, pero **no se crea el
+     club todavía**. El club se crea recién cuando el admin completa `/set-password`.
 2. El invitado recibe un mail y entra a `/invite/callback` (componente cliente que
    maneja los 3 formatos de Supabase: PKCE `?code=`, OTP `?token_hash=`, e implícito
    `#access_token=`). Autentica y redirige a `/set-password`.
-3. En **`/set-password`** el admin crea su **contraseña** y el **nombre de su cancha**.
-   - Recién acá se crea el registro en la tabla `users` (`POST /api/auth/onboarding`)
+3. En **`/set-password`** el admin crea su **contraseña** y confirma el **nombre de su cancha**.
+   - La contraseña se guarda server-side en `POST /api/auth/set-password` usando la sesión de la
+     invitación, para evitar errores de cliente tipo `Auth session missing`.
+   - Recién después se crea el registro en la tabla `users` (`POST /api/auth/onboarding`)
      y se crea/asocia el `club`. **Un usuario "existe" en la DB solo cuando completa
      su cuenta**, no al hacer click en el mail.
 4. Queda logueado y entra al panel del club.
 
 > Archivos clave: `app/api/admin/invite/route.ts`, `app/(auth)/invite/callback/page.tsx`,
 > `app/(auth)/set-password/`, `app/api/auth/onboarding/route.ts`,
-> `lib/db/queries.ts` (`ensureUserProfile`, `setOnboardingClubName`, `deleteDbUserByEmail`).
+> `app/api/auth/set-password/route.ts`,
+> `lib/db/queries.ts` (`ensureUserProfile`, `setOnboardingClubName`, `cleanupIncompleteInvite`).
 
 ---
 

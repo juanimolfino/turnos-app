@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 interface Props {
   askClubName?: boolean;
@@ -35,11 +34,15 @@ export function SetPasswordForm({ askClubName = false, initialClubName = "" }: P
     setLoading(true);
     setMessage(null);
 
-    const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase.auth.updateUser({ password });
-    if (error) {
+    const passwordRes = await fetch("/api/auth/set-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    if (!passwordRes.ok) {
+      const data = await passwordRes.json().catch(() => ({}));
       setLoading(false);
-      setMessage(error.message);
+      setMessage(data.error ?? "No se pudo guardar la contraseña. Pedí que te reenvíen la invitación.");
       return;
     }
 
