@@ -245,7 +245,11 @@ Variables de entorno en `.env.local` (Supabase, DATABASE_URL, Resend, MercadoPag
 
 ### Flujo de alta de un admin (invitación)
 1. El **superadmin** invita un email desde su panel (`/superadmin/admins`).
-   - `POST /api/admin/invite` → usa `inviteUserByEmail` de Supabase.
+   - `POST /api/admin/invite` → usa `generateLink(type='invite')` de Supabase para crear el
+     link/token y manda el email con Resend. No se usa el envío de email de Supabase para evitar
+     rate limits de invitaciones.
+   - Si Resend no está configurado o falla, el endpoint no pierde la invitación: devuelve el
+     `inviteLink` y el panel lo muestra para copiar/enviar manualmente.
    - Si el email ya existe en Auth pero **no tiene perfil interno** en `public.users`
      (link vencido, onboarding interrumpido o sesión perdida antes de terminar), se considera
      invitación incompleta: se limpia Auth/DB y se reinvita limpio.
@@ -266,6 +270,7 @@ Variables de entorno en `.env.local` (Supabase, DATABASE_URL, Resend, MercadoPag
 > Archivos clave: `app/api/admin/invite/route.ts`, `app/(auth)/invite/callback/page.tsx`,
 > `app/(auth)/set-password/`, `app/api/auth/onboarding/route.ts`,
 > `app/api/auth/set-password/route.ts`,
+> `lib/email/send.ts` (`sendAdminInviteEmail`),
 > `lib/db/queries.ts` (`ensureUserProfile`, `setOnboardingClubName`, `cleanupIncompleteInvite`).
 
 ---

@@ -1,3 +1,4 @@
+import { AdminInviteEmail } from "@/emails/admin-invite";
 import { JobReadyEmail } from "@/emails/job-ready";
 import { PurchaseConfirmationEmail } from "@/emails/purchase-confirmation";
 import { WelcomeEmail } from "@/emails/welcome";
@@ -50,4 +51,26 @@ export async function sendJobReadyEmail(email: string, resultUrl: string) {
       react: JobReadyEmail({ resultUrl })
     })
   );
+}
+
+export async function sendAdminInviteEmail(input: {
+  email: string;
+  inviteLink: string;
+  role: "admin" | "superadmin";
+  venueName?: string;
+}) {
+  if (!canSendEmail()) {
+    throw new Error("RESEND_API_KEY y RESEND_FROM_EMAIL son requeridos para enviar invitaciones.");
+  }
+
+  await getResend().emails.send({
+    from: process.env.RESEND_FROM_EMAIL!,
+    to: input.email,
+    subject: "Invitación a Cancha",
+    react: AdminInviteEmail({
+      inviteLink: input.inviteLink,
+      role: input.role,
+      venueName: input.venueName,
+    }),
+  });
 }

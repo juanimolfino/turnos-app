@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { cleanupIncompleteInvite, getUserByAuthId, getUserByEmail } from "@/lib/db/queries";
+import { sendAdminInviteEmail } from "@/lib/email/send";
 
 const schema = z.object({
   email: z.string().email(),
@@ -61,17 +62,46 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const { error } = await adminClient.auth.admin.inviteUserByEmail(normalizedEmail, {
-    redirectTo: `${origin}/invite/callback`,
-    data: {
-      invited_role: role,
-      ...(venueName ? { venue_name: venueName } : {}),
-    }
+  const { data: linkData, error } = await adminClient.auth.admin.generateLink({
+    type: "invite",
+    email: normalizedEmail,
+    options: {
+      redirectTo: `${origin}/invite/callback`,
+      data: {
+        invited_role: role,
+        ...(venueName ? { venue_name: venueName } : {}),
+      },
+    },
   });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
+  const inviteLink = linkData.properties?.action_link;
+  if (!inviteLink || !linkData.user?.id) {
+    return NextResponse.json({ error: "No se pudo generar el link de invitación." }, { status: 500 });
+  }
 
-  return NextResponse.json({ ok: true });
+  try {
+    await sendAdminInviteEmail({
+      email: normalizedEmail,
+      inviteLink,
+      role,
+      venueName,
+    });
+  } catch (sendErr) {
+    const message = sendErr instanceof Error ? sendErr.message : "No se pudo enviar la invitación.";
+    console.warn("[admin invite] no se pudo enviar email automático; devolviendo link manual", {
+      email: normalizedEmail,
+      error: message,
+    });
+    return NextResponse.json({
+      ok: true,
+      emailSent: false,
+      inviteLink,
+      warning: message,
+    });
+  }
+
+  return NextResponse.json({ ok: true, emailSent: true });
 }

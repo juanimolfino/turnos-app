@@ -115,7 +115,7 @@ function InviteForm({ clubs, onSuccess }: { clubs: Club[]; onSuccess: () => void
   const [role, setRole] = useState<"admin" | "superadmin">("admin");
   const [venueName, setVenueName] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const [message, setMessage] = useState<{ text: string; ok: boolean; inviteLink?: string } | null>(null);
   const isMobile = useIsMobile();
 
   async function handleSubmit(e: React.FormEvent) {
@@ -130,6 +130,14 @@ function InviteForm({ clubs, onSuccess }: { clubs: Club[]; onSuccess: () => void
     const data = await res.json();
     setLoading(false);
     if (res.ok) {
+      if (data.emailSent === false && data.inviteLink) {
+        setMessage({
+          text: "No se pudo enviar el email automático. Copiá este link y mandáselo al usuario.",
+          ok: true,
+          inviteLink: data.inviteLink,
+        });
+        return;
+      }
       setMessage({ text: `Invitación enviada a ${email}`, ok: true });
       setEmail(""); setVenueName("");
       setTimeout(onSuccess, 1200);
@@ -206,7 +214,27 @@ function InviteForm({ clubs, onSuccess }: { clubs: Club[]; onSuccess: () => void
       </div>
 
       {message && (
-        <p style={{ fontSize: 13.5, color: message.ok ? "#2F7D4E" : "#B23A28", margin: 0 }}>{message.text}</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <p style={{ fontSize: 13.5, color: message.ok ? "#2F7D4E" : "#B23A28", margin: 0 }}>{message.text}</p>
+          {message.inviteLink && (
+            <input
+              readOnly
+              value={message.inviteLink}
+              onFocus={(event) => event.currentTarget.select()}
+              style={{
+                width: "100%",
+                border: "1px solid #CFE6D2",
+                background: "#F7FBF7",
+                borderRadius: 9,
+                padding: "9px 11px",
+                fontSize: 12,
+                color: "#2F7D4E",
+                fontFamily: "monospace",
+                boxSizing: "border-box",
+              }}
+            />
+          )}
+        </div>
       )}
     </form>
   );

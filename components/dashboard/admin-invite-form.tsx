@@ -9,7 +9,7 @@ export function AdminInviteForm({ onSuccess }: { onSuccess?: () => void }) {
   const [role, setRole] = useState<"admin" | "superadmin">("admin");
   const [venueName, setVenueName] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const [message, setMessage] = useState<{ text: string; ok: boolean; inviteLink?: string } | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,6 +26,14 @@ export function AdminInviteForm({ onSuccess }: { onSuccess?: () => void }) {
     setLoading(false);
 
     if (res.ok) {
+      if (data.emailSent === false && data.inviteLink) {
+        setMessage({
+          text: "No se pudo enviar el email automático. Copiá este link y mandáselo al usuario.",
+          ok: true,
+          inviteLink: data.inviteLink,
+        });
+        return;
+      }
       setMessage({ text: `Invitación enviada a ${email}`, ok: true });
       setEmail("");
       setVenueName("");
@@ -80,9 +88,18 @@ export function AdminInviteForm({ onSuccess }: { onSuccess?: () => void }) {
         {loading ? "Enviando..." : "Enviar invitación"}
       </Button>
       {message && (
-        <p className={`text-sm ${message.ok ? "text-green-600" : "text-destructive"}`}>
-          {message.text}
-        </p>
+        <div className="space-y-2">
+          <p className={`text-sm ${message.ok ? "text-green-600" : "text-destructive"}`}>
+            {message.text}
+          </p>
+          {message.inviteLink && (
+            <Input
+              readOnly
+              value={message.inviteLink}
+              onFocus={(event) => event.currentTarget.select()}
+            />
+          )}
+        </div>
       )}
     </form>
   );
