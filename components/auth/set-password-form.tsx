@@ -2,13 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { createBrowserClient } from "@supabase/ssr";
 
 interface Props {
   askClubName?: boolean;
   initialClubName?: string;
+  inviteToken?: string;
+  inviteEmail?: string;
 }
 
-export function SetPasswordForm({ askClubName = false, initialClubName = "" }: Props) {
+export function SetPasswordForm({ askClubName = false, initialClubName = "", inviteToken, inviteEmail }: Props) {
   const [clubName, setClubName] = useState(initialClubName);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -33,6 +36,42 @@ export function SetPasswordForm({ askClubName = false, initialClubName = "" }: P
 
     setLoading(true);
     setMessage(null);
+
+    if (inviteToken) {
+      const acceptRes = await fetch("/api/auth/accept-invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: inviteToken,
+          password,
+          clubName: askClubName ? clubName.trim() : undefined,
+        }),
+      });
+      const acceptData = await acceptRes.json().catch(() => ({}));
+      if (!acceptRes.ok) {
+        setLoading(false);
+        setMessage(acceptData.error ?? "No se pudo aceptar la invitación. Pedí que te la reenvíen.");
+        return;
+      }
+
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: acceptData.email,
+        password,
+      });
+      if (signInError) {
+        setLoading(false);
+        setMessage("Tu cuenta fue creada. Entrá desde login con el email y la contraseña que acabás de elegir.");
+        return;
+      }
+
+      router.push(acceptData.redirectTo ?? "/dashboard");
+      router.refresh();
+      return;
+    }
 
     const passwordRes = await fetch("/api/auth/set-password", {
       method: "POST",
@@ -106,6 +145,12 @@ export function SetPasswordForm({ askClubName = false, initialClubName = "" }: P
           {askClubName
             ? "Poné el nombre de tu cancha y creá tu contraseña para empezar a gestionar tus turnos."
             : "Creá tu contraseña para acceder al sistema."}
+          {inviteEmail ? (
+            <>
+              <br />
+              <span style={{ fontSize: 13, color: "#928B7E" }}>{inviteEmail}</span>
+            </>
+          ) : null}
         </p>
 
         <form

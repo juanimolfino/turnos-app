@@ -28,7 +28,7 @@ export function AdminInviteForm({ onSuccess }: { onSuccess?: () => void }) {
     if (res.ok) {
       if (data.emailSent === false && data.inviteLink) {
         setMessage({
-          text: "No se pudo enviar el email automático. Copiá este link y mandáselo al usuario.",
+          text: "La invitación se creó, pero no pudimos enviar el email automático. Copiá este link y mandáselo al usuario.",
           ok: true,
           inviteLink: data.inviteLink,
         });
@@ -93,11 +93,19 @@ export function AdminInviteForm({ onSuccess }: { onSuccess?: () => void }) {
             {message.text}
           </p>
           {message.inviteLink && (
-            <Input
-              readOnly
-              value={message.inviteLink}
-              onFocus={(event) => event.currentTarget.select()}
-            />
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                value={message.inviteLink}
+                onFocus={(event) => event.currentTarget.select()}
+              />
+              <Button
+                type="button"
+                onClick={() => navigator.clipboard?.writeText(message.inviteLink ?? "")}
+              >
+                Copiar
+              </Button>
+            </div>
           )}
         </div>
       )}

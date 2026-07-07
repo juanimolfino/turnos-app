@@ -4,6 +4,11 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { cleanupIncompleteInvite, getUserByAuthId, getUserByEmail } from "@/lib/db/queries";
 import { sendAdminInviteEmail } from "@/lib/email/send";
+import {
+  buildAdminInviteUrl,
+  createAdminInvitation,
+  normalizeInviteEmail,
+} from "@/lib/auth/admin-invitations";
 
 const schema = z.object({
   email: z.string().email(),
@@ -17,8 +22,13 @@ export async function POST(request: NextRequest) {
 
   if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
-  const profile = await getUserByAuthId(user.id);
+  const profile = (await getUserByAuthId(user.id)) ?? (user.email ? await getUserByEmail(user.email) : null);
   if (!profile || profile.role !== "superadmin") {
+    console.warn("[admin invite] intento sin permisos", {
+      authUserId: user.id,
+      email: user.email ?? null,
+      profileRole: profile?.role ?? null,
+    });
     return NextResponse.json({ error: "Sin permisos" }, { status: 403 });
   }
 
@@ -29,7 +39,7 @@ export async function POST(request: NextRequest) {
   }
 
   const { email, role, venueName } = parsed.data;
-  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedEmail = normalizeInviteEmail(email);
 
   const origin = request.headers.get("origin") ?? process.env.NEXT_PUBLIC_APP_URL;
   const adminClient = getSupabaseAdmin();
@@ -62,25 +72,13 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const { data: linkData, error } = await adminClient.auth.admin.generateLink({
-    type: "invite",
+  const { token } = await createAdminInvitation({
     email: normalizedEmail,
-    options: {
-      redirectTo: `${origin}/invite/callback`,
-      data: {
-        invited_role: role,
-        ...(venueName ? { venue_name: venueName } : {}),
-      },
-    },
+    role,
+    venueName,
+    invitedByUserId: profile.id,
   });
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
-  }
-  const inviteLink = linkData.properties?.action_link;
-  if (!inviteLink || !linkData.user?.id) {
-    return NextResponse.json({ error: "No se pudo generar el link de invitación." }, { status: 500 });
-  }
+  const inviteLink = buildAdminInviteUrl(origin ?? "http://localhost:3000", token);
 
   try {
     await sendAdminInviteEmail({

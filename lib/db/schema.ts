@@ -2,6 +2,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -215,6 +216,25 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
 });
 
+export const adminInvitations = pgTable("admin_invitations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  email: text("email").notNull(),
+  role: roleEnum("role").notNull(),
+  venueName: text("venue_name"),
+  tokenHash: text("token_hash").notNull().unique(),
+  invitedByUserId: uuid("invited_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  emailIdx: index("admin_invitations_email_idx").on(table.email),
+  pendingEmailIdx: index("admin_invitations_pending_email_idx")
+    .on(table.email)
+    .where(sql`${table.acceptedAt} IS NULL AND ${table.revokedAt} IS NULL`),
+}));
+
 export const credits = pgTable("credits", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull().unique(),
@@ -277,7 +297,12 @@ export const userRelations = relations(users, ({ one, many }) => ({
   credits: one(credits),
   jobs: many(jobs),
   subscriptions: many(subscriptions),
-  transactions: many(transactions)
+  transactions: many(transactions),
+  sentInvitations: many(adminInvitations),
+}));
+
+export const adminInvitationRelations = relations(adminInvitations, ({ one }) => ({
+  invitedBy: one(users, { fields: [adminInvitations.invitedByUserId], references: [users.id] }),
 }));
 
 export const clubRelations = relations(clubs, ({ one, many }) => ({
@@ -316,6 +341,7 @@ export const bookingRelations = relations(bookings, ({ one }) => ({
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 export type User = typeof users.$inferSelect;
+export type AdminInvitation = typeof adminInvitations.$inferSelect;
 export type Job = typeof jobs.$inferSelect;
 export type JobType = typeof jobTypeEnum.enumValues[number];
 export type JobStatus = typeof jobStatusEnum.enumValues[number];

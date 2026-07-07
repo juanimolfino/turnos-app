@@ -132,7 +132,7 @@ function InviteForm({ clubs, onSuccess }: { clubs: Club[]; onSuccess: () => void
     if (res.ok) {
       if (data.emailSent === false && data.inviteLink) {
         setMessage({
-          text: "No se pudo enviar el email automático. Copiá este link y mandáselo al usuario.",
+          text: "La invitación se creó, pero no pudimos enviar el email automático. Copiá este link y mandáselo al usuario.",
           ok: true,
           inviteLink: data.inviteLink,
         });
@@ -217,22 +217,42 @@ function InviteForm({ clubs, onSuccess }: { clubs: Club[]; onSuccess: () => void
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <p style={{ fontSize: 13.5, color: message.ok ? "#2F7D4E" : "#B23A28", margin: 0 }}>{message.text}</p>
           {message.inviteLink && (
-            <input
-              readOnly
-              value={message.inviteLink}
-              onFocus={(event) => event.currentTarget.select()}
-              style={{
-                width: "100%",
-                border: "1px solid #CFE6D2",
-                background: "#F7FBF7",
-                borderRadius: 9,
-                padding: "9px 11px",
-                fontSize: 12,
-                color: "#2F7D4E",
-                fontFamily: "monospace",
-                boxSizing: "border-box",
-              }}
-            />
+            <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+              <input
+                readOnly
+                value={message.inviteLink}
+                onFocus={(event) => event.currentTarget.select()}
+                style={{
+                  width: "100%",
+                  minWidth: 0,
+                  border: "1px solid #CFE6D2",
+                  background: "#F7FBF7",
+                  borderRadius: 9,
+                  padding: "9px 11px",
+                  fontSize: 12,
+                  color: "#2F7D4E",
+                  fontFamily: "monospace",
+                  boxSizing: "border-box",
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => navigator.clipboard?.writeText(message.inviteLink ?? "")}
+                style={{
+                  border: "1px solid #CFE6D2",
+                  background: "#FFFFFF",
+                  color: "#2F7D4E",
+                  borderRadius: 9,
+                  padding: "0 12px",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                Copiar
+              </button>
+            </div>
           )}
         </div>
       )}

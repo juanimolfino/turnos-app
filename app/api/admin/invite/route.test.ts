@@ -3,8 +3,8 @@ import { NextRequest } from "next/server";
 
 const mocks = vi.hoisted(() => ({
   cleanupIncompleteInvite: vi.fn(),
+  createAdminInvitation: vi.fn(),
   deleteUser: vi.fn(),
-  generateLink: vi.fn(),
   getUser: vi.fn(),
   getUserByAuthId: vi.fn(),
   getUserByEmail: vi.fn(),
@@ -24,7 +24,6 @@ vi.mock("@/lib/supabase/admin", () => ({
       admin: {
         listUsers: mocks.listUsers,
         deleteUser: mocks.deleteUser,
-        generateLink: mocks.generateLink,
       },
     },
   }),
@@ -32,6 +31,12 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/email/send", () => ({
   sendAdminInviteEmail: mocks.sendAdminInviteEmail,
+}));
+
+vi.mock("@/lib/auth/admin-invitations", () => ({
+  buildAdminInviteUrl: (origin: string, token: string) => `${origin}/invite/accept?token=${token}`,
+  createAdminInvitation: mocks.createAdminInvitation,
+  normalizeInviteEmail: (email: string) => email.trim().toLowerCase(),
 }));
 
 vi.mock("@/lib/db/queries", () => ({
@@ -50,23 +55,17 @@ function inviteRequest(body: Record<string, unknown>) {
 
 describe("POST /api/admin/invite", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mocks.getUser.mockResolvedValue({ data: { user: { id: "auth-super" } } });
     mocks.getUserByAuthId.mockResolvedValue({ id: "u1", role: "superadmin" });
     mocks.getUserByEmail.mockResolvedValue(null);
     mocks.listUsers.mockResolvedValue({ data: { users: [] } });
     mocks.deleteUser.mockResolvedValue({ error: null });
-    mocks.generateLink.mockResolvedValue({
-      data: {
-        properties: { action_link: "https://supabase.example/auth/v1/verify?token=abc&type=invite" },
-        user: { id: "auth-new", user_metadata: {} },
-      },
-      error: null,
-    });
+    mocks.createAdminInvitation.mockResolvedValue({ token: "invite-token" });
     mocks.sendAdminInviteEmail.mockResolvedValue(undefined);
   });
 
-  it("invita admin sin precrear club; el club se crea al completar onboarding", async () => {
+  it("invita admin sin precrear Auth/club; el club se crea al aceptar la invitación", async () => {
     const { POST } = await import("./route");
 
     const response = await POST(inviteRequest({
@@ -76,21 +75,15 @@ describe("POST /api/admin/invite", () => {
     }));
 
     expect(response.status).toBe(200);
-    expect(mocks.generateLink).toHaveBeenCalledWith({
-      type: "invite",
+    expect(mocks.createAdminInvitation).toHaveBeenCalledWith({
       email: "agos@example.com",
-      options: {
-        redirectTo: "https://example.com/invite/callback",
-        data: {
-          invited_role: "admin",
-          venue_name: "Canchita de Agos",
-        },
-      },
+      role: "admin",
+      venueName: "Canchita de Agos",
+      invitedByUserId: "u1",
     });
-    expect(JSON.stringify(mocks.generateLink.mock.calls[0][0])).not.toContain("club_id");
     expect(mocks.sendAdminInviteEmail).toHaveBeenCalledWith({
       email: "agos@example.com",
-      inviteLink: "https://supabase.example/auth/v1/verify?token=abc&type=invite",
+      inviteLink: "https://example.com/invite/accept?token=invite-token",
       role: "admin",
       venueName: "Canchita de Agos",
     });
@@ -118,8 +111,28 @@ describe("POST /api/admin/invite", () => {
     expect(response.status).toBe(200);
     expect(mocks.cleanupIncompleteInvite).toHaveBeenCalledWith("agos@example.com", "club-orphan");
     expect(mocks.deleteUser).toHaveBeenCalledWith("auth-incomplete");
-    expect(mocks.generateLink).toHaveBeenCalled();
+    expect(mocks.createAdminInvitation).toHaveBeenCalled();
     expect(mocks.sendAdminInviteEmail).toHaveBeenCalled();
+  });
+
+  it("si el auth_user_id no matchea pero el email es superadmin activo, permite invitar", async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: { id: "auth-rotated", email: "kevin@example.com" } } });
+    mocks.getUserByAuthId.mockResolvedValue(null);
+    mocks.getUserByEmail
+      .mockResolvedValueOnce({ id: "u-super", email: "kevin@example.com", role: "superadmin" })
+      .mockResolvedValueOnce(null);
+    const { POST } = await import("./route");
+
+    const response = await POST(inviteRequest({
+      email: "agos@example.com",
+      role: "admin",
+      venueName: "Canchita de Agos",
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.createAdminInvitation).toHaveBeenCalledWith(expect.objectContaining({
+      invitedByUserId: "u-super",
+    }));
   });
 
   it("si existe Auth y perfil interno, bloquea como cuenta activa", async () => {
@@ -138,11 +151,11 @@ describe("POST /api/admin/invite", () => {
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({ error: "Ese email ya tiene una cuenta activa." });
     expect(mocks.deleteUser).not.toHaveBeenCalled();
-    expect(mocks.generateLink).not.toHaveBeenCalled();
+    expect(mocks.createAdminInvitation).not.toHaveBeenCalled();
     expect(mocks.sendAdminInviteEmail).not.toHaveBeenCalled();
   });
 
-  it("si Resend falla, devuelve el link manual sin borrar el usuario generado", async () => {
+  it("si Resend falla, devuelve el link manual sin borrar la invitación generada", async () => {
     mocks.sendAdminInviteEmail.mockRejectedValue(new Error("Resend down"));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { POST } = await import("./route");
@@ -157,7 +170,7 @@ describe("POST /api/admin/invite", () => {
     expect(await response.json()).toEqual({
       ok: true,
       emailSent: false,
-      inviteLink: "https://supabase.example/auth/v1/verify?token=abc&type=invite",
+      inviteLink: "https://example.com/invite/accept?token=invite-token",
       warning: "Resend down",
     });
     expect(mocks.deleteUser).not.toHaveBeenCalled();

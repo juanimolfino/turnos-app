@@ -234,6 +234,9 @@ ya previsto en el diseño de pagos). El diseño no cierra ninguno de los dos cam
 - Zona horaria de referencia: `America/Argentina/Buenos_Aires`
 
 Variables de entorno en `.env.local` (Supabase, DATABASE_URL, Resend, MercadoPago, etc.).
+Para invitaciones automáticas en producción, Vercel debe tener `RESEND_API_KEY` y
+`RESEND_FROM_EMAIL`; opcionalmente `ADMIN_INVITE_TTL_HOURS` define cuántas horas dura el link
+(default 168).
 
 ---
 
@@ -245,31 +248,34 @@ Variables de entorno en `.env.local` (Supabase, DATABASE_URL, Resend, MercadoPag
 
 ### Flujo de alta de un admin (invitación)
 1. El **superadmin** invita un email desde su panel (`/superadmin/admins`).
-   - `POST /api/admin/invite` → usa `generateLink(type='invite')` de Supabase para crear el
-     link/token y manda el email con Resend. No se usa el envío de email de Supabase para evitar
-     rate limits de invitaciones.
+   - `POST /api/admin/invite` → crea una invitación propia en `admin_invitations`, guarda solo
+     el hash del token y manda un link `/invite/accept?token=...` con Resend. No se usa el envío
+     de email de Supabase ni los links OTP de Supabase para evitar rate limits y links inválidos
+     por reintentos.
+   - Reinvitar el mismo email revoca las invitaciones pendientes anteriores y genera un token nuevo.
+     Si había un usuario Auth huérfano sin perfil interno, se limpia para que el alta pueda arrancar
+     de cero.
    - Si Resend no está configurado o falla, el endpoint no pierde la invitación: devuelve el
      `inviteLink` y el panel lo muestra para copiar/enviar manualmente.
-   - Si el email ya existe en Auth pero **no tiene perfil interno** en `public.users`
-     (link vencido, onboarding interrumpido o sesión perdida antes de terminar), se considera
-     invitación incompleta: se limpia Auth/DB y se reinvita limpio.
    - Si el email ya tiene perfil interno en `public.users`, es una cuenta activa y se rechaza (409).
    - El nombre de la cancha puede precargarse como metadata de invitación, pero **no se crea el
-     club todavía**. El club se crea recién cuando el admin completa `/set-password`.
-2. El invitado recibe un mail y entra a `/invite/callback` (componente cliente que
-   maneja los 3 formatos de Supabase: PKCE `?code=`, OTP `?token_hash=`, e implícito
-   `#access_token=`). Autentica y redirige a `/set-password`.
+     club ni el usuario Auth todavía**. Se crean recién cuando el admin completa `/set-password`.
+   - Las invitaciones vencen por defecto a los 7 días (`ADMIN_INVITE_TTL_HOURS=168`, configurable).
+2. El invitado recibe un mail y entra a `/invite/accept?token=...`. La página valida server-side que
+   la invitación exista, no esté revocada/aceptada y no haya vencido.
 3. En **`/set-password`** el admin crea su **contraseña** y confirma el **nombre de su cancha**.
-   - La contraseña se guarda server-side en `POST /api/auth/set-password` usando la sesión de la
-     invitación, para evitar errores de cliente tipo `Auth session missing`.
-   - Recién después se crea el registro en la tabla `users` (`POST /api/auth/onboarding`)
-     y se crea/asocia el `club`. **Un usuario "existe" en la DB solo cuando completa
-     su cuenta**, no al hacer click en el mail.
+   - Con invitación nueva, `POST /api/auth/accept-invite` valida el token, crea/actualiza el usuario
+     en Supabase Auth con service role, crea `public.users`, crea el `club` si el rol es admin y
+     marca la invitación como aceptada. **Un usuario "existe" en la DB solo cuando completa su
+     cuenta**, no al generar/enviar el link.
+   - `/invite/callback` y `POST /api/auth/set-password` quedan como compatibilidad para links viejos
+     de Supabase que todavía estén vivos.
 4. Queda logueado y entra al panel del club.
 
 > Archivos clave: `app/api/admin/invite/route.ts`, `app/(auth)/invite/callback/page.tsx`,
-> `app/(auth)/set-password/`, `app/api/auth/onboarding/route.ts`,
-> `app/api/auth/set-password/route.ts`,
+> `app/(auth)/invite/accept/page.tsx`, `app/(auth)/set-password/`,
+> `app/api/auth/accept-invite/route.ts`, `app/api/auth/onboarding/route.ts`,
+> `app/api/auth/set-password/route.ts`, `lib/auth/admin-invitations.ts`,
 > `lib/email/send.ts` (`sendAdminInviteEmail`),
 > `lib/db/queries.ts` (`ensureUserProfile`, `setOnboardingClubName`, `cleanupIncompleteInvite`).
 
@@ -428,6 +434,13 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
 `id` · `auth_user_id` (Supabase) · `email` · `full_name` · `role` (admin/superadmin) ·
 `venue_name` · `club_id` · `created_at`
 
+### `admin_invitations` — invitaciones pendientes/aceptadas
+`id` · `email` · `role` · `venue_name` · `token_hash` · `invited_by_user_id` ·
+`expires_at` · `accepted_at` · `revoked_at` · `created_at`
+
+El token plano solo se muestra en el link enviado al invitado; en DB se guarda `token_hash`.
+Reinvitar un email revoca las invitaciones pendientes anteriores.
+
 ### Legacy (ignorar) — del boilerplate SaaS, no se usan en Cancha
 `credits` · `subscriptions` · `jobs` · `transactions`
 
@@ -465,6 +478,7 @@ GET /api/public/availability?date=YYYY-MM-DD[&api_key=...][&city=...][&start=HH:
 ## 7. Endpoints internos (panel admin/superadmin)
 
 - `POST /api/admin/invite` — invitar admin/superadmin
+- `POST /api/auth/accept-invite` — acepta invitación propia, crea Auth user + perfil interno
 - `POST /api/auth/onboarding` — crea perfil + nombre de cancha (set-password)
 - `POST /api/auth/ensure-profile` — crea perfil para superadmin
 - `GET/POST/PATCH /api/courts` — canchas
