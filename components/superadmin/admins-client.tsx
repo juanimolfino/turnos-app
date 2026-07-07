@@ -52,6 +52,7 @@ const INVITATION_STATUS_STYLE: Record<InvitationStatus, { bg: string; color: str
 
 export function AdminsClient({ admins, clubs, invitations }: { admins: Admin[]; clubs: Club[]; invitations: Invitation[] }) {
   const [showForm, setShowForm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Admin | null>(null);
   const isMobile = useIsMobile();
   const router = useRouter();
 
@@ -89,7 +90,7 @@ export function AdminsClient({ admins, clubs, invitations }: { admins: Admin[]; 
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: isMobile ? 480 : "auto" }}>
             <thead>
               <tr style={{ background: "#F7F4EE" }}>
-                {["Usuario", "Rol", "Club / Cancha", "Registrado"].map((h) => (
+                {["Usuario", "Rol", "Club / Cancha", "Registrado", ""].map((h) => (
                   <th key={h} style={{ padding: "11px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "#A39C8F", whiteSpace: "nowrap" }}>
                     {h}
                   </th>
@@ -125,6 +126,20 @@ export function AdminsClient({ admins, clubs, invitations }: { admins: Admin[]; 
                     <td style={{ padding: "12px 16px", fontSize: 13, color: "#928B7E", whiteSpace: "nowrap" }}>
                       {new Date(admin.createdAt).toLocaleDateString("es-AR")}
                     </td>
+                    <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
+                      {admin.role === "admin" && (
+                        <button
+                          onClick={() => setDeleteTarget(admin)}
+                          style={{
+                            border: "1px solid #F2D6C5", background: "#fff", color: "#B0572C",
+                            borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 700,
+                            cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+                          }}
+                        >
+                          Borrar
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -134,6 +149,103 @@ export function AdminsClient({ admins, clubs, invitations }: { admins: Admin[]; 
       </div>
 
       <InvitationsTable invitations={invitations} onChanged={() => router.refresh()} />
+
+      {deleteTarget && (
+        <DeleteAdminModal
+          admin={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={() => { setDeleteTarget(null); router.refresh(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function DeleteAdminModal({ admin, onClose, onDeleted }: {
+  admin: Admin; onClose: () => void; onDeleted: () => void;
+}) {
+  const [confirmText, setConfirmText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const canDelete = confirmText.trim().toLowerCase() === admin.email.toLowerCase();
+
+  async function handleDelete() {
+    if (!canDelete) return;
+    setLoading(true); setError("");
+    try {
+      const res = await fetch(`/api/admin/${admin.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "No se pudo borrar el admin"); return; }
+      onDeleted();
+    } catch { setError("Error de conexión"); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 500, background: "rgba(34,31,27,.45)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: "#FCFBF8", borderRadius: 18, maxWidth: 460, width: "100%",
+          padding: "24px 24px 20px", boxShadow: "0 20px 60px rgba(0,0,0,.25)",
+          display: "flex", flexDirection: "column", gap: 14,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontSize: 22, color: "#221F1B" }}>
+          Borrar a {admin.email}
+        </div>
+        <div style={{ fontSize: 13.5, color: "#6B6660", lineHeight: 1.5 }}>
+          Esta acción es <strong>permanente</strong> y no se puede deshacer. Va a borrar al admin
+          {admin.venueName ? <> y <strong>todo</strong> lo de su club <strong>{admin.venueName}</strong></> : null}:
+          canchas, agenda, reservas, clientes y la conexión de Mercado Pago. El club deja de existir
+          para el bot de inmediato.
+        </div>
+        <div style={{ fontSize: 13, color: "#54504A" }}>
+          Para confirmar, escribí el email <strong>{admin.email}</strong>:
+        </div>
+        <input
+          type="text"
+          value={confirmText}
+          onChange={(e) => setConfirmText(e.target.value)}
+          placeholder={admin.email}
+          autoFocus
+          style={{
+            width: "100%", border: "1px solid #E0DACE", background: "#fff",
+            borderRadius: 10, padding: "10px 13px", fontSize: 14, color: "#221F1B",
+            outline: "none", fontFamily: "inherit", boxSizing: "border-box",
+          }}
+        />
+        {error && <div style={{ fontSize: 13, color: "#B23A28" }}>{error}</div>}
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button
+            onClick={onClose}
+            style={{
+              border: "1px solid #E7E1D6", background: "#fff", color: "#6B6660",
+              borderRadius: 10, padding: "10px 16px", fontSize: 13.5, fontWeight: 600,
+              cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={!canDelete || loading}
+            style={{
+              border: "none", background: canDelete ? "#B0572C" : "#E7C9BB", color: "#fff",
+              borderRadius: 10, padding: "10px 16px", fontSize: 13.5, fontWeight: 700,
+              cursor: canDelete && !loading ? "pointer" : "not-allowed", fontFamily: "inherit",
+            }}
+          >
+            {loading ? "Borrando..." : "Borrar definitivamente"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
