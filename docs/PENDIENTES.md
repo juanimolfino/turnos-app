@@ -121,10 +121,10 @@ Cancelación con refund del cliente: hecha en el Paso 7B. Si la política habili
 procesa refund total en Mercado Pago antes de cancelar; si no corresponde devolución, pide
 confirmación explícita antes de cancelar sin refund.
 
-Pendiente de la fase grande: crear la cuenta/proyecto de Inngest y cargar `INNGEST_EVENT_KEY` /
-`INNGEST_SIGNING_KEY` en Vercel para activar el cron; cargar `EXPIRE_HOLDS_SECRET` si se quiere usar
-la invocación manual protegida; comisión de plataforma configurable desde superadmin (hoy 0%),
-prueba E2E completa de pagos.
+Inngest activado en Vercel (`INNGEST_EVENT_KEY` / `INNGEST_SIGNING_KEY` cargadas) y testeado: el cron
+de expiración de holds corre en producción.
+Pendiente de la fase grande: cargar `EXPIRE_HOLDS_SECRET` si se quiere usar la invocación manual
+protegida; comisión de plataforma configurable desde superadmin (hoy 0%), prueba E2E completa de pagos.
 Se planifica paso a paso por ser la parte que toca dinero.
 
 ### Refund automático de pagos tardíos
