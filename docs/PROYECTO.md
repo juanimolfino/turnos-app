@@ -294,6 +294,18 @@ desde un botón en el Sidebar; vuelve a aparecer solo mientras falte algo por co
 > `components/layout/app-shell.tsx`, `components/dashboard/onboarding-checklist.tsx`,
 > `app/(app)/layout.tsx`.
 
+### Trazabilidad de invitaciones en `/superadmin/admins`
+Debajo de la tabla de admins, una tabla de **Invitaciones** lista cada invitación alguna vez
+creada (no solo las aceptadas), con su estado: `Pendiente` (no vencida, sin aceptar), `Expirada`
+(venció sin que el invitado la use), `Aceptada` (el usuario completó `/set-password` y ya puede
+entrar) o `Reemplazada` (se reenvió la invitación a ese email, lo que revoca automáticamente la
+anterior — no existe todavía una revocación manual). El estado se deriva en el momento a partir de
+`acceptedAt`/`revokedAt`/`expiresAt`, sin agregar una columna de estado. Para `Pendiente` y
+`Expirada` hay un botón **Reenviar** que llama al mismo `POST /api/admin/invite` (que ya revoca la
+invitación vieja y crea una nueva), sin un endpoint separado.
+> Archivos clave: `lib/auth/invitation-status.ts` (`deriveInvitationStatus`),
+> `lib/db/queries.ts` (`getAdminInvitations`), `components/superadmin/admins-client.tsx`.
+
 ---
 
 ## 3. Estructura de rutas

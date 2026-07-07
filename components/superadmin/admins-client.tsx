@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useIsMobile } from "@/hooks/use-is-mobile";
+import { deriveInvitationStatus, type InvitationStatus } from "@/lib/auth/invitation-status";
 
 interface Admin {
   id: string;
@@ -18,13 +19,38 @@ interface Club {
   name: string;
 }
 
+interface Invitation {
+  id: string;
+  email: string;
+  role: string;
+  venueName: string | null;
+  invitedByEmail: string | null;
+  createdAt: Date;
+  expiresAt: Date;
+  acceptedAt: Date | null;
+  revokedAt: Date | null;
+}
+
 const ROLE_LABEL: Record<string, string> = { superadmin: "Super Admin", admin: "Admin" };
 const ROLE_STYLE: Record<string, { bg: string; color: string }> = {
   superadmin: { bg: "#F1EAF7", color: "#6B4E9E" },
   admin: { bg: "#EAF0F8", color: "#3D5C93" },
 };
 
-export function AdminsClient({ admins, clubs }: { admins: Admin[]; clubs: Club[] }) {
+const INVITATION_STATUS_LABEL: Record<InvitationStatus, string> = {
+  pendiente: "Pendiente",
+  expirada: "Expirada",
+  aceptada: "Aceptada",
+  reemplazada: "Reemplazada",
+};
+const INVITATION_STATUS_STYLE: Record<InvitationStatus, { bg: string; color: string }> = {
+  pendiente: { bg: "#FBF3D9", color: "#8A6D1D" },
+  expirada: { bg: "#FBEBE2", color: "#B0572C" },
+  aceptada: { bg: "#E9F3EA", color: "#2F7D4E" },
+  reemplazada: { bg: "#F4F1EA", color: "#928B7E" },
+};
+
+export function AdminsClient({ admins, clubs, invitations }: { admins: Admin[]; clubs: Club[]; invitations: Invitation[] }) {
   const [showForm, setShowForm] = useState(false);
   const isMobile = useIsMobile();
   const router = useRouter();
@@ -106,6 +132,125 @@ export function AdminsClient({ admins, clubs }: { admins: Admin[]; clubs: Club[]
           </table>
         </div>
       </div>
+
+      <InvitationsTable invitations={invitations} onChanged={() => router.refresh()} />
+    </div>
+  );
+}
+
+function InvitationsTable({ invitations, onChanged }: { invitations: Invitation[]; onChanged: () => void }) {
+  const isMobile = useIsMobile();
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: "#221F1B", marginTop: 4 }}>
+        Invitaciones
+      </div>
+      <div style={{ background: "#FCFBF8", border: "1px solid #E7E1D6", borderRadius: 16, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" as React.CSSProperties["WebkitOverflowScrolling"] }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: isMobile ? 620 : "auto" }}>
+            <thead>
+              <tr style={{ background: "#F7F4EE" }}>
+                {["Email", "Rol", "Club / Cancha", "Estado", "Invitada", "Invitó", ""].map((h) => (
+                  <th key={h} style={{ padding: "11px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "#A39C8F", whiteSpace: "nowrap" }}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {invitations.length === 0 && (
+                <tr>
+                  <td colSpan={7} style={{ padding: "18px 16px", fontSize: 13.5, color: "#928B7E" }}>
+                    Todavía no se envió ninguna invitación.
+                  </td>
+                </tr>
+              )}
+              {invitations.map((inv) => {
+                const status = deriveInvitationStatus(inv);
+                const statusSt = INVITATION_STATUS_STYLE[status];
+                const roleSt = ROLE_STYLE[inv.role] ?? ROLE_STYLE.admin;
+                const canResend = status === "pendiente" || status === "expirada";
+                return (
+                  <tr key={inv.id} style={{ borderTop: "1px solid #EFEAE0" }}>
+                    <td style={{ padding: "12px 16px", fontSize: 13.5, color: "#221F1B", fontWeight: 500, whiteSpace: "nowrap" }}>
+                      {inv.email}
+                    </td>
+                    <td style={{ padding: "12px 16px" }}>
+                      <span style={{ background: roleSt.bg, color: roleSt.color, borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
+                        {ROLE_LABEL[inv.role] ?? inv.role}
+                      </span>
+                    </td>
+                    <td style={{ padding: "12px 16px", fontSize: 13.5, color: "#6B6660", whiteSpace: "nowrap" }}>
+                      {inv.venueName ?? "—"}
+                    </td>
+                    <td style={{ padding: "12px 16px" }}>
+                      <span style={{ background: statusSt.bg, color: statusSt.color, borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
+                        {INVITATION_STATUS_LABEL[status]}
+                      </span>
+                    </td>
+                    <td style={{ padding: "12px 16px", fontSize: 13, color: "#928B7E", whiteSpace: "nowrap" }}>
+                      {new Date(inv.createdAt).toLocaleDateString("es-AR")}
+                    </td>
+                    <td style={{ padding: "12px 16px", fontSize: 13, color: "#928B7E", whiteSpace: "nowrap" }}>
+                      {inv.invitedByEmail ?? "—"}
+                    </td>
+                    <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
+                      {canResend && (
+                        <ResendInviteButton
+                          email={inv.email}
+                          role={inv.role as "admin" | "superadmin"}
+                          venueName={inv.venueName}
+                          onDone={onChanged}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ResendInviteButton({ email, role, venueName, onDone }: {
+  email: string; role: "admin" | "superadmin"; venueName: string | null; onDone: () => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function resend() {
+    setLoading(true); setError("");
+    try {
+      const res = await fetch("/api/admin/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, role, venueName: venueName ?? undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "No se pudo reenviar"); return; }
+      onDone();
+    } catch { setError("Error de conexión"); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+      <button
+        onClick={resend}
+        disabled={loading}
+        style={{
+          border: "1px solid #E0DACE", background: "#fff", color: "#54504A",
+          borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 700,
+          cursor: loading ? "not-allowed" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+        }}
+      >
+        {loading ? "Reenviando..." : "Reenviar"}
+      </button>
+      {error && <span style={{ fontSize: 11.5, color: "#B23A28" }}>{error}</span>}
     </div>
   );
 }
