@@ -1,6 +1,6 @@
 import { and, count, desc, eq, isNotNull, sql, lt, gt, gte, lte, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { clubs, courts, sports, professors, credits, jobs, subscriptions, transactions, users, bookings, customers, clubMercadoPagoCredentials, type JobType, type PaymentMode, type Role } from "@/lib/db/schema";
+import { clubs, courts, sports, professors, credits, jobs, subscriptions, transactions, users, bookings, customers, clubMercadoPagoCredentials, adminInvitations, type JobType, type PaymentMode, type Role } from "@/lib/db/schema";
 import { sendPurchaseConfirmationEmail, sendWelcomeEmail } from "@/lib/email/send";
 import type { User } from "@supabase/supabase-js";
 import { randomBytes, randomUUID } from "crypto";
@@ -57,6 +57,18 @@ export async function getAllAdmins() {
   return getDb().query.users.findMany({
     where: isNotNull(users.role),
     columns: { id: true, email: true, role: true, venueName: true, clubId: true, createdAt: true }
+  });
+}
+
+/**
+ * Trazabilidad de invitaciones para el panel de superadmin: todas las
+ * invitaciones alguna vez creadas (pendientes, expiradas, aceptadas o
+ * reemplazadas por un reenvío), más el email de quién invitó.
+ */
+export async function getAdminInvitations() {
+  return getDb().query.adminInvitations.findMany({
+    orderBy: desc(adminInvitations.createdAt),
+    with: { invitedBy: { columns: { email: true } } },
   });
 }
 
