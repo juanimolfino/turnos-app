@@ -394,8 +394,16 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
   );
 }
 
+const VALID_TABS: Tab[] = ["plantilla", "clases", "fijos", "eventos", "miclub"];
+
+function getInitialTab(): Tab {
+  if (typeof window === "undefined") return "plantilla";
+  const requested = new URLSearchParams(window.location.search).get("tab");
+  return VALID_TABS.includes(requested as Tab) ? (requested as Tab) : "plantilla";
+}
+
 export function AjustesClient({ clases, fijos, eventos, club = {} }: AjustesClientProps) {
-  const [tab, setTab] = useState<Tab>("plantilla");
+  const [tab, setTab] = useState<Tab>(getInitialTab);
   const isMobile = useIsMobile();
 
   const tabs: { key: Tab; label: string }[] = [

@@ -11,6 +11,26 @@ interface SidebarProps {
   clubName: string;
   courtCount: number;
   initials: string;
+  checklistComplete?: boolean;
+  onOpenChecklist?: () => void;
+}
+
+function ChecklistButton({ complete, onClick }: { complete?: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", gap: 8, width: "100%",
+        border: "1px solid #E7E1D6",
+        background: complete ? "#fff" : "#FBEBE2",
+        color: complete ? "#6B6660" : "#B0572C",
+        borderRadius: 10, padding: "9px 12px", fontSize: 12.5, fontWeight: 700,
+        cursor: "pointer", fontFamily: "inherit", textAlign: "left", marginBottom: 10,
+      }}
+    >
+      {complete ? "✓ Configuración completa" : "⚠ Falta configurar tu club"}
+    </button>
+  );
 }
 
 const NAV = [
@@ -20,7 +40,7 @@ const NAV = [
   { href: "/estadisticas", label: "Estadísticas", Icon: BarChart2 },
 ];
 
-export function Sidebar({ clubName, courtCount, initials }: SidebarProps) {
+export function Sidebar({ clubName, courtCount, initials, checklistComplete, onOpenChecklist }: SidebarProps) {
   const pathname = usePathname();
   const isMobile = useIsMobile();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -113,6 +133,13 @@ export function Sidebar({ clubName, courtCount, initials }: SidebarProps) {
                   <X size={16} />
                 </button>
               </div>
+
+              {onOpenChecklist && (
+                <ChecklistButton
+                  complete={checklistComplete}
+                  onClick={() => { onOpenChecklist(); setDrawerOpen(false); }}
+                />
+              )}
 
               {/* Club info */}
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 4px 16px", borderBottom: "1px solid #EFEAE0", marginBottom: 12 }}>
@@ -212,6 +239,9 @@ export function Sidebar({ clubName, courtCount, initials }: SidebarProps) {
       <div style={{ flex: 1 }} />
 
       <div style={{ borderTop: "1px solid #EEE9DF", paddingTop: 14 }}>
+        {onOpenChecklist && (
+          <ChecklistButton complete={checklistComplete} onClick={onOpenChecklist} />
+        )}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 4px 12px" }}>
           <div style={{
             width: 34, height: 34, borderRadius: 9, background: "#EDE7DB",
