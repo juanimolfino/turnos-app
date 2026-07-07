@@ -306,6 +306,20 @@ invitación vieja y crea una nueva), sin un endpoint separado.
 > Archivos clave: `lib/auth/invitation-status.ts` (`deriveInvitationStatus`),
 > `lib/db/queries.ts` (`getAdminInvitations`), `components/superadmin/admins-client.tsx`.
 
+### Borrar un admin desde `/superadmin/admins`
+El superadmin puede borrar un admin desde la tabla de Admins (no se puede borrar a un superadmin
+ni a sí mismo). Es una acción irreversible, así que pide doble verificación: un modal explica qué
+se va a borrar (el admin y, si nadie más comparte el club, todo el club: canchas, agenda, reservas,
+clientes, conexión de Mercado Pago) y exige que el superadmin escriba el email exacto del admin
+para habilitar el botón de borrado definitivo. El borrado en cascada del club no necesitó lógica
+nueva: todas las tablas del club (`courts`, `customers`, `professors`, `opening_hours`, `events`,
+`recurring_rules`, `bookings`, `notifications`, `club_mercadopago_credentials`) ya tenían
+`onDelete: "cascade"` sobre `club_id` desde el schema — borrar la fila de `clubs` alcanza para que
+el club desaparezca del bot de inmediato. También se borra el usuario de Supabase Auth para que no
+pueda volver a loguearse.
+> Archivos clave: `lib/db/queries.ts` (`deleteAdminCascade`), `app/api/admin/[id]/route.ts`,
+> `components/superadmin/admins-client.tsx` (`DeleteAdminModal`).
+
 ---
 
 ## 3. Estructura de rutas
@@ -505,6 +519,10 @@ GET /api/public/availability?date=YYYY-MM-DD[&api_key=...][&city=...][&start=HH:
 ## 7. Endpoints internos (panel admin/superadmin)
 
 - `POST /api/admin/invite` — invitar admin/superadmin
+- `DELETE /api/admin/[id]` — borra un admin (superadmin-only, no se puede borrar a sí mismo ni a
+  otro superadmin); en cascada borra su club completo (canchas, agenda, reservas, clientes,
+  credenciales de MP) salvo que otro usuario siga apuntando al mismo club, y borra su usuario de
+  Supabase Auth
 - `POST /api/auth/accept-invite` — acepta invitación propia, crea Auth user + perfil interno
 - `POST /api/auth/onboarding` — crea perfil + nombre de cancha (set-password)
 - `POST /api/auth/ensure-profile` — crea perfil para superadmin

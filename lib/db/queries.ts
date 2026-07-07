@@ -60,6 +60,51 @@ export async function getAllAdmins() {
   });
 }
 
+export class DeleteAdminError extends Error {
+  constructor(
+    public code: "ADMIN_NOT_FOUND" | "CANNOT_DELETE_SUPERADMIN",
+    message: string
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Borra un admin y, en cascada, TODO lo de su club (canchas, agenda, reservas,
+ * clientes, credenciales de MP: todas esas tablas tienen onDelete: "cascade"
+ * sobre club_id). Así el club deja de existir para el bot de una.
+ * No borra el club si todavía queda otro usuario apuntando a ese club_id
+ * (co-admin del mismo lugar).
+ * No borra el usuario de Supabase Auth: eso lo hace el caller (server-side,
+ * con el client de service role) una vez que esta transacción confirma.
+ */
+export async function deleteAdminCascade(adminUserId: string) {
+  const db = getDb();
+
+  return db.transaction(async (tx) => {
+    const admin = await tx.query.users.findFirst({ where: eq(users.id, adminUserId) });
+    if (!admin) {
+      throw new DeleteAdminError("ADMIN_NOT_FOUND", "El admin no existe.");
+    }
+    if (admin.role === "superadmin") {
+      throw new DeleteAdminError("CANNOT_DELETE_SUPERADMIN", "No se puede borrar un superadmin desde acá.");
+    }
+
+    await tx.delete(users).where(eq(users.id, adminUserId));
+
+    let clubDeleted = false;
+    if (admin.clubId) {
+      const stillUsed = await tx.query.users.findFirst({ where: eq(users.clubId, admin.clubId) });
+      if (!stillUsed) {
+        await tx.delete(clubs).where(eq(clubs.id, admin.clubId));
+        clubDeleted = true;
+      }
+    }
+
+    return { authUserId: admin.authUserId, email: admin.email, clubId: admin.clubId, clubDeleted };
+  });
+}
+
 /**
  * Trazabilidad de invitaciones para el panel de superadmin: todas las
  * invitaciones alguna vez creadas (pendientes, expiradas, aceptadas o
