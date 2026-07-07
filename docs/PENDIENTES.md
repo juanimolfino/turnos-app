@@ -52,6 +52,18 @@ consistente en toda la UI.
 
 ---
 
+## Infraestructura / Email
+
+### RESEND_FROM_EMAIL con dominio provisorio (headshotly.pro)
+`RESEND_FROM_EMAIL` en Vercel quedó configurado como `Cancha <noreply@headshotly.pro>`.
+`headshotly.pro` es un dominio que ya se tenía comprado para otro proyecto, verificado en Resend
+(DKIM/SPF/DMARC) solo para poder mandar emails reales de invitación mientras se testea Cancha —
+no es la marca ni el dominio definitivo del producto. Antes de salir a producción con clubes
+reales, pendiente: definir el nombre de marca, comprar el dominio propio de Cancha, verificarlo
+en Resend y actualizar `RESEND_FROM_EMAIL` en Vercel a esa dirección definitiva.
+
+---
+
 ## Seguridad / robustez
 
 ### Rate limit anti-fuerza-bruta en el webhook
