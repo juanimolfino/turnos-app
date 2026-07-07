@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     venueName,
     invitedByUserId: profile.id,
   });
-  const inviteLink = buildAdminInviteUrl(origin ?? "http://localhost:3000", token);
+  const inviteLink = buildAdminInviteUrl(origin, token);
 
   try {
     await sendAdminInviteEmail({

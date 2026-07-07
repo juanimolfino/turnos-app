@@ -235,8 +235,9 @@ ya previsto en el diseño de pagos). El diseño no cierra ninguno de los dos cam
 
 Variables de entorno en `.env.local` (Supabase, DATABASE_URL, Resend, MercadoPago, etc.).
 Para invitaciones automáticas en producción, Vercel debe tener `RESEND_API_KEY` y
-`RESEND_FROM_EMAIL`; opcionalmente `ADMIN_INVITE_TTL_HOURS` define cuántas horas dura el link
-(default 168).
+`RESEND_FROM_EMAIL`; `NEXT_PUBLIC_APP_URL` debe apuntar a la app pública
+(`https://turnos-app-nine-tau.vercel.app` en el deploy actual). Opcionalmente
+`ADMIN_INVITE_TTL_HOURS` define cuántas horas dura el link (default 168).
 
 ---
 

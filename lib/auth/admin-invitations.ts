@@ -14,6 +14,7 @@ import {
 } from "@/lib/db/schema";
 
 export const ADMIN_INVITE_TTL_HOURS = Number(process.env.ADMIN_INVITE_TTL_HOURS ?? 168);
+export const DEFAULT_PUBLIC_APP_URL = "https://turnos-app-nine-tau.vercel.app";
 
 export class AdminInvitationError extends Error {
   constructor(
@@ -36,8 +37,14 @@ function expiresFrom(now: Date) {
   return new Date(now.getTime() + ADMIN_INVITE_TTL_HOURS * 60 * 60 * 1000);
 }
 
-export function buildAdminInviteUrl(origin: string, token: string) {
-  const url = new URL("/invite/accept", origin);
+export function resolvePublicAppUrl(value?: string | null) {
+  const raw = (value ?? process.env.NEXT_PUBLIC_APP_URL ?? DEFAULT_PUBLIC_APP_URL).trim();
+  const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  return withProtocol.replace(/\/$/, "");
+}
+
+export function buildAdminInviteUrl(origin: string | null | undefined, token: string) {
+  const url = new URL("/invite/accept", resolvePublicAppUrl(origin));
   url.searchParams.set("token", token);
   return url.toString();
 }
