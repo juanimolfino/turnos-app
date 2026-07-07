@@ -280,6 +280,20 @@ Para invitaciones automáticas en producción, Vercel debe tener `RESEND_API_KEY
 > `lib/email/send.ts` (`sendAdminInviteEmail`),
 > `lib/db/queries.ts` (`ensureUserProfile`, `setOnboardingClubName`, `cleanupIncompleteInvite`).
 
+### Checklist de onboarding en el panel
+Al entrar al panel, si al admin le falta configurar su club aparece un pop-up con un checklist de
+3 pasos: 1) cargar info del club (dirección, teléfono, precio de canchas, método de pago y conectar
+Mercado Pago si corresponde), 2) definir la cantidad de canchas en Agenda semanal, y 3) cargar los
+horarios que NO están disponibles (clases, turnos fijos, torneos) — explicando que cualquier franja
+sin nada cargado el bot la va a ofrecer como libre. Los pasos 1 y 2 se calculan en vivo a partir de
+datos reales (club, canchas activas, conexión de Mercado Pago) sin agregar columnas nuevas; el paso
+3 no es verificable por dato (un club puede no tener nada de eso) así que se marca con un ack manual
+guardado en `localStorage`. El pop-up se puede cerrar ("Ahora no") y reabrir en cualquier momento
+desde un botón en el Sidebar; vuelve a aparecer solo mientras falte algo por completar.
+> Archivos clave: `lib/onboarding/checklist.ts` (`computeOnboardingChecklist`),
+> `components/layout/app-shell.tsx`, `components/dashboard/onboarding-checklist.tsx`,
+> `app/(app)/layout.tsx`.
+
 ---
 
 ## 3. Estructura de rutas
