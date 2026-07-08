@@ -377,8 +377,10 @@ El layout `(app)` muestra el **Sidebar** (escritorio) o barra superior + nav inf
 ### Agenda del día (`/dashboard`) — visualización
 - Se arma con los **mismos `bookings`** de la agenda semanal, para el día elegido.
 - Formato: columna **Disponibilidad** (semáforo: Todas libres / X libres / Completo),
-  franjas según los bordes de los bloques, y **estado por celda** (Libre · Reservado ·
-  Clase · Turno fijo · Americano · Torneo · Cerrado).
+  franjas según apertura/cierre del club más los bordes de los bloques, y **estado por
+  celda** (Libre · Reservado · Clase · Turno fijo · Americano · Torneo · Cerrado).
+- Las reservas simples muestran si fueron creadas por el panel (`origin='admin'`) o por
+  el bot (`origin='bot'`) para que el dueño distinga el canal de entrada.
 - **Banda unificada** cuando un bloque abarca todas las canchas.
 - **Línea de "ahora"** posicionada a la hora real dentro de la franja, y lo ya
   transcurrido del día **atenuado**.

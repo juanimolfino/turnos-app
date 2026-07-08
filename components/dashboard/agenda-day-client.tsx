@@ -13,6 +13,7 @@ interface Block {
   startTime: string; endTime: string; type: string;
   status: string; blockGroupId: string | null; notes: string | null; label: string | null;
   customerPhone?: string | null;
+  origin?: string | null;
 }
 interface Props {
   courts: Court[];
@@ -20,13 +21,14 @@ interface Props {
   date: string;
   clubName: string;
   timezone: string;
+  openingWindow: { open: string; close: string };
 }
 
 type StatusKey = "libre" | "simple" | "pendiente" | "clase" | "fijo" | "americano" | "torneo" | "bloqueo";
 
 const STATUS: Record<StatusKey, { bg: string; bd: string; fg: string; dot: string; label: string }> = {
   libre:     { bg: "#E9F3EA", bd: "#CFE6D2", fg: "#2F7D4E", dot: "#3E9B63", label: "Libre" },
-  simple:    { bg: "#FFFFFF", bd: "#E7E1D6", fg: "#7A746A", dot: "#B8B0A2", label: "Reservado" },
+  simple:    { bg: "#EAF3FA", bd: "#C9DDEE", fg: "#32647A", dot: "#5B92B1", label: "Reservado" },
   pendiente: { bg: "#FFF6E0", bd: "#D9A93B", fg: "#795C12", dot: "#D9A93B", label: "Pendiente de pago" },
   clase:     { bg: "#EAF0F8", bd: "#D3DEF0", fg: "#3D5C93", dot: "#5B7FBE", label: "Clase" },
   fijo:      { bg: "#F1EAF7", bd: "#E2D4EF", fg: "#6B4E9E", dot: "#8A6BC4", label: "Turno fijo" },
@@ -42,6 +44,10 @@ function statusOf(type: string): StatusKey {
 function statusOfBlock(block: Block): StatusKey {
   if (block.status === "pendiente") return "pendiente";
   return statusOf(block.type);
+}
+function blockDisplayLabel(block: Block | null, fallback: string) {
+  if (!block || statusOfBlock(block) !== "simple") return fallback;
+  return block.origin === "bot" ? "Reservado por bot" : "Reservado por admin";
 }
 
 const SEMAFORO = {
@@ -75,7 +81,7 @@ interface Segment {
   merged: Block | null;
 }
 
-export function AgendaDayClient({ courts, blocks, date, clubName, timezone }: Props) {
+export function AgendaDayClient({ courts, blocks, date, clubName, timezone, openingWindow }: Props) {
   const router = useRouter();
   const isMobile = useIsMobile();
 
@@ -93,12 +99,16 @@ export function AgendaDayClient({ courts, blocks, date, clubName, timezone }: Pr
 
   const visibleCourts = courtFilter === "all" ? courts : courts.filter((c) => c.id === courtFilter);
 
-  // Construye franjas a partir de los bordes (start/end) de los bloques.
+  // Construye franjas a partir de apertura/cierre del club y bordes de bloques.
   const segments = useMemo<Segment[]>(() => {
-    const bounds = Array.from(new Set(blocks.flatMap((b) => [b.startTime, b.endTime]))).sort();
+    const blockBounds = blocks.flatMap((b) => [b.startTime, b.endTime]);
+    const minBound = blockBounds.reduce((min, value) => value < min ? value : min, openingWindow.open);
+    const maxBound = blockBounds.reduce((max, value) => value > max ? value : max, openingWindow.close);
+    const bounds = Array.from(new Set([minBound, maxBound, openingWindow.open, openingWindow.close, ...blockBounds])).sort();
     const segs: Segment[] = [];
     for (let i = 0; i < bounds.length - 1; i++) {
       const start = bounds[i], end = bounds[i + 1];
+      if (start >= end) continue;
       const cells: Cell[] = courts.map((court) => ({
         court,
         block: blocks.find((b) => b.courtId === court.id && b.startTime <= start && b.endTime >= end) ?? null,
@@ -115,7 +125,7 @@ export function AgendaDayClient({ courts, blocks, date, clubName, timezone }: Pr
       });
     }
     return segs;
-  }, [blocks, courts]);
+  }, [blocks, courts, openingWindow.close, openingWindow.open]);
 
   const isToday = now?.date === date;
   const nowMin = now ? now.minutes : null;
@@ -269,7 +279,9 @@ export function AgendaDayClient({ courts, blocks, date, clubName, timezone }: Pr
                             >
                               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                 <span style={{ width: 7, height: 7, borderRadius: "50%", background: st.dot, flexShrink: 0 }} />
-                                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: st.fg, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{st.label}</span>
+                                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: st.fg, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {blockDisplayLabel(cell.block, st.label)}
+                                </span>
                               </div>
                               {cell.block?.label && (
                                 <div style={{ fontSize: isMobile ? 12.5 : 14, fontWeight: 600, color: "#221F1B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cell.block.label}</div>
@@ -305,7 +317,9 @@ export function AgendaDayClient({ courts, blocks, date, clubName, timezone }: Pr
               padding: "18px 18px 24px", boxShadow: "0 20px 50px -12px rgba(0,0,0,.35)",
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                <span style={{ padding: "4px 10px", borderRadius: 999, background: st.bg, color: st.fg, fontWeight: 700, fontSize: 12.5 }}>{bookingPanelLabel(detail.type, detail.status)}</span>
+                <span style={{ padding: "4px 10px", borderRadius: 999, background: st.bg, color: st.fg, fontWeight: 700, fontSize: 12.5 }}>
+                  {blockDisplayLabel(detail, bookingPanelLabel(detail.type, detail.status))}
+                </span>
                 {detail.label && <span style={{ fontSize: 15, fontWeight: 700, color: "#221F1B" }}>{detail.label}</span>}
               </div>
               <div style={{ fontSize: 14, color: "#54504A" }}>{courtName} · {detail.startTime} – {detail.endTime}</div>
@@ -332,6 +346,12 @@ function MergedBand({ block, start, end, courtCount, onClick }: { block: Block; 
   const sk = statusOfBlock(block);
   const st = STATUS[sk];
   const hatched = sk === "clase";
+  const title = sk === "pendiente"
+    ? st.label
+    : sk === "simple"
+      ? blockDisplayLabel(block, st.label)
+      : block.label ?? st.label;
+  const detail = [block.label, block.notes].filter(Boolean).join(" · ");
   return (
     <div onClick={onClick} style={{
       flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: 2,
@@ -341,9 +361,9 @@ function MergedBand({ block, start, end, courtCount, onClick }: { block: Block; 
         ? "repeating-linear-gradient(45deg,#EAF0F8,#EAF0F8 11px,#E1E9F6 11px,#E1E9F6 22px)"
         : st.bg,
     }}>
-      <span style={{ fontSize: 13.5, fontWeight: 700 }}>{sk === "pendiente" ? st.label : block.label ?? st.label}</span>
+      <span style={{ fontSize: 13.5, fontWeight: 700 }}>{title}</span>
       <span style={{ fontSize: 12, opacity: 0.85 }}>
-        {block.notes ? `${block.notes} · ` : ""}{start} – {end} · las {courtCount} canchas
+        {detail ? `${detail} · ` : ""}{start} – {end} · las {courtCount} canchas
       </span>
     </div>
   );

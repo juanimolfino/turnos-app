@@ -2,10 +2,11 @@ import { redirect } from "next/navigation";
 import { createSupabaseReadOnlyServerClient } from "@/lib/supabase/server";
 import { getUserByAuthId, getClubCourts, getWeekAgenda } from "@/lib/db/queries";
 import { getDb } from "@/lib/db";
-import { clubs } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { clubs, openingHours } from "@/lib/db/schema";
+import { and, eq } from "drizzle-orm";
 import { todayInTz } from "@/lib/tz";
 import { AgendaDayClient } from "@/components/dashboard/agenda-day-client";
+import { DEFAULT_WINDOW } from "@/lib/bookings/availability";
 
 export const metadata = { title: "Agenda del día" };
 
@@ -45,11 +46,17 @@ export default async function DashboardPage({
 
   const { date: dateParam } = await searchParams;
   const date = dateParam ?? todayInTz(tz);
+  const weekday = (new Date(date + "T12:00:00").getDay() + 6) % 7;
 
-  const [courts, blocks] = await Promise.all([
+  const [courts, blocks, opening] = await Promise.all([
     getClubCourts(profile.clubId),
     getWeekAgenda(profile.clubId, date, date),
+    db.select().from(openingHours).where(and(eq(openingHours.clubId, profile.clubId), eq(openingHours.weekday, weekday))),
   ]);
+  const openingWindow = {
+    open: opening[0]?.openTime ?? DEFAULT_WINDOW.open,
+    close: opening[0]?.closeTime ?? DEFAULT_WINDOW.close,
+  };
 
   return (
     <AgendaDayClient
@@ -58,6 +65,7 @@ export default async function DashboardPage({
       date={date}
       clubName={club?.name ?? "Mi Club"}
       timezone={tz}
+      openingWindow={openingWindow}
     />
   );
 }

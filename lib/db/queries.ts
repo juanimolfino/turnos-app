@@ -1046,6 +1046,7 @@ export async function getWeekAgenda(clubId: string, startDate: string, endDate: 
     status: bookings.status, notes: bookings.notes, blockGroupId: bookings.blockGroupId,
     customerId: bookings.customerId, professorId: bookings.professorId,
     customerName: bookings.customerName,
+    origin: bookings.origin,
   }).from(bookings).where(and(
     eq(bookings.clubId, clubId),
     gte(bookings.date, startDate),
@@ -1073,6 +1074,7 @@ export async function getWeekAgenda(clubId: string, startDate: string, endDate: 
       status: r.status, blockGroupId: r.blockGroupId, notes: r.notes,
       label: r.professorId ? profMap[r.professorId] ?? null : r.customerId ? custMap[r.customerId]?.name ?? null : r.customerName ?? null,
       customerPhone: r.customerId ? custMap[r.customerId]?.phone ?? null : null,
+      origin: r.origin,
     }));
 }
 

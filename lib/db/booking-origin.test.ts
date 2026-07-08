@@ -117,6 +117,7 @@ describe("getWeekAgenda", () => {
         blockGroupId: null,
         customerId: null,
         professorId: null,
+        origin: "bot",
       },
     ];
 
@@ -127,6 +128,7 @@ describe("getWeekAgenda", () => {
         id: "bk1",
         type: "simple",
         status: "pendiente",
+        origin: "bot",
       }),
     ]);
   });
@@ -146,6 +148,7 @@ describe("getWeekAgenda", () => {
         customerId: "cust1",
         customerName: "Snapshot viejo",
         professorId: null,
+        origin: "bot",
       },
     ];
     state.customerRows = [{ id: "cust1", name: "Carlos Gómez", phone: "2314 555555" }];
