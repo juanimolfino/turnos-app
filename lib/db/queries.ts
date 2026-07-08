@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNotNull, isNull, sql, lt, gt, gte, lte, inArray } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, isNull, ne, sql, lt, gt, gte, lte, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { clubs, courts, sports, professors, credits, jobs, subscriptions, transactions, users, bookings, customers, notifications, recurringRules, playerIdentities, clubMercadoPagoCredentials, adminInvitations, type JobType, type PaymentMode, type Role } from "@/lib/db/schema";
 import { sendPurchaseConfirmationEmail, sendWelcomeEmail } from "@/lib/email/send";
@@ -832,8 +832,27 @@ export async function listClubCustomers(clubId: string) {
     .where(eq(customers.clubId, clubId))
     .orderBy(desc(customers.updatedAt), desc(customers.createdAt));
 
+  // Cantidad de turnos que reservó cada cliente en el club: reservas reales
+  // (type 'simple') que no estén canceladas. No cuenta bloques ni holds vencidos.
+  const ids = rows.map((r) => r.id);
+  const bookingCounts: Record<string, number> = {};
+  if (ids.length) {
+    const counts = await getDb()
+      .select({ customerId: bookings.customerId, n: count() })
+      .from(bookings)
+      .where(and(
+        eq(bookings.clubId, clubId),
+        inArray(bookings.customerId, ids),
+        eq(bookings.type, "simple"),
+        ne(bookings.status, "cancelado"),
+      ))
+      .groupBy(bookings.customerId);
+    for (const c of counts) if (c.customerId) bookingCounts[c.customerId] = Number(c.n);
+  }
+
   return rows.map((customer) => ({
     ...customer,
+    bookingCount: bookingCounts[customer.id] ?? 0,
     source: customer.playerIdentityId || (customer.channel && customer.channelUserId) ? "bot" as const : "admin" as const,
     editable: !(customer.playerIdentityId || (customer.channel && customer.channelUserId)),
   }));

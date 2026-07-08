@@ -16,6 +16,7 @@ describe("ClientesClient", () => {
         playerIdentityId: "pid-1",
         channel: "telegram",
         channelUserId: "123",
+        bookingCount: 3,
         source: "bot",
         editable: false,
         createdAt: baseDate,
@@ -30,6 +31,7 @@ describe("ClientesClient", () => {
         playerIdentityId: null,
         channel: null,
         channelUserId: null,
+        bookingCount: 0,
         source: "admin",
         editable: true,
         createdAt: baseDate,
@@ -46,5 +48,21 @@ describe("ClientesClient", () => {
     expect(html).toContain("Agregado por admin");
     expect(html).toContain("Editar");
     expect(html).toContain("Borrar");
+  });
+
+  it("muestra la cantidad de reservas por cliente", () => {
+    const customers: PanelCustomer[] = [
+      {
+        id: "bot-1", name: "Carlos Gómez", phone: null, email: null, notes: null,
+        playerIdentityId: "pid-1", channel: "telegram", channelUserId: "123",
+        bookingCount: 3, source: "bot", editable: false, createdAt: baseDate, updatedAt: baseDate,
+      },
+    ];
+
+    const html = renderToStaticMarkup(<ClientesClient initialCustomers={customers} />);
+
+    expect(html).toContain("Reservas");
+    expect(html).toContain("3");
+    expect(html).toContain("reservas");
   });
 });

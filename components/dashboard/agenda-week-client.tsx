@@ -21,6 +21,7 @@ interface Block {
   notes: string | null;
   label: string | null;
   customerPhone?: string | null;
+  origin?: string | null;
 }
 
 interface Props {
@@ -32,7 +33,8 @@ interface Props {
 
 // Las labels salen de lib/bookings/labels (fuente única). 'simple' = "Reservado".
 const TYPE_META: Record<BlockType, { label: string; short: string; bg: string; bd: string; fg: string }> = {
-  simple:    { label: bookingTypeLabel("simple"),    short: "Reservado", bg: "#FFFFFF", bd: "#E7E1D6", fg: "#7A746A" },
+  // Azul = "Reservado", igual que la agenda del día (el verde ahí es "Libre").
+  simple:    { label: bookingTypeLabel("simple"),    short: "Reservado", bg: "#EAF3FA", bd: "#C9DDEE", fg: "#32647A" },
   clase:     { label: bookingTypeLabel("clase"),     short: "Clases",    bg: "#EAF0F8", bd: "#D3DEF0", fg: "#3D5C93" },
   fijo:      { label: bookingTypeLabel("fijo"),      short: "Fijo",      bg: "#F1EAF7", bd: "#E2D4EF", fg: "#6B4E9E" },
   americano: { label: bookingTypeLabel("americano"), short: "Americano", bg: "#FBEBE2", bd: "#F2D6C5", fg: "#B0572C" },
@@ -57,7 +59,8 @@ function metaForBlock(block: Block) {
 }
 function blockGridTitle(block: Block, meta: { short: string }) {
   if (block.status === "pendiente") return meta.short;
-  return block.label ?? meta.short;
+  const base = block.label ?? meta.short;
+  return block.type === "simple" && block.origin === "bot" ? `${base} · Bot` : base;
 }
 const TYPES: BlockType[] = ["simple", "clase", "fijo", "americano", "torneo", "bloqueo"];
 const DAY_NAMES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
@@ -517,6 +520,14 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
                 <br />
                 {viewBlock.startTime} – {viewBlock.endTime}
               </div>
+              {viewBlock.type === "simple" && (
+                <div style={{ display: "inline-flex", alignItems: "center", alignSelf: "flex-start", gap: 6, padding: "4px 10px", borderRadius: 999, fontSize: 12.5, fontWeight: 700,
+                  background: viewBlock.origin === "bot" ? "#EAF1F8" : "#F3EFE7",
+                  color: viewBlock.origin === "bot" ? "#315E82" : "#6B5A3B",
+                  border: `1px solid ${viewBlock.origin === "bot" ? "#D4E3EF" : "#E4D9C7"}` }}>
+                  {viewBlock.origin === "bot" ? "Reservado por bot" : "Reservado por admin"}
+                </div>
+              )}
               {viewBlock.customerPhone && (
                 <div style={{ fontSize: 13.5, color: "#54504A" }}>
                   Teléfono: <span style={{ fontWeight: 700, color: "#221F1B" }}>{viewBlock.customerPhone}</span>

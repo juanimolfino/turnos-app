@@ -12,6 +12,7 @@ export type PanelCustomer = {
   playerIdentityId: string | null;
   channel: string | null;
   channelUserId: string | null;
+  bookingCount: number;
   createdAt: Date | string;
   updatedAt: Date | string;
   source: "bot" | "admin";
@@ -39,6 +40,7 @@ function toForm(customer: PanelCustomer): FormState {
 function customerFromResponse(raw: PanelCustomer): PanelCustomer {
   return {
     ...raw,
+    bookingCount: raw.bookingCount ?? 0,
     source: raw.playerIdentityId || (raw.channel && raw.channelUserId) ? "bot" : "admin",
     editable: !(raw.playerIdentityId || (raw.channel && raw.channelUserId)),
   };
@@ -288,6 +290,7 @@ export function ClientesClient({ initialCustomers }: { initialCustomers: PanelCu
                 <tr>
                   <th style={styles.th}>Cliente</th>
                   <th style={styles.th}>Contacto</th>
+                  <th style={styles.th}>Reservas</th>
                   <th style={styles.th}>Origen</th>
                   <th style={styles.th}>Notas</th>
                   <th style={styles.th}>Alta</th>
@@ -318,6 +321,14 @@ export function ClientesClient({ initialCustomers }: { initialCustomers: PanelCu
                             {customer.email && <span>{customer.email}</span>}
                           </div>
                         )}
+                      </td>
+                      <td style={styles.td}>
+                        <span style={{ fontWeight: 700, color: customer.bookingCount > 0 ? "#221F1B" : "#A39C8F" }}>
+                          {customer.bookingCount}
+                        </span>
+                        <span style={{ color: "#928B7E", fontSize: 13 }}>
+                          {customer.bookingCount === 1 ? " reserva" : " reservas"}
+                        </span>
                       </td>
                       <td style={styles.td}>
                         <Badge label={customer.source === "bot" ? `Bot${customer.channel ? ` · ${customer.channel}` : ""}` : "Agregado por admin"} tone={customer.source} />
