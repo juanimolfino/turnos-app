@@ -174,7 +174,27 @@ describe("handleIncomingMessage (Fase 6 — reservar)", () => {
     expect(send).toHaveBeenCalledWith("123", "CONFIRMADA HYS324");
   });
 
-  it("si el cliente ya existe para ese club, reserva sin pedir nombre ni teléfono", async () => {
+  it("si el cliente ya existe para ese club, pide confirmar los datos antes de reservar", async () => {
+    getKnownBotCustomer.mockResolvedValue({ clubId: "cl1", name: "Carlos Gómez", phone: "2314 444444" });
+    extraerIntencion.mockResolvedValue(conIntencion);
+    extraerAccionReserva.mockResolvedValue({ tipo: "elegir", lugar: "Pádel Central", hora: "19:00", cancha: null, nombre: null, telefono: null });
+
+    await handleIncomingMessage(msg("quiero ese"));
+
+    expect(crearReservaBot).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith("123", expect.stringContaining("Nombre: Carlos Gómez"));
+    expect(send).toHaveBeenCalledWith("123", expect.stringContaining("Teléfono: 2314 444444"));
+    expect(send).toHaveBeenCalledWith("123", expect.stringContaining("Confirmás que son correctos"));
+  });
+
+  it("si el cliente confirma los datos guardados, reserva con esos datos", async () => {
+    getHistory.mockResolvedValue([
+      {
+        role: "assistant",
+        content:
+          'Tengo estos datos para reservar en Pádel Central (Cancha 1) a las 19:00:\nNombre: Carlos Gómez\nTeléfono: 2314 444444\n\n¿Confirmás que son correctos para reservar? Si está bien, respondé "sí". Si querés cambiarlos, mandame nombre y teléfono nuevos.',
+      },
+    ]);
     getKnownBotCustomer.mockResolvedValue({ clubId: "cl1", name: "Carlos Gómez", phone: "2314 444444" });
     extraerIntencion.mockResolvedValue(conIntencion);
     extraerAccionReserva.mockResolvedValue({ tipo: "elegir", lugar: "Pádel Central", hora: "19:00", cancha: null, nombre: null, telefono: null });
@@ -191,7 +211,7 @@ describe("handleIncomingMessage (Fase 6 — reservar)", () => {
     };
     crearReservaBot.mockResolvedValue(reservaOk);
 
-    await handleIncomingMessage(msg("quiero ese"));
+    await handleIncomingMessage(msg("sí"));
 
     expect(crearReservaBot).toHaveBeenCalledWith({
       clubId: "cl1", courtId: "ct1", date: "2026-06-27",
@@ -202,6 +222,99 @@ describe("handleIncomingMessage (Fase 6 — reservar)", () => {
       channelUserId: "123",
     });
     expect(confirmarReservaTexto).toHaveBeenCalledWith(turno, "Carlos Gómez", reservaOk);
+  });
+
+  it("si el cliente niega los datos guardados, pide datos nuevos y no reserva", async () => {
+    getHistory.mockResolvedValue([
+      {
+        role: "assistant",
+        content:
+          'Tengo estos datos para reservar en Pádel Central (Cancha 1) a las 19:00:\nNombre: Carlos Gómez\nTeléfono: 2314 444444\n\n¿Confirmás que son correctos para reservar? Si está bien, respondé "sí". Si querés cambiarlos, mandame nombre y teléfono nuevos.',
+      },
+    ]);
+    getKnownBotCustomer.mockResolvedValue({ clubId: "cl1", name: "Carlos Gómez", phone: "2314 444444" });
+    extraerIntencion.mockResolvedValue(conIntencion);
+    extraerAccionReserva.mockResolvedValue({ tipo: "elegir", lugar: "Pádel Central", hora: "19:00", cancha: null, nombre: null, telefono: null });
+
+    await handleIncomingMessage(msg("no, está mal"));
+
+    expect(crearReservaBot).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith("123", expect.stringContaining("nombre y apellido"));
+    expect(send).toHaveBeenCalledWith("123", expect.stringContaining("teléfono"));
+  });
+
+  it("si el cliente corrige los datos guardados, reserva con los nuevos datos", async () => {
+    getHistory.mockResolvedValue([
+      {
+        role: "assistant",
+        content:
+          'Tengo estos datos para reservar en Pádel Central (Cancha 1) a las 19:00:\nNombre: Carlos Gómez\nTeléfono: 2314 444444\n\n¿Confirmás que son correctos para reservar? Si está bien, respondé "sí". Si querés cambiarlos, mandame nombre y teléfono nuevos.',
+      },
+    ]);
+    getKnownBotCustomer.mockResolvedValue({ clubId: "cl1", name: "Carlos Gómez", phone: "2314 444444" });
+    extraerIntencion.mockResolvedValue(conIntencion);
+    extraerAccionReserva.mockResolvedValue({
+      tipo: "reservar",
+      lugar: "Pádel Central",
+      hora: "19:00",
+      cancha: null,
+      nombre: "Luis García",
+      telefono: "2314 999999",
+    });
+    crearReservaBot.mockResolvedValue({
+      ok: true,
+      bookingId: "bk1",
+      bookingCode: "HYS324",
+      status: "confirmado",
+      paymentMode: "none",
+      amountToCharge: 0,
+      heldUntil: null,
+      paymentInitPoint: null,
+      mpPreferenceId: null,
+    });
+
+    await handleIncomingMessage(msg("no, soy Luis García, 2314 999999"));
+
+    expect(crearReservaBot).toHaveBeenCalledWith({
+      clubId: "cl1", courtId: "ct1", date: "2026-06-27",
+      startTime: "19:00", endTime: "20:30",
+      customerName: "Luis García",
+      customerContactPhone: "2314 999999",
+      channel: "telegram",
+      channelUserId: "123",
+    });
+  });
+
+  it("sanea nombre y teléfono antes de persistir datos enviados por el chat", async () => {
+    extraerIntencion.mockResolvedValue(conIntencion);
+    extraerAccionReserva.mockResolvedValue({
+      tipo: "reservar",
+      lugar: "Pádel Central",
+      hora: "19:00",
+      cancha: null,
+      nombre: '<script>alert("x")</script> Juan Pérez',
+      telefono: "+54 <img> 2314 555555",
+    });
+    crearReservaBot.mockResolvedValue({
+      ok: true,
+      bookingId: "bk1",
+      bookingCode: "HYS324",
+      status: "confirmado",
+      paymentMode: "none",
+      amountToCharge: 0,
+      heldUntil: null,
+      paymentInitPoint: null,
+      mpPreferenceId: null,
+    });
+
+    await handleIncomingMessage(msg('soy <script>alert("x")</script> Juan Pérez, +54 <img> 2314 555555'));
+
+    expect(crearReservaBot).toHaveBeenCalledWith(expect.objectContaining({
+      customerName: "Juan Pérez",
+      customerContactPhone: "+54 2314 555555",
+    }));
+    expect(crearReservaBot.mock.calls[0][0].customerName).not.toMatch(/[<>`{}[\]]/);
+    expect(crearReservaBot.mock.calls[0][0].customerContactPhone).not.toMatch(/[<>`{}[\]]/);
   });
 
   it("CAPA B/A: si el turno se ocupó → no confirma, avisa y re-ofrece", async () => {

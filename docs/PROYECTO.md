@@ -84,12 +84,14 @@ cancha por cancha, dos canchas con ocupación distinta producían horarios corri
 pisaban ("20:00 y 20:30" a la vez). *(El cómo del cálculo está en
 [§ Bot de reservas](#bot-de-reservas-asistente-de-pádel) y §5.)*
 
-#### El jugador no tiene login; se identifica por teléfono + nombre
-Nadie hace login para reservar: le escribe a un bot. El teléfono sale del canal
-(Telegram/WhatsApp lo proveen) y el nombre se pide una vez. Para el MVP, nombre y
-teléfono se guardan **en la reserva misma**. Una tabla global de clientes (para clientes
-frecuentes, preferencias, marketing) queda para una etapa posterior — pero el dato se
-captura desde ahora, para no perderlo.
+#### El jugador no tiene login; se identifica por canal + nombre/teléfono
+Nadie hace login para reservar: le escribe a un bot. La identidad estable sale del canal
+(`telegram + userId` hoy; mañana `whatsapp + id/phone`). El nombre y el teléfono real de
+contacto se piden una vez y se guardan en `customers` por club. Si la persona vuelve, el
+bot puede reconocerla, saludarla por nombre y mostrar los datos guardados para que los
+confirme antes de reservar. Si dice que no son correctos, el bot pide nombre/teléfono
+nuevos y los actualiza al reservar. En `bookings` queda un snapshot y el id del canal para
+la seguridad de cancelación por código.
 
 #### Reserva automática, sin aprobación del dueño
 Cuando el jugador reserva, queda reservado: el dueño **ve** la reserva, no la **aprueba**.
@@ -451,7 +453,11 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
 - El bot crea/actualiza un cliente por club usando `channel + channel_user_id` (hoy
   `telegram + userId`). En la primera reserva pide nombre y teléfono real de contacto.
 - Si la persona vuelve a hablarle al bot y ya existe en `customers`, el bot puede saludarla por
-  nombre y reutilizar sus datos para reservar sin volver a pedir teléfono.
+  nombre. Antes de reutilizar sus datos para reservar, le muestra nombre/teléfono y exige una
+  confirmación simple; si el usuario niega o corrige, pide datos nuevos y actualiza el cliente.
+- Los datos que llegan desde el chat se tratan como entrada externa: se normaliza el teléfono y se
+  sanea texto libre (sin tags/script, caracteres de control ni símbolos peligrosos) antes de
+  persistirlo.
 - La agenda semanal y la agenda del día muestran los datos de `customers` para que el club pueda
   contactar a quien reservó.
 
@@ -520,7 +526,8 @@ GET /api/public/availability?date=YYYY-MM-DD[&api_key=...][&city=...][&start=HH:
 
 > El modelo es consistente: las reservas de jugadores son `bookings` `type: simple`;
 > los bloques del dueño son los otros `type`. El bot trabaja con
-> `clubs → courts → bookings` (no usa `customers`: guarda nombre/teléfono en el booking).
+> `clubs → courts → bookings` y vincula reservas a `customers` para que el panel muestre datos
+> de contacto y el bot reconozca clientes recurrentes.
 
 ---
 
@@ -627,8 +634,10 @@ desde datos reales.
    club específico ("qué hay en Pádel Central"), el bot responde solo sobre ese club; si
    pide una zona/barrio, filtra por esa zona; si no acota, muestra la oferta cruzada.
 2. Si el usuario ya existe como cliente del club (`customers.channel + channel_user_id`), el bot
-   reutiliza su nombre/teléfono y puede saludarlo por nombre. Si no existe, al elegir un turno pide
-   **nombre y apellido + teléfono de contacto**.
+   puede saludarlo por nombre. Al elegir un turno, antes de reutilizar sus datos guardados muestra
+   **nombre + teléfono de contacto** y pregunta si son correctos. Con respuesta afirmativa continúa
+   la reserva; con respuesta negativa pide datos actualizados. Si no existe, pide **nombre y
+   apellido + teléfono de contacto**.
 3. Al tener los datos necesarios, **antes de escribir** se re-verifica que el turno siga libre
    (**capa B**).
 4. Si sigue libre, el resultado depende de `clubs.payment_mode`:

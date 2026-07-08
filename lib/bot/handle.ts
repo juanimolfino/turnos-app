@@ -7,7 +7,7 @@ import { extraerIntencion } from "@/lib/bot/intent";
 import { buscarDisponibilidad } from "@/lib/bot/search";
 import { redactarRespuesta } from "@/lib/bot/reply";
 import { extraerAccionReserva } from "@/lib/bot/extraer-reserva";
-import { crearReservaBot, resolverTurno, confirmarReservaTexto } from "@/lib/bot/reservar";
+import { crearReservaBot, resolverTurno, confirmarReservaTexto, type Turno } from "@/lib/bot/reservar";
 import { extraerAccionCancelacion } from "@/lib/bot/extraer-cancelacion";
 import { cancelarReservaBotPorCodigo, respuestaCancelacionTexto } from "@/lib/bot/cancelar";
 import { getKnownBotCustomer } from "@/lib/db/queries";
@@ -20,25 +20,113 @@ const adapters: Record<Channel, ChannelAdapter> = {
 
 const BOOKING_CODE_RE = /\b([A-Z]{3}[0-9]{3})\b/i;
 const PHONE_RE = /(?:\+?\d[\d\s().-]{5,}\d)/;
+const KNOWN_CUSTOMER_CONFIRMATION_RE = /confirm[aá]s que son correctos para reservar/i;
+const AFFIRMATIVE_RE = /(^|\s)(s[ií]|dale|ok|okay|confirmo|confirmar|correcto|est[aá]\s+bien)(\s|$|[.!?])/i;
+const NEGATIVE_RE = /(^|\s)(no|mal|incorrecto|incorrecta|cambiar|cambialo|cambiarlos|modificar|est[aá]\s+mal)(\s|$|[.!?])/i;
 
 function firstName(name: string) {
   return name.trim().split(/\s+/)[0] ?? name;
 }
 
+function sanitizeText(value: string, maxLength = 90) {
+  return value
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/[<>{}\[\]`]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength)
+    .trim();
+}
+
+function normalizePhone(value: string | null | undefined) {
+  if (!value) return null;
+  const cleaned = value
+    .replace(/<[^>]*>/g, " ")
+    .replace(/[^\d+().\-\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 40)
+    .trim();
+  const digits = cleaned.replace(/\D/g, "");
+  if (digits.length < 6 || digits.length > 20) return null;
+  return cleaned;
+}
+
 function extractPhone(text: string, fallback?: string | null) {
-  return (text.match(PHONE_RE)?.[0] ?? fallback ?? "").replace(/\s+/g, " ").trim() || null;
+  return normalizePhone(fallback ?? text.match(PHONE_RE)?.[0]);
 }
 
 function cleanName(name: string | null | undefined, phone: string | null) {
   if (!name) return null;
-  const withoutPhone = phone ? name.replace(phone, "") : name;
+  const sanitized = sanitizeText(name);
+  const withoutPhone = phone ? sanitized.replace(phone, "") : sanitized;
   const cleaned = withoutPhone
     .replace(PHONE_RE, "")
-    .replace(/\b(tel[eé]fono|tel|celular|cel|mi|es)\b/gi, " ")
+    .replace(/\b(tel[eé]fono|tel|celular|cel|mi|es|soy|me|llamo)\b/gi, " ")
     .replace(/[:;,.-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
   return cleaned || null;
+}
+
+function lastAssistantMessage(history: ChatTurn[]) {
+  return [...history].reverse().find((turn) => turn.role === "assistant")?.content ?? "";
+}
+
+function isConfirmingKnownCustomer(history: ChatTurn[]) {
+  return KNOWN_CUSTOMER_CONFIRMATION_RE.test(lastAssistantMessage(history));
+}
+
+function confirmsKnownCustomer(text: string) {
+  return AFFIRMATIVE_RE.test(text) && !NEGATIVE_RE.test(text);
+}
+
+function rejectsKnownCustomer(text: string) {
+  return NEGATIVE_RE.test(text);
+}
+
+function confirmKnownCustomerText(customer: { name: string; phone: string }, turno: { clubName: string; courtName: string; startTime: string }) {
+  return (
+    `Tengo estos datos para reservar en ${turno.clubName} (${turno.courtName}) a las ${turno.startTime}:\n` +
+    `Nombre: ${customer.name}\n` +
+    `Teléfono: ${customer.phone}\n\n` +
+    `¿Confirmás que son correctos para reservar? Si está bien, respondé "sí". Si querés cambiarlos, mandame nombre y teléfono nuevos.`
+  );
+}
+
+async function reservarTurno(params: {
+  turno: Turno;
+  name: string;
+  phone: string;
+  msg: IncomingMessage;
+  history: ChatTurn[];
+  userText: string;
+  intent: Awaited<ReturnType<typeof extraerIntencion>>;
+  lugares: Awaited<ReturnType<typeof buscarDisponibilidad>>;
+}) {
+  const res = await crearReservaBot({
+    clubId: params.turno.clubId,
+    courtId: params.turno.courtId,
+    date: params.turno.date,
+    startTime: params.turno.startTime,
+    endTime: params.turno.endTime,
+    customerName: params.name,
+    customerContactPhone: params.phone,
+    channel: params.msg.channel,
+    channelUserId: params.msg.userId,
+  });
+  if (res.ok) {
+    return confirmarReservaTexto(params.turno, params.name, res);
+  }
+  if (res.error === "PAGO_NO_DISPONIBLE") {
+    return "No pude generar el link de pago, así que liberé el turno y no quedó reservado. Probá de nuevo en unos minutos o elegí otro horario.";
+  }
+  return (
+    "Uy, ese turno se acaba de ocupar 😕. " +
+    (await redactarRespuesta({ history: params.history, userText: params.userText, intent: params.intent, lugares: params.lugares }))
+  );
 }
 
 function extraerConfirmacionCancelacionSinRefund(history: ChatTurn[], userText: string): string | null {
@@ -124,32 +212,26 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
       const knownForThisClub = knownCustomer?.clubId === turno.clubId ? knownCustomer : null;
       const phone = extractPhone(msg.text, accion.telefono);
       const name = cleanName(accion.nombre, phone);
+      const confirmingKnownCustomer = isConfirmingKnownCustomer(history);
+      const confirmedKnownCustomer = confirmingKnownCustomer && confirmsKnownCustomer(msg.text);
+      const rejectedKnownCustomer = confirmingKnownCustomer && rejectsKnownCustomer(msg.text);
 
-      const knownPhone = knownForThisClub?.phone ?? phone;
-
-      if (knownForThisClub && knownPhone && (accion.tipo === "elegir" || !name || !phone)) {
-        const res = await crearReservaBot({
-          clubId: turno.clubId,
-          courtId: turno.courtId,
-          date: turno.date,
-          startTime: turno.startTime,
-          endTime: turno.endTime,
-          customerName: knownForThisClub.name,
-          customerContactPhone: knownPhone,
-          channel: msg.channel,
-          channelUserId: msg.userId,
+      if (knownForThisClub?.phone && confirmedKnownCustomer) {
+        respuesta = await reservarTurno({
+          turno,
+          name: sanitizeText(knownForThisClub.name),
+          phone: normalizePhone(knownForThisClub.phone) ?? knownForThisClub.phone,
+          msg,
+          history,
+          userText: msg.text,
+          intent,
+          lugares,
         });
-        if (res.ok) {
-          respuesta = confirmarReservaTexto(turno, knownForThisClub.name, res);
-        } else if (res.error === "PAGO_NO_DISPONIBLE") {
-          respuesta =
-            "No pude generar el link de pago, así que liberé el turno y no quedó reservado. Probá de nuevo en unos minutos o elegí otro horario.";
-        } else {
-          respuesta =
-            "Uy, ese turno se acaba de ocupar 😕. " +
-            (await redactarRespuesta({ history, userText: msg.text, intent, lugares }));
-        }
-      } else if (knownForThisClub && !knownForThisClub.phone) {
+      } else if (knownForThisClub?.phone && rejectedKnownCustomer && (!name || !phone)) {
+        respuesta = "No hay problema. Pasame nombre y apellido, y un teléfono de contacto actualizados.";
+      } else if (knownForThisClub?.phone && !confirmingKnownCustomer && (accion.tipo === "elegir" || !name || !phone)) {
+        respuesta = confirmKnownCustomerText({ name: sanitizeText(knownForThisClub.name), phone: knownForThisClub.phone }, turno);
+      } else if (knownForThisClub && !knownForThisClub.phone && !phone) {
         respuesta = `Pasame un teléfono de contacto para la reserva de ${knownForThisClub.name}.`;
       } else if (accion.tipo === "elegir" || !name) {
         // Eligió un turno pero falta identificar al cliente.
@@ -158,27 +240,7 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
         respuesta = `Pasame un teléfono de contacto para la reserva de ${name}.`;
       } else {
         // Eligió + dio datos → reservar. El id del canal se conserva para seguridad de cancelación.
-        const res = await crearReservaBot({
-          clubId: turno.clubId,
-          courtId: turno.courtId,
-          date: turno.date,
-          startTime: turno.startTime,
-          endTime: turno.endTime,
-          customerName: name,
-          customerContactPhone: phone,
-          channel: msg.channel,
-          channelUserId: msg.userId,
-        });
-        if (res.ok) {
-          respuesta = confirmarReservaTexto(turno, name, res);
-        } else if (res.error === "PAGO_NO_DISPONIBLE") {
-          respuesta =
-            "No pude generar el link de pago, así que liberé el turno y no quedó reservado. Probá de nuevo en unos minutos o elegí otro horario.";
-        } else {
-          respuesta =
-            "Uy, ese turno se acaba de ocupar 😕. " +
-            (await redactarRespuesta({ history, userText: msg.text, intent, lugares }));
-        }
+        respuesta = await reservarTurno({ turno, name, phone, msg, history, userText: msg.text, intent, lugares });
       }
     } else {
       // Sigue explorando → redactamos la oferta sobre los datos reales.
