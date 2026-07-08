@@ -106,7 +106,10 @@ describe("Mercado Pago OAuth onboarding", () => {
     const response = await GET(request);
 
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("https://example.com/ajustes?mp=error");
+    const location = new URL(response.headers.get("location") ?? "");
+    expect(location.origin + location.pathname).toBe("https://example.com/ajustes");
+    expect(location.searchParams.get("mp")).toBe("error");
+    expect(location.searchParams.get("mp_reason")).toBe("mp_denied");
     expect(mocks.exchangeCode).not.toHaveBeenCalled();
     expect(mocks.upsertCredentials).not.toHaveBeenCalled();
   });

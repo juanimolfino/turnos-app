@@ -68,7 +68,12 @@ export async function exchangeMercadoPagoAuthorizationCode(code: string): Promis
     body,
   });
 
-  if (!response.ok) throw new Error("Mercado Pago OAuth token exchange failed");
+  if (!response.ok) {
+    // Debug: MP devuelve el motivo real en el body (ej. invalid_client, invalid_grant,
+    // redirect_uri mismatch). Lo capturamos para diagnosticar sin exponer secretos.
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Mercado Pago OAuth token exchange failed (HTTP ${response.status}): ${detail.slice(0, 800)}`);
+  }
 
   const raw = await response.json();
   const parsed = TokenResponseSchema.safeParse(raw);
