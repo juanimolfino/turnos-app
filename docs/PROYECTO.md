@@ -339,6 +339,7 @@ app/
     estadisticas/
     ajustes/           Mi Club, clases, fijos, eventos
   (superadmin)/        panel del SUPERADMIN (clubs, admins, resumen)
+    superadmin/clientes/ clientes globales que usaron el bot + historial
   api/                 endpoints (ver sección 6 y 7)
 ```
 
@@ -395,6 +396,16 @@ El layout `(app)` muestra el **Sidebar** (escritorio) o barra superior + nav inf
   "Agregado por admin" y se pueden editar o borrar desde la misma solapa.
 - Al borrar un cliente manual, se desasocia de reservas/fijos existentes antes de eliminarlo. Las
   reservas no se borran.
+
+### Clientes del bot para superadmin (`/superadmin/clientes`)
+- Vista global de `player_identities`: muestra jugadores que usaron el bot, con datos locales
+  agregados desde `customers` (nombre, teléfono, clubs donde reservaron).
+- Tiene buscador por nombre, teléfono, email o id del canal.
+- Al seleccionar un jugador, muestra historial de reservas cruzando sus clientes locales por club:
+  club, cancha, fecha/hora, estado, pago y `booking_code`.
+- El historial se pagina de a 10 reservas con query params (`player`, `offset`). Esta vista no
+  implementa estadísticas todavía; solo deja preparada la base para calcularlas después desde
+  `bookings.customer_id` y `customers.player_identity_id`.
 
 ---
 

@@ -310,6 +310,154 @@ export async function getSuperadminStats() {
   };
 }
 
+export type SuperadminBotPlayer = {
+  id: string;
+  channel: string;
+  channelUserId: string;
+  names: string[];
+  phones: string[];
+  emails: string[];
+  clubs: string[];
+  clubCount: number;
+  bookingCount: number;
+  lastBookingAt: Date | null;
+  createdAt: Date;
+};
+
+export type SuperadminBotPlayerReservation = {
+  id: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  paymentStatus: string | null;
+  origin: string;
+  bookingCode: string | null;
+  createdAt: Date;
+  clubName: string;
+  courtName: string;
+  customerName: string;
+  customerPhone: string | null;
+};
+
+function normalizeSearch(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+export async function getSuperadminBotPlayers(search?: string | null) {
+  const db = getDb();
+  const q = normalizeSearch(search);
+  const pattern = q ? `%${q}%` : null;
+
+  const rows = await db.execute(sql`
+    select
+      pi.id,
+      pi.channel,
+      pi.channel_user_id as "channelUserId",
+      coalesce(array_remove(array_agg(distinct c.name), null), '{}'::text[]) as names,
+      coalesce(array_remove(array_agg(distinct c.phone), null), '{}'::text[]) as phones,
+      coalesce(array_remove(array_agg(distinct c.email), null), '{}'::text[]) as emails,
+      coalesce(array_remove(array_agg(distinct cl.name), null), '{}'::text[]) as clubs,
+      count(distinct c.club_id)::int as "clubCount",
+      count(distinct b.id)::int as "bookingCount",
+      max(b.created_at) as "lastBookingAt",
+      pi.created_at as "createdAt"
+    from player_identities pi
+    left join customers c on c.player_identity_id = pi.id
+    left join clubs cl on cl.id = c.club_id
+    left join bookings b on b.customer_id = c.id
+    where ${pattern ? sql`
+      exists (
+        select 1
+        from customers sc
+        where sc.player_identity_id = pi.id
+          and (
+            sc.name ilike ${pattern}
+            or sc.phone ilike ${pattern}
+            or coalesce(sc.email, '') ilike ${pattern}
+            or pi.channel_user_id ilike ${pattern}
+          )
+      )
+    ` : sql`true`}
+    group by pi.id, pi.channel, pi.channel_user_id, pi.created_at
+    order by max(b.created_at) desc nulls last, pi.created_at desc
+    limit 100
+  `);
+
+  return rows as unknown as SuperadminBotPlayer[];
+}
+
+export async function getSuperadminBotPlayerById(playerIdentityId: string) {
+  const rows = await getDb().execute(sql`
+    select
+      pi.id,
+      pi.channel,
+      pi.channel_user_id as "channelUserId",
+      coalesce(array_remove(array_agg(distinct c.name), null), '{}'::text[]) as names,
+      coalesce(array_remove(array_agg(distinct c.phone), null), '{}'::text[]) as phones,
+      coalesce(array_remove(array_agg(distinct c.email), null), '{}'::text[]) as emails,
+      coalesce(array_remove(array_agg(distinct cl.name), null), '{}'::text[]) as clubs,
+      count(distinct c.club_id)::int as "clubCount",
+      count(distinct b.id)::int as "bookingCount",
+      max(b.created_at) as "lastBookingAt",
+      pi.created_at as "createdAt"
+    from player_identities pi
+    left join customers c on c.player_identity_id = pi.id
+    left join clubs cl on cl.id = c.club_id
+    left join bookings b on b.customer_id = c.id
+    where pi.id = ${playerIdentityId}
+    group by pi.id, pi.channel, pi.channel_user_id, pi.created_at
+  `);
+  return (rows as unknown as SuperadminBotPlayer[])[0] ?? null;
+}
+
+export async function getSuperadminBotPlayerReservations(playerIdentityId: string, offset = 0, limit = 10) {
+  const db = getDb();
+  const safeOffset = Math.max(0, offset);
+  const safeLimit = Math.max(1, Math.min(50, limit));
+
+  const [reservations, totals] = await Promise.all([
+    db.execute(sql`
+      select
+        b.id,
+        b.date,
+        b.start_time as "startTime",
+        b.end_time as "endTime",
+        b.status,
+        b.payment_status as "paymentStatus",
+        b.origin,
+        b.booking_code as "bookingCode",
+        b.created_at as "createdAt",
+        cl.name as "clubName",
+        co.name as "courtName",
+        c.name as "customerName",
+        c.phone as "customerPhone"
+      from bookings b
+      inner join customers c on c.id = b.customer_id
+      inner join clubs cl on cl.id = b.club_id
+      inner join courts co on co.id = b.court_id
+      where c.player_identity_id = ${playerIdentityId}
+      order by b.date desc, b.start_time desc, b.created_at desc
+      limit ${safeLimit}
+      offset ${safeOffset}
+    `),
+    db.execute(sql`
+      select count(*)::int as total
+      from bookings b
+      inner join customers c on c.id = b.customer_id
+      where c.player_identity_id = ${playerIdentityId}
+    `),
+  ]);
+
+  return {
+    reservations: reservations as unknown as SuperadminBotPlayerReservation[],
+    total: ((totals as unknown as { total: number }[])[0]?.total ?? 0),
+    limit: safeLimit,
+    offset: safeOffset,
+  };
+}
+
 export async function getAllClubs() {
   const db = getDb();
   const allClubs = await db.select().from(clubs).orderBy(clubs.createdAt);

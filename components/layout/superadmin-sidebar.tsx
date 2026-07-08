@@ -11,6 +11,7 @@ const NAV = [
   { href: "/superadmin", label: "Resumen", Icon: LayoutDashboard, exact: true },
   { href: "/superadmin/clubs", label: "Clubs", Icon: Building2 },
   { href: "/superadmin/admins", label: "Admins", Icon: Users },
+  { href: "/superadmin/clientes", label: "Clientes", Icon: Users },
 ];
 
 export function SuperadminSidebar({ adminEmail }: { adminEmail: string }) {
