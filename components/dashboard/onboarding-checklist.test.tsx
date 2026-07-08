@@ -31,7 +31,7 @@ describe("OnboardingChecklist", () => {
       />,
     );
     expect(html).toContain("Cargá la información de tu club");
-    expect(html).toContain("Ir a Ajustes → Mi Club");
+    expect(html).toContain("Ir a Ajustes");
     expect(html).toContain("Definí cuántas canchas tenés");
     expect(html).toContain("Ir a Agenda semanal");
     expect(html).toContain("el bot la va a mostrar como disponible para reservar");
@@ -49,7 +49,7 @@ describe("OnboardingChecklist", () => {
         onAckStep3={noop}
       />,
     );
-    expect(html).not.toContain("Ir a Ajustes → Mi Club");
+    expect(html).not.toContain("Ir a Ajustes");
     expect(html).not.toContain("Ya cargué mis horarios fijos");
   });
 });

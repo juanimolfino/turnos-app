@@ -337,7 +337,7 @@ app/
     agenda/            "Agenda semanal" (carga de bloques)
     clientes/          clientes del club (bot + manuales)
     estadisticas/
-    ajustes/           Mi Club, clases, fijos, eventos
+    ajustes/           datos del club, pagos, Mercado Pago, política de cancelación y API key
   (superadmin)/        panel del SUPERADMIN (clubs, admins, resumen)
     superadmin/clientes/ clientes globales que usaron el bot + historial
   api/                 endpoints (ver sección 6 y 7)

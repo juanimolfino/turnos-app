@@ -88,8 +88,8 @@ export function OnboardingChecklist({
             title="Cargá la información de tu club"
             description="Dirección, teléfono, precio de las canchas, método de pago (0%, seña o 100%) y, si vas a cobrar online, conectá Mercado Pago."
             done={clubInfoDone}
-            href="/ajustes?tab=miclub"
-            cta="Ir a Ajustes → Mi Club"
+            href="/ajustes"
+            cta="Ir a Ajustes"
           />
           <Step
             number={2}
