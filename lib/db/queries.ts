@@ -1,6 +1,6 @@
 import { and, count, desc, eq, isNotNull, isNull, sql, lt, gt, gte, lte, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { clubs, courts, sports, professors, credits, jobs, subscriptions, transactions, users, bookings, customers, notifications, recurringRules, clubMercadoPagoCredentials, adminInvitations, type JobType, type PaymentMode, type Role } from "@/lib/db/schema";
+import { clubs, courts, sports, professors, credits, jobs, subscriptions, transactions, users, bookings, customers, notifications, recurringRules, playerIdentities, clubMercadoPagoCredentials, adminInvitations, type JobType, type PaymentMode, type Role } from "@/lib/db/schema";
 import { sendPurchaseConfirmationEmail, sendWelcomeEmail } from "@/lib/email/send";
 import type { User } from "@supabase/supabase-js";
 import { randomBytes, randomUUID } from "crypto";
@@ -520,10 +520,43 @@ export async function findOrCreateCustomer(clubId: string, name: string, phone: 
 }
 
 export async function getKnownBotCustomer(channel: string, channelUserId: string) {
-  return getDb().query.customers.findFirst({
+  const db = getDb();
+  const identity = await db.query.playerIdentities.findFirst({
+    where: and(eq(playerIdentities.channel, channel), eq(playerIdentities.channelUserId, channelUserId)),
+  });
+
+  if (identity) {
+    const customer = await db.query.customers.findFirst({
+      where: eq(customers.playerIdentityId, identity.id),
+      orderBy: desc(customers.updatedAt),
+    });
+    if (customer) return customer;
+  }
+
+  return db.query.customers.findFirst({
     where: and(eq(customers.channel, channel), eq(customers.channelUserId, channelUserId)),
     orderBy: desc(customers.createdAt),
   });
+}
+
+type PlayerIdentityDb = Pick<ReturnType<typeof getDb>, "query" | "insert">;
+
+async function findOrCreatePlayerIdentity(tx: PlayerIdentityDb, channel: string, channelUserId: string) {
+  const existing = await tx.query.playerIdentities.findFirst({
+    where: and(eq(playerIdentities.channel, channel), eq(playerIdentities.channelUserId, channelUserId)),
+  });
+  if (existing) return existing;
+
+  const [created] = await tx
+    .insert(playerIdentities)
+    .values({ channel, channelUserId })
+    .onConflictDoUpdate({
+      target: [playerIdentities.channel, playerIdentities.channelUserId],
+      set: { updatedAt: new Date() },
+    })
+    .returning();
+
+  return created;
 }
 
 export async function findOrCreateBotCustomer(input: {
@@ -534,48 +567,89 @@ export async function findOrCreateBotCustomer(input: {
   channelUserId: string;
 }) {
   const db = getDb();
-  const existingByChannel = await db.query.customers.findFirst({
-    where: and(
-      eq(customers.clubId, input.clubId),
-      eq(customers.channel, input.channel),
-      eq(customers.channelUserId, input.channelUserId),
-    ),
+  return db.transaction(async (tx) => {
+    const identity = await findOrCreatePlayerIdentity(tx, input.channel, input.channelUserId);
+
+    const existingByIdentity = await tx.query.customers.findFirst({
+      where: and(eq(customers.clubId, input.clubId), eq(customers.playerIdentityId, identity.id)),
+    });
+
+    if (existingByIdentity) {
+      const [updated] = await tx
+        .update(customers)
+        .set({
+          name: input.name,
+          phone: input.phone,
+          channel: input.channel,
+          channelUserId: input.channelUserId,
+          updatedAt: new Date(),
+        })
+        .where(eq(customers.id, existingByIdentity.id))
+        .returning();
+      return updated ?? existingByIdentity;
+    }
+
+    const existingByChannel = await tx.query.customers.findFirst({
+      where: and(
+        eq(customers.clubId, input.clubId),
+        eq(customers.channel, input.channel),
+        eq(customers.channelUserId, input.channelUserId),
+      ),
+    });
+
+    if (existingByChannel) {
+      const [updated] = await tx
+        .update(customers)
+        .set({ playerIdentityId: identity.id, name: input.name, phone: input.phone, updatedAt: new Date() })
+        .where(eq(customers.id, existingByChannel.id))
+        .returning();
+      return updated ?? existingByChannel;
+    }
+
+    const existingByPhone = await tx.query.customers.findFirst({
+      where: and(eq(customers.clubId, input.clubId), eq(customers.phone, input.phone)),
+    });
+    if (existingByPhone) {
+      const [updated] = await tx
+        .update(customers)
+        .set({
+          name: input.name,
+          channel: input.channel,
+          channelUserId: input.channelUserId,
+          playerIdentityId: identity.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(customers.id, existingByPhone.id))
+        .returning();
+      return updated ?? existingByPhone;
+    }
+
+    const [created] = await tx.insert(customers).values({
+      clubId: input.clubId,
+      playerIdentityId: identity.id,
+      name: input.name,
+      phone: input.phone,
+      channel: input.channel,
+      channelUserId: input.channelUserId,
+    }).returning();
+    return created;
   });
+}
 
-  if (existingByChannel) {
-    const [updated] = await db
+export async function linkExistingCustomersToPlayerIdentity(input: {
+  channel: string;
+  channelUserId: string;
+}) {
+  const db = getDb();
+  return db.transaction(async (tx) => {
+    const identity = await findOrCreatePlayerIdentity(tx, input.channel, input.channelUserId);
+    const linked = await tx
       .update(customers)
-      .set({ name: input.name, phone: input.phone, updatedAt: new Date() })
-      .where(eq(customers.id, existingByChannel.id))
+      .set({ playerIdentityId: identity.id, updatedAt: new Date() })
+      .where(and(eq(customers.channel, input.channel), eq(customers.channelUserId, input.channelUserId), isNull(customers.playerIdentityId)))
       .returning();
-    return updated ?? existingByChannel;
-  }
-
-  const existingByPhone = await db.query.customers.findFirst({
-    where: and(eq(customers.clubId, input.clubId), eq(customers.phone, input.phone)),
+    return { identity, linkedCount: linked.length };
   });
-  if (existingByPhone) {
-    const [updated] = await db
-      .update(customers)
-      .set({
-        name: input.name,
-        channel: input.channel,
-        channelUserId: input.channelUserId,
-        updatedAt: new Date(),
-      })
-      .where(eq(customers.id, existingByPhone.id))
-      .returning();
-    return updated ?? existingByPhone;
-  }
-
-  const [created] = await db.insert(customers).values({
-    clubId: input.clubId,
-    name: input.name,
-    phone: input.phone,
-    channel: input.channel,
-    channelUserId: input.channelUserId,
-  }).returning();
-  return created;
 }
 
 function normalizeOptionalText(value: string | null | undefined) {
@@ -600,6 +674,7 @@ export async function listClubCustomers(clubId: string) {
       phone: customers.phone,
       email: customers.email,
       notes: customers.notes,
+      playerIdentityId: customers.playerIdentityId,
       channel: customers.channel,
       channelUserId: customers.channelUserId,
       createdAt: customers.createdAt,
@@ -611,8 +686,8 @@ export async function listClubCustomers(clubId: string) {
 
   return rows.map((customer) => ({
     ...customer,
-    source: customer.channel && customer.channelUserId ? "bot" as const : "admin" as const,
-    editable: !(customer.channel && customer.channelUserId),
+    source: customer.playerIdentityId || (customer.channel && customer.channelUserId) ? "bot" as const : "admin" as const,
+    editable: !(customer.playerIdentityId || (customer.channel && customer.channelUserId)),
   }));
 }
 
@@ -627,6 +702,7 @@ export async function createManualCustomer(input: {
     .insert(customers)
     .values({
       clubId: input.clubId,
+      playerIdentityId: null,
       name: input.name.trim(),
       phone: normalizeOptionalText(input.phone),
       email: normalizeOptionalText(input.email)?.toLowerCase() ?? null,
@@ -652,7 +728,7 @@ export async function updateManualCustomer(input: {
     where: and(eq(customers.id, input.customerId), eq(customers.clubId, input.clubId)),
   });
   if (!existing) throw new CustomerMutationError("CUSTOMER_NOT_FOUND", "El cliente no existe.");
-  if (existing.channel || existing.channelUserId) {
+  if (existing.playerIdentityId || existing.channel || existing.channelUserId) {
     throw new CustomerMutationError("BOT_CUSTOMER_LOCKED", "Los clientes creados por el bot no se editan desde el panel.");
   }
 
@@ -665,7 +741,7 @@ export async function updateManualCustomer(input: {
       notes: normalizeOptionalText(input.notes),
       updatedAt: new Date(),
     })
-    .where(and(eq(customers.id, input.customerId), eq(customers.clubId, input.clubId), isNull(customers.channel), isNull(customers.channelUserId)))
+    .where(and(eq(customers.id, input.customerId), eq(customers.clubId, input.clubId), isNull(customers.playerIdentityId), isNull(customers.channel), isNull(customers.channelUserId)))
     .returning();
 
   return updated;
@@ -678,7 +754,7 @@ export async function deleteManualCustomer(clubId: string, customerId: string) {
       where: and(eq(customers.id, customerId), eq(customers.clubId, clubId)),
     });
     if (!existing) throw new CustomerMutationError("CUSTOMER_NOT_FOUND", "El cliente no existe.");
-    if (existing.channel || existing.channelUserId) {
+    if (existing.playerIdentityId || existing.channel || existing.channelUserId) {
       throw new CustomerMutationError("BOT_CUSTOMER_LOCKED", "Los clientes creados por el bot no se borran desde el panel.");
     }
 
@@ -687,7 +763,7 @@ export async function deleteManualCustomer(clubId: string, customerId: string) {
     await tx.delete(notifications).where(and(eq(notifications.clubId, clubId), eq(notifications.customerId, customerId)));
     const [deleted] = await tx
       .delete(customers)
-      .where(and(eq(customers.id, customerId), eq(customers.clubId, clubId), isNull(customers.channel), isNull(customers.channelUserId)))
+      .where(and(eq(customers.id, customerId), eq(customers.clubId, clubId), isNull(customers.playerIdentityId), isNull(customers.channel), isNull(customers.channelUserId)))
       .returning({ id: customers.id });
 
     return deleted;

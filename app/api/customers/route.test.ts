@@ -43,6 +43,7 @@ describe("customers API", () => {
         phone: "2314 555555",
         email: null,
         notes: null,
+        playerIdentityId: "pid_1",
         channel: "telegram",
         channelUserId: "123",
         source: "bot",
@@ -62,7 +63,7 @@ describe("customers API", () => {
   });
 
   it("crea cliente manual asociado al club del admin y sanea tags", async () => {
-    mocks.createManualCustomer.mockResolvedValue({ id: "cust_admin", name: "Agos Castellani", phone: "2314 555555", channel: null, channelUserId: null });
+    mocks.createManualCustomer.mockResolvedValue({ id: "cust_admin", name: "Agos Castellani", phone: "2314 555555", playerIdentityId: null, channel: null, channelUserId: null });
     const { POST } = await import("./route");
     const request = new NextRequest("https://example.com/api/customers", {
       method: "POST",

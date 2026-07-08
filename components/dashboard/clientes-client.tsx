@@ -9,6 +9,7 @@ export type PanelCustomer = {
   phone: string | null;
   email: string | null;
   notes: string | null;
+  playerIdentityId: string | null;
   channel: string | null;
   channelUserId: string | null;
   createdAt: Date | string;
@@ -38,8 +39,8 @@ function toForm(customer: PanelCustomer): FormState {
 function customerFromResponse(raw: PanelCustomer): PanelCustomer {
   return {
     ...raw,
-    source: raw.channel && raw.channelUserId ? "bot" : "admin",
-    editable: !(raw.channel && raw.channelUserId),
+    source: raw.playerIdentityId || (raw.channel && raw.channelUserId) ? "bot" : "admin",
+    editable: !(raw.playerIdentityId || (raw.channel && raw.channelUserId)),
   };
 }
 

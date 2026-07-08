@@ -32,7 +32,7 @@ describe("customer detail API", () => {
   });
 
   it("actualiza cliente manual", async () => {
-    mocks.updateManualCustomer.mockResolvedValue({ id: "cust_admin", name: "Agos", channel: null, channelUserId: null });
+    mocks.updateManualCustomer.mockResolvedValue({ id: "cust_admin", name: "Agos", playerIdentityId: null, channel: null, channelUserId: null });
     const { PATCH } = await import("./route");
     const request = new NextRequest("https://example.com/api/customers/cust_admin", {
       method: "PATCH",

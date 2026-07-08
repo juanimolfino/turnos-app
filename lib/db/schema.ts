@@ -94,9 +94,21 @@ export const courts = pgTable("courts", {
   priceNonNegative: check("courts_price_non_negative", sql`${table.price} >= 0`),
 }));
 
+export const playerIdentities = pgTable("player_identities", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  channel: text("channel").notNull(),
+  channelUserId: text("channel_user_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  channelIdentityUnique: uniqueIndex("player_identities_channel_identity_unique")
+    .on(table.channel, table.channelUserId),
+}));
+
 export const customers = pgTable("customers", {
   id: uuid("id").defaultRandom().primaryKey(),
   clubId: uuid("club_id").references(() => clubs.id, { onDelete: "cascade" }).notNull(),
+  playerIdentityId: uuid("player_identity_id").references(() => playerIdentities.id, { onDelete: "set null" }),
   name: text("name").notNull(),
   phone: text("phone"),
   email: text("email"),
@@ -106,6 +118,7 @@ export const customers = pgTable("customers", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
+  playerIdentityIdx: index("customers_player_identity_id_idx").on(table.playerIdentityId),
   botIdentityUnique: uniqueIndex("customers_bot_identity_unique")
     .on(table.clubId, table.channel, table.channelUserId)
     .where(sql`${table.channel} IS NOT NULL AND ${table.channelUserId} IS NOT NULL`),
@@ -327,6 +340,10 @@ export const clubRelations = relations(clubs, ({ one, many }) => ({
   }),
 }));
 
+export const playerIdentityRelations = relations(playerIdentities, ({ many }) => ({
+  customers: many(customers),
+}));
+
 export const clubMercadoPagoCredentialsRelations = relations(clubMercadoPagoCredentials, ({ one }) => ({
   club: one(clubs, { fields: [clubMercadoPagoCredentials.clubId], references: [clubs.id] }),
 }));
@@ -347,6 +364,14 @@ export const bookingRelations = relations(bookings, ({ one }) => ({
   recurringRule: one(recurringRules, { fields: [bookings.recurringRuleId], references: [recurringRules.id] }),
 }));
 
+export const customerRelations = relations(customers, ({ one, many }) => ({
+  club: one(clubs, { fields: [customers.clubId], references: [clubs.id] }),
+  playerIdentity: one(playerIdentities, { fields: [customers.playerIdentityId], references: [playerIdentities.id] }),
+  bookings: many(bookings),
+  recurringRules: many(recurringRules),
+  notifications: many(notifications),
+}));
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 export type User = typeof users.$inferSelect;
 export type AdminInvitation = typeof adminInvitations.$inferSelect;
@@ -357,6 +382,7 @@ export type Role = typeof roleEnum.enumValues[number];
 export type Club = typeof clubs.$inferSelect;
 export type ClubMercadoPagoCredentials = typeof clubMercadoPagoCredentials.$inferSelect;
 export type Court = typeof courts.$inferSelect;
+export type PlayerIdentity = typeof playerIdentities.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;
 export type BookingType = typeof bookingTypeEnum.enumValues[number];

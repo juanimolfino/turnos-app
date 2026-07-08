@@ -84,14 +84,16 @@ cancha por cancha, dos canchas con ocupación distinta producían horarios corri
 pisaban ("20:00 y 20:30" a la vez). *(El cómo del cálculo está en
 [§ Bot de reservas](#bot-de-reservas-asistente-de-pádel) y §5.)*
 
-#### El jugador no tiene login; se identifica por canal + nombre/teléfono
+#### El jugador no tiene login; se identifica por canal + ficha local del club
 Nadie hace login para reservar: le escribe a un bot. La identidad estable sale del canal
-(`telegram + userId` hoy; mañana `whatsapp + id/phone`). El nombre y el teléfono real de
-contacto se piden una vez y se guardan en `customers` por club. Si la persona vuelve, el
-bot puede reconocerla, saludarla por nombre y mostrar los datos guardados para que los
-confirme antes de reservar. Si dice que no son correctos, el bot pide nombre/teléfono
-nuevos y los actualiza al reservar. En `bookings` queda un snapshot y el id del canal para
-la seguridad de cancelación por código.
+(`telegram + userId` hoy; mañana `whatsapp + id/phone`) y vive en `player_identities`.
+Esa identidad global es técnica y no se comparte con los clubes. Cada club tiene su propia
+ficha local en `customers`: nombre, teléfono, email/notas y vínculo opcional a
+`player_identity_id`. Así una misma persona puede jugar en varios clubes, pero cada club
+solo ve su relación local con esa persona. Si el admin creó un cliente manual y después ese
+mismo jugador entra por el bot en ese club, se intenta vincular por teléfono en ese club en
+vez de duplicarlo. En `bookings` queda `customer_id` y un snapshot/id del canal para la
+seguridad de cancelación por código.
 
 #### Reserva automática, sin aprobación del dueño
 Cuando el jugador reserva, queda reservado: el dueño **ve** la reserva, no la **aprueba**.
@@ -386,9 +388,9 @@ El layout `(app)` muestra el **Sidebar** (escritorio) o barra superior + nav inf
 
 ### Clientes (`/clientes`)
 - Lista los clientes del club guardados en `customers`.
-- Los clientes que llegan desde el bot se identifican por `channel + channel_user_id` y se
-  muestran como **solo lectura**: el dueño ve nombre/teléfono/notas, pero no los edita ni borra
-  desde el panel para no romper la identidad que usa el bot.
+- Los clientes que llegan desde el bot quedan vinculados a `player_identities` y se muestran como
+  **solo lectura**: el dueño ve nombre/teléfono/notas, pero no los edita ni borra desde el panel
+  para no romper la identidad que usa el bot.
 - El dueño puede crear clientes manuales. Quedan sin `channel` / `channel_user_id`, figuran como
   "Agregado por admin" y se pueden editar o borrar desde la misma solapa.
 - Al borrar un cliente manual, se desasocia de reservas/fijos existentes antes de eliminarlo. Las
@@ -458,19 +460,27 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
   `confirmado`. Sigue ocupando la grilla porque es provisorio, no libre.
 - Lo que carga el dueño en /agenda y lo que reserva el bot viven **todo acá**.
 
+### `player_identities` 🤖 — identidad técnica global del jugador
+`id` · `channel` · `channel_user_id` · `created_at` · `updated_at`
+- Una fila por identidad estable de canal (`telegram + userId`, futuro `whatsapp + id/phone`).
+- No representa una ficha visible para todos los clubes; es una clave técnica para que la
+  plataforma sepa que la misma persona puede tener clientes locales en varios clubes.
+
 ### `customers` 🤖 — jugadores/clientes del club
-`id` · `club_id` · `name` · `phone` · `email` · `channel` · `channel_user_id` · `notes` ·
-`created_at` · `updated_at`
-- El bot crea/actualiza un cliente por club usando `channel + channel_user_id` (hoy
-  `telegram + userId`). En la primera reserva pide nombre y teléfono real de contacto.
+`id` · `club_id` · `player_identity_id` · `name` · `phone` · `email` · `channel` ·
+`channel_user_id` · `notes` · `created_at` · `updated_at`
+- El bot crea/actualiza un cliente por club vinculado a `player_identity_id`. En la primera
+  reserva pide nombre y teléfono real de contacto. Si ya existía un cliente manual con el mismo
+  teléfono dentro de ese club, lo vincula a la identidad global en vez de crear otro cliente local.
 - Si la persona vuelve a hablarle al bot y ya existe en `customers`, el bot puede saludarla por
   nombre. Antes de reutilizar sus datos para reservar, le muestra nombre/teléfono y exige una
   confirmación simple; si el usuario niega o corrige, pide datos nuevos y actualiza el cliente.
 - Los datos que llegan desde el chat se tratan como entrada externa: se normaliza el teléfono y se
   sanea texto libre (sin tags/script, caracteres de control ni símbolos peligrosos) antes de
   persistirlo.
-- En `/clientes`, el admin puede crear clientes manuales (`channel/channel_user_id = null`) y
-  editarlos/borrarlos. Los clientes con identidad de canal quedan bloqueados como solo lectura.
+- En `/clientes`, el admin puede crear clientes manuales (`player_identity_id = null`) y
+  editarlos/borrarlos. Los clientes vinculados a una identidad global quedan bloqueados como
+  solo lectura.
 - La agenda semanal y la agenda del día muestran los datos de `customers` para que el club pueda
   contactar a quien reservó.
 
@@ -648,7 +658,7 @@ desde datos reales.
 1. El usuario busca y el bot ofrece turnos concretos por lugar. Si el usuario pide un
    club específico ("qué hay en Pádel Central"), el bot responde solo sobre ese club; si
    pide una zona/barrio, filtra por esa zona; si no acota, muestra la oferta cruzada.
-2. Si el usuario ya existe como cliente del club (`customers.channel + channel_user_id`), el bot
+2. Si el usuario ya existe como cliente del club (`customers.player_identity_id`), el bot
    puede saludarlo por nombre. Al elegir un turno, antes de reutilizar sus datos guardados muestra
    **nombre + teléfono de contacto** y pregunta si son correctos. Con respuesta afirmativa continúa
    la reserva; con respuesta negativa pide datos actualizados. Si no existe, pide **nombre y
