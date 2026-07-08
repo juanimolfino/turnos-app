@@ -57,6 +57,7 @@ vi.mock("@/lib/db/queries", () => ({
     state.cancelledHolds.push(bookingId);
     return Promise.resolve({ id: bookingId, status: "cancelado" });
   },
+  findOrCreateBotCustomer: vi.fn().mockResolvedValue({ id: "customer-1", name: "Juan Pérez", phone: "2314 555555" }),
 }));
 
 import { crearReservaBot, generarBookingCode, resolverTurno, confirmarReservaTexto } from "@/lib/bot/reservar";
@@ -64,7 +65,10 @@ import { crearReservaBot, generarBookingCode, resolverTurno, confirmarReservaTex
 const input = {
   clubId: "club1", courtId: "court1", date: "2026-06-27",
   startTime: "19:00", endTime: "20:30",
-  customerName: "Juan Pérez", customerPhone: "12345",
+  customerName: "Juan Pérez",
+  customerContactPhone: "2314 555555",
+  channel: "telegram" as const,
+  channelUserId: "12345",
 };
 
 describe("generarBookingCode", () => {
@@ -112,7 +116,9 @@ describe("crearReservaBot", () => {
       type: "simple", origin: "bot", status: "confirmado", paymentStatus: "impago",
       clubId: "club1", courtId: "court1", date: "2026-06-27",
       startTime: "19:00", endTime: "20:30",
-      customerName: "Juan Pérez", customerPhone: "12345",
+      customerId: "customer-1",
+      customerName: "Juan Pérez",
+      customerPhone: "12345",
     });
     expect(v.heldUntil).toBeNull();
     expect(v.price).toBeNull();

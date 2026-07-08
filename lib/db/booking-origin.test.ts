@@ -4,12 +4,18 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const state = vi.hoisted(() => ({
   inserts: [] as Record<string, unknown>[],
   selectRows: [] as Record<string, unknown>[],
+  customerRows: [] as Record<string, unknown>[],
+  professorRows: [] as Record<string, unknown>[],
 }));
 vi.mock("@/lib/db", () => ({
   getDb: () => ({
-    select: () => ({
+    select: (fields?: Record<string, unknown>) => ({
       from: () => ({
-        where: () => Promise.resolve(state.selectRows),
+        where: () => {
+          if (fields?.phone) return Promise.resolve(state.customerRows);
+          if (fields?.name && !fields?.phone) return Promise.resolve(state.professorRows);
+          return Promise.resolve(state.selectRows);
+        },
       }),
     }),
     insert: () => ({
@@ -30,6 +36,8 @@ describe("origin en creación de bookings", () => {
   beforeEach(() => {
     state.inserts = [];
     state.selectRows = [];
+    state.customerRows = [];
+    state.professorRows = [];
   });
 
   it("createBooking (panel) setea origin='admin' por defecto", async () => {
@@ -73,6 +81,8 @@ describe("end_time='24:00' nunca se persiste", () => {
   beforeEach(() => {
     state.inserts = [];
     state.selectRows = [];
+    state.customerRows = [];
+    state.professorRows = [];
   });
 
   it("createBooking que termina a medianoche guarda '23:59'", async () => {
@@ -119,6 +129,33 @@ describe("getWeekAgenda", () => {
         status: "pendiente",
       }),
     ]);
+  });
+
+  it("devuelve nombre y teléfono del cliente para mostrar detalles de reservas del bot", async () => {
+    state.selectRows = [
+      {
+        id: "bk1",
+        courtId: "ct1",
+        date: "2026-06-27",
+        startTime: "18:00",
+        endTime: "19:30",
+        type: "simple",
+        status: "confirmado",
+        notes: null,
+        blockGroupId: null,
+        customerId: "cust1",
+        customerName: "Snapshot viejo",
+        professorId: null,
+      },
+    ];
+    state.customerRows = [{ id: "cust1", name: "Carlos Gómez", phone: "2314 555555" }];
+
+    const rows = await getWeekAgenda("club1", "2026-06-27", "2026-06-27");
+
+    expect(rows[0]).toMatchObject({
+      label: "Carlos Gómez",
+      customerPhone: "2314 555555",
+    });
   });
 });
 

@@ -519,6 +519,65 @@ export async function findOrCreateCustomer(clubId: string, name: string, phone: 
   return created;
 }
 
+export async function getKnownBotCustomer(channel: string, channelUserId: string) {
+  return getDb().query.customers.findFirst({
+    where: and(eq(customers.channel, channel), eq(customers.channelUserId, channelUserId)),
+    orderBy: desc(customers.createdAt),
+  });
+}
+
+export async function findOrCreateBotCustomer(input: {
+  clubId: string;
+  name: string;
+  phone: string;
+  channel: string;
+  channelUserId: string;
+}) {
+  const db = getDb();
+  const existingByChannel = await db.query.customers.findFirst({
+    where: and(
+      eq(customers.clubId, input.clubId),
+      eq(customers.channel, input.channel),
+      eq(customers.channelUserId, input.channelUserId),
+    ),
+  });
+
+  if (existingByChannel) {
+    const [updated] = await db
+      .update(customers)
+      .set({ name: input.name, phone: input.phone, updatedAt: new Date() })
+      .where(eq(customers.id, existingByChannel.id))
+      .returning();
+    return updated ?? existingByChannel;
+  }
+
+  const existingByPhone = await db.query.customers.findFirst({
+    where: and(eq(customers.clubId, input.clubId), eq(customers.phone, input.phone)),
+  });
+  if (existingByPhone) {
+    const [updated] = await db
+      .update(customers)
+      .set({
+        name: input.name,
+        channel: input.channel,
+        channelUserId: input.channelUserId,
+        updatedAt: new Date(),
+      })
+      .where(eq(customers.id, existingByPhone.id))
+      .returning();
+    return updated ?? existingByPhone;
+  }
+
+  const [created] = await db.insert(customers).values({
+    clubId: input.clubId,
+    name: input.name,
+    phone: input.phone,
+    channel: input.channel,
+    channelUserId: input.channelUserId,
+  }).returning();
+  return created;
+}
+
 export async function createBooking(data: {
   clubId: string;
   courtId: string;
@@ -646,6 +705,7 @@ export async function getWeekAgenda(clubId: string, startDate: string, endDate: 
     startTime: bookings.startTime, endTime: bookings.endTime, type: bookings.type,
     status: bookings.status, notes: bookings.notes, blockGroupId: bookings.blockGroupId,
     customerId: bookings.customerId, professorId: bookings.professorId,
+    customerName: bookings.customerName,
   }).from(bookings).where(and(
     eq(bookings.clubId, clubId),
     gte(bookings.date, startDate),
@@ -655,14 +715,14 @@ export async function getWeekAgenda(clubId: string, startDate: string, endDate: 
   const profIds = [...new Set(rows.map((r) => r.professorId).filter(Boolean))] as string[];
   const custIds = [...new Set(rows.map((r) => r.customerId).filter(Boolean))] as string[];
   const profMap: Record<string, string> = {};
-  const custMap: Record<string, string> = {};
+  const custMap: Record<string, { name: string; phone: string | null }> = {};
   if (profIds.length) {
     const ps = await db.select({ id: professors.id, name: professors.name }).from(professors).where(inArray(professors.id, profIds));
     ps.forEach((p) => { profMap[p.id] = p.name; });
   }
   if (custIds.length) {
-    const cs = await db.select({ id: customers.id, name: customers.name }).from(customers).where(inArray(customers.id, custIds));
-    cs.forEach((c) => { custMap[c.id] = c.name; });
+    const cs = await db.select({ id: customers.id, name: customers.name, phone: customers.phone }).from(customers).where(inArray(customers.id, custIds));
+    cs.forEach((c) => { custMap[c.id] = { name: c.name, phone: c.phone }; });
   }
 
   return rows
@@ -671,7 +731,8 @@ export async function getWeekAgenda(clubId: string, startDate: string, endDate: 
       id: r.id, courtId: r.courtId, date: r.date,
       startTime: r.startTime, endTime: r.endTime, type: r.type,
       status: r.status, blockGroupId: r.blockGroupId, notes: r.notes,
-      label: r.professorId ? profMap[r.professorId] ?? null : r.customerId ? custMap[r.customerId] ?? null : null,
+      label: r.professorId ? profMap[r.professorId] ?? null : r.customerId ? custMap[r.customerId]?.name ?? null : r.customerName ?? null,
+      customerPhone: r.customerId ? custMap[r.customerId]?.phone ?? null : null,
     }));
 }
 

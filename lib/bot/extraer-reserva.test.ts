@@ -26,15 +26,22 @@ describe("extraerAccionReserva", () => {
 
   it("eligió turno + nombre → 'reservar'", async () => {
     create.mockImplementation(async () =>
-      modelReturns({ tipo: "reservar", lugar: "Pádel Central", hora: "19:00", cancha: null, nombre: "Juan Pérez" }),
+      modelReturns({ tipo: "reservar", lugar: "Pádel Central", hora: "19:00", cancha: null, nombre: "Juan Pérez", telefono: "2314 555555" }),
     );
     const accion = await extraerAccionReserva(history, lugares);
-    expect(accion).toEqual({ tipo: "reservar", lugar: "Pádel Central", hora: "19:00", cancha: null, nombre: "Juan Pérez" });
+    expect(accion).toEqual({
+      tipo: "reservar",
+      lugar: "Pádel Central",
+      hora: "19:00",
+      cancha: null,
+      nombre: "Juan Pérez",
+      telefono: "2314 555555",
+    });
   });
 
   it("'reservar' sin nombre se degrada a 'elegir'", async () => {
     create.mockImplementation(async () =>
-      modelReturns({ tipo: "reservar", lugar: "Pádel Central", hora: "19:00", cancha: null, nombre: null }),
+      modelReturns({ tipo: "reservar", lugar: "Pádel Central", hora: "19:00", cancha: null, nombre: null, telefono: "2314 555555" }),
     );
     const accion = await extraerAccionReserva(history, lugares);
     expect(accion.tipo).toBe("elegir");

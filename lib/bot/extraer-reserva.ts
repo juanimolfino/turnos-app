@@ -17,11 +17,12 @@ const AccionSchema = z.object({
   hora: z.string().nullable(), // HH:MM del turno elegido
   cancha: z.string().nullable(),
   nombre: z.string().nullable(), // nombre y apellido del cliente
+  telefono: z.string().nullable(), // teléfono de contacto del cliente, si lo dio
 });
 
 export type AccionReserva = z.infer<typeof AccionSchema>;
 
-const NINGUNA: AccionReserva = { tipo: "ninguna", lugar: null, hora: null, cancha: null, nombre: null };
+const NINGUNA: AccionReserva = { tipo: "ninguna", lugar: null, hora: null, cancha: null, nombre: null, telefono: null };
 
 let client: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -45,8 +46,9 @@ Claves del JSON:
 - "hora": la hora de inicio del turno elegido en formato HH:MM (debe ser una de las de OPCIONES), o null.
 - "cancha": la cancha elegida si la mencionó, o null.
 - "nombre": el nombre y apellido que dio el usuario para la reserva, o null.
+- "telefono": el teléfono de contacto que dio el usuario, o null.
 
-Reglas: el turno elegido debe corresponder a una opción real de OPCIONES (no inventes lugar/hora). Si el usuario solo dice un nombre después de que se le pidió, y ya había un turno en juego, marcá "reservar" con ese nombre y el turno del contexto. Respondé solo el JSON.`;
+Reglas: el turno elegido debe corresponder a una opción real de OPCIONES (no inventes lugar/hora). Si el usuario solo dice un nombre o un teléfono después de que se le pidió, y ya había un turno en juego, marcá "reservar" con los datos disponibles y el turno del contexto. Respondé solo el JSON.`;
 }
 
 export async function extraerAccionReserva(
@@ -70,7 +72,7 @@ export async function extraerAccionReserva(
     const raw = completion.choices[0]?.message?.content;
     if (!raw) return { ...NINGUNA };
     const obj = JSON.parse(raw) as Record<string, unknown>;
-    for (const k of ["lugar", "hora", "cancha", "nombre"]) if (obj[k] === "") obj[k] = null;
+    for (const k of ["lugar", "hora", "cancha", "nombre", "telefono"]) if (obj[k] === "") obj[k] = null;
     const parsed = AccionSchema.safeParse(obj);
     if (!parsed.success) {
       console.error("[reserva] acción inválida:", parsed.error.message);

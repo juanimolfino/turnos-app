@@ -48,6 +48,11 @@ vi.mock("@/lib/bot/reservar", () => ({
   confirmarReservaTexto: (...a: unknown[]) => confirmarReservaTexto(...a),
 }));
 
+const getKnownBotCustomer = vi.fn();
+vi.mock("@/lib/db/queries", () => ({
+  getKnownBotCustomer: (...a: unknown[]) => getKnownBotCustomer(...a),
+}));
+
 import { handleIncomingMessage } from "@/lib/bot/handle";
 
 const msg = (text: string) => ({ channel: "telegram" as const, userId: "123", text });
@@ -75,6 +80,7 @@ describe("handleIncomingMessage (Fase 6 — reservar)", () => {
     crearReservaBot.mockReset();
     resolverTurno.mockReset().mockReturnValue(turno);
     confirmarReservaTexto.mockReset().mockReturnValue("CONFIRMADA HYS324");
+    getKnownBotCustomer.mockReset().mockResolvedValue(null);
   });
 
   it("sin date → repregunta (charla) y NO busca ni reserva", async () => {
@@ -83,6 +89,16 @@ describe("handleIncomingMessage (Fase 6 — reservar)", () => {
     expect(generarRespuesta).toHaveBeenCalled();
     expect(buscarDisponibilidad).not.toHaveBeenCalled();
     expect(crearReservaBot).not.toHaveBeenCalled();
+  });
+
+  it("si el cliente ya existe y abre conversación, lo saluda por nombre", async () => {
+    getKnownBotCustomer.mockResolvedValue({ clubId: "cl1", name: "Carlos Gómez", phone: "2314 444444" });
+    extraerIntencion.mockResolvedValue({ date: null, time: null, zone: null, sport: "padel" });
+
+    await handleIncomingMessage(msg("hola"));
+
+    expect(generarRespuesta).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith("123", "Hola Carlos. ¿Cuándo te gustaría jugar?");
   });
 
   it("si nombra un club pero falta día → pregunta el día conservando ese club", async () => {
@@ -111,9 +127,26 @@ describe("handleIncomingMessage (Fase 6 — reservar)", () => {
     expect(send).toHaveBeenCalledWith("123", expect.stringContaining("nombre"));
   });
 
-  it("eligió turno + nombre → reserva y confirma con código (teléfono = id del canal)", async () => {
+  it("eligió turno + nombre pero sin teléfono → pide teléfono y no reserva", async () => {
     extraerIntencion.mockResolvedValue(conIntencion);
     extraerAccionReserva.mockResolvedValue({ tipo: "reservar", lugar: "Pádel Central", hora: "19:00", cancha: null, nombre: "Juan Pérez" });
+
+    await handleIncomingMessage(msg("Juan Pérez"));
+
+    expect(crearReservaBot).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith("123", expect.stringContaining("teléfono"));
+  });
+
+  it("eligió turno + nombre + teléfono → guarda cliente, reserva y conserva id del canal para cancelación", async () => {
+    extraerIntencion.mockResolvedValue(conIntencion);
+    extraerAccionReserva.mockResolvedValue({
+      tipo: "reservar",
+      lugar: "Pádel Central",
+      hora: "19:00",
+      cancha: null,
+      nombre: "Juan Pérez",
+      telefono: "2314 555555",
+    });
     const reservaOk = {
       ok: true,
       bookingId: "bk1",
@@ -132,15 +165,48 @@ describe("handleIncomingMessage (Fase 6 — reservar)", () => {
     expect(crearReservaBot).toHaveBeenCalledWith({
       clubId: "cl1", courtId: "ct1", date: "2026-06-27",
       startTime: "19:00", endTime: "20:30",
-      customerName: "Juan Pérez", customerPhone: "123",
+      customerName: "Juan Pérez",
+      customerContactPhone: "2314 555555",
+      channel: "telegram",
+      channelUserId: "123",
     });
     expect(confirmarReservaTexto).toHaveBeenCalledWith(turno, "Juan Pérez", reservaOk);
     expect(send).toHaveBeenCalledWith("123", "CONFIRMADA HYS324");
   });
 
+  it("si el cliente ya existe para ese club, reserva sin pedir nombre ni teléfono", async () => {
+    getKnownBotCustomer.mockResolvedValue({ clubId: "cl1", name: "Carlos Gómez", phone: "2314 444444" });
+    extraerIntencion.mockResolvedValue(conIntencion);
+    extraerAccionReserva.mockResolvedValue({ tipo: "elegir", lugar: "Pádel Central", hora: "19:00", cancha: null, nombre: null, telefono: null });
+    const reservaOk = {
+      ok: true,
+      bookingId: "bk1",
+      bookingCode: "HYS324",
+      status: "confirmado",
+      paymentMode: "none",
+      amountToCharge: 0,
+      heldUntil: null,
+      paymentInitPoint: null,
+      mpPreferenceId: null,
+    };
+    crearReservaBot.mockResolvedValue(reservaOk);
+
+    await handleIncomingMessage(msg("quiero ese"));
+
+    expect(crearReservaBot).toHaveBeenCalledWith({
+      clubId: "cl1", courtId: "ct1", date: "2026-06-27",
+      startTime: "19:00", endTime: "20:30",
+      customerName: "Carlos Gómez",
+      customerContactPhone: "2314 444444",
+      channel: "telegram",
+      channelUserId: "123",
+    });
+    expect(confirmarReservaTexto).toHaveBeenCalledWith(turno, "Carlos Gómez", reservaOk);
+  });
+
   it("CAPA B/A: si el turno se ocupó → no confirma, avisa y re-ofrece", async () => {
     extraerIntencion.mockResolvedValue(conIntencion);
-    extraerAccionReserva.mockResolvedValue({ tipo: "reservar", lugar: "Pádel Central", hora: "19:00", cancha: null, nombre: "Juan Pérez" });
+    extraerAccionReserva.mockResolvedValue({ tipo: "reservar", lugar: "Pádel Central", hora: "19:00", cancha: null, nombre: "Juan Pérez", telefono: "2314 555555" });
     crearReservaBot.mockResolvedValue({ ok: false, error: "SLOT_NO_DISPONIBLE" });
 
     await handleIncomingMessage(msg("Juan Pérez"));
@@ -152,7 +218,7 @@ describe("handleIncomingMessage (Fase 6 — reservar)", () => {
 
   it("si falla Mercado Pago, avisa y no deja el hold como reservado", async () => {
     extraerIntencion.mockResolvedValue(conIntencion);
-    extraerAccionReserva.mockResolvedValue({ tipo: "reservar", lugar: "Pádel Central", hora: "19:00", cancha: null, nombre: "Juan Pérez" });
+    extraerAccionReserva.mockResolvedValue({ tipo: "reservar", lugar: "Pádel Central", hora: "19:00", cancha: null, nombre: "Juan Pérez", telefono: "2314 555555" });
     crearReservaBot.mockResolvedValue({ ok: false, error: "PAGO_NO_DISPONIBLE" });
 
     await handleIncomingMessage(msg("Juan Pérez"));

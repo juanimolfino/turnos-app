@@ -9,6 +9,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid
 } from "drizzle-orm/pg-core";
 
@@ -99,9 +100,16 @@ export const customers = pgTable("customers", {
   name: text("name").notNull(),
   phone: text("phone"),
   email: text("email"),
+  channel: text("channel"),
+  channelUserId: text("channel_user_id"),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  botIdentityUnique: uniqueIndex("customers_bot_identity_unique")
+    .on(table.clubId, table.channel, table.channelUserId)
+    .where(sql`${table.channel} IS NOT NULL AND ${table.channelUserId} IS NOT NULL`),
+}));
 
 export const professors = pgTable("professors", {
   id: uuid("id").defaultRandom().primaryKey(),

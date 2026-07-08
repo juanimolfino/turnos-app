@@ -20,6 +20,7 @@ interface Block {
   blockGroupId: string | null;
   notes: string | null;
   label: string | null;
+  customerPhone?: string | null;
 }
 
 interface Props {
@@ -516,6 +517,11 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
                 <br />
                 {viewBlock.startTime} – {viewBlock.endTime}
               </div>
+              {viewBlock.customerPhone && (
+                <div style={{ fontSize: 13.5, color: "#54504A" }}>
+                  Teléfono: <span style={{ fontWeight: 700, color: "#221F1B" }}>{viewBlock.customerPhone}</span>
+                </div>
+              )}
               {viewBlock.notes && <div style={{ fontSize: 13.5, color: "#6B6660" }}>{viewBlock.notes}</div>}
 
               <div style={{ borderTop: "1px solid #EFEAE0", paddingTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>

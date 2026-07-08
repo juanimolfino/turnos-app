@@ -430,8 +430,11 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
 - **`payment_review_reason`**: motivo por el cual un pago aprobado no confirmó la reserva y
   requiere revisión manual/refund, o por el cual falló un refund (ej. `hold_expired`,
   `not_pending`, `amount_mismatch`, `refund_failed`, `refund_not_approved`).
-- **`customer_name` / `customer_phone`**: datos del cliente del bot (sin login); las
-  reservas del admin pueden no tenerlos.
+- **`customer_id`**: cliente del club (`customers`). Las reservas creadas por el bot lo setean
+  para que el dueño vea nombre/teléfono y el bot reconozca a la persona si vuelve.
+- **`customer_name` / `customer_phone`**: snapshot de seguridad del bot. `customer_name` conserva
+  el nombre usado en la reserva; `customer_phone` conserva el id del canal (ej. Telegram `userId`)
+  para validar cancelación por código. El teléfono real de contacto vive en `customers.phone`.
 - **`booking_code`**: código tipo aerolínea (3 letras + 3 números, ej `HYS324`), único,
   que el bot le da al cliente para cancelar.
 - **Regla de disponibilidad**: una cancha está **libre** en un rango si NO hay ningún
@@ -442,10 +445,15 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
   `confirmado`. Sigue ocupando la grilla porque es provisorio, no libre.
 - Lo que carga el dueño en /agenda y lo que reserva el bot viven **todo acá**.
 
-### `customers` — jugadores/clientes del club (legacy / panel)
-`id` · `club_id` · `name` · `phone` · `email` · `notes` · `created_at`
-- **El bot NO usa esta tabla:** guarda `customer_name`/`customer_phone` directo en el
-  `booking`. La tabla global de clientes queda para una **etapa futura**.
+### `customers` 🤖 — jugadores/clientes del club
+`id` · `club_id` · `name` · `phone` · `email` · `channel` · `channel_user_id` · `notes` ·
+`created_at` · `updated_at`
+- El bot crea/actualiza un cliente por club usando `channel + channel_user_id` (hoy
+  `telegram + userId`). En la primera reserva pide nombre y teléfono real de contacto.
+- Si la persona vuelve a hablarle al bot y ya existe en `customers`, el bot puede saludarla por
+  nombre y reutilizar sus datos para reservar sin volver a pedir teléfono.
+- La agenda semanal y la agenda del día muestran los datos de `customers` para que el club pueda
+  contactar a quien reservó.
 
 ### `professors` — profes de clases
 `id` · `club_id` · `name` · `active`
@@ -618,13 +626,15 @@ desde datos reales.
 1. El usuario busca y el bot ofrece turnos concretos por lugar. Si el usuario pide un
    club específico ("qué hay en Pádel Central"), el bot responde solo sobre ese club; si
    pide una zona/barrio, filtra por esa zona; si no acota, muestra la oferta cruzada.
-2. El usuario elige un turno → el bot pide **nombre y apellido** ("¿A nombre de quién?").
-   El **teléfono sale del canal** (Telegram: `userId`); no se pide por chat.
-3. Al dar el nombre, **antes de escribir** se re-verifica que el turno siga libre (**capa B**).
+2. Si el usuario ya existe como cliente del club (`customers.channel + channel_user_id`), el bot
+   reutiliza su nombre/teléfono y puede saludarlo por nombre. Si no existe, al elegir un turno pide
+   **nombre y apellido + teléfono de contacto**.
+3. Al tener los datos necesarios, **antes de escribir** se re-verifica que el turno siga libre
+   (**capa B**).
 4. Si sigue libre, el resultado depende de `clubs.payment_mode`:
    - `none`: crea el booking directo como antes: `type='simple'`, `origin='bot'`,
-     `status='confirmado'`, `payment_status='impago'`, con `customer_name`, `customer_phone`
-     y `booking_code`.
+     `status='confirmado'`, `payment_status='impago'`, con `customer_id`, `customer_name`,
+     `customer_phone` (id del canal) y `booking_code`.
    - `partial` / `full`: crea un **hold** `type='simple'`, `origin='bot'`,
      `status='pendiente'`, `payment_status='impago'`, `held_until=now()+10min`, con el monto
      calculado en `price` (`partial`: `court.price * deposit_pct / 100`; `full`: `court.price`).
@@ -741,7 +751,4 @@ desde datos reales.
   después de volver de Mercado Pago. En éxito no afirma estado final de reserva: muestra que el
   pago fue recibido y que la confirmación llega por Telegram. La fuente de verdad es el webhook
   firmado de MP.
-- Nombre/teléfono se guardan **en el booking** (no en `customers`): la tabla global de clientes
-  queda para una etapa posterior.
-- **Fase futura:** refunds automáticos para pagos tardíos / `customers` global / búsqueda por
-  distancia (lat/lng).
+- **Fase futura:** refunds automáticos para pagos tardíos / búsqueda por distancia (lat/lng).

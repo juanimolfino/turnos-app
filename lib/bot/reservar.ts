@@ -4,8 +4,9 @@ import { bookings, clubs, courts, type PaymentMode } from "@/lib/db/schema";
 import type { LugarDisponibilidad } from "@/lib/bot/search";
 import { calculateBookingPaymentAmount } from "@/lib/payments/amount";
 import { createBookingPaymentPreference } from "@/lib/payments/mercadopago-booking";
-import { cancelBotHoldAfterPaymentError } from "@/lib/db/queries";
+import { cancelBotHoldAfterPaymentError, findOrCreateBotCustomer } from "@/lib/db/queries";
 import { cancellationPolicyText } from "@/lib/bot/cancellation-policy-text";
+import type { Channel } from "@/lib/bot/types";
 
 // Motor de reserva del bot (Fase 6). Crea bookings type='simple', origin='bot'.
 // Anti-doble-booking en DOS capas:
@@ -20,7 +21,9 @@ export type ReservaInput = {
   startTime: string; // HH:MM
   endTime: string; // HH:MM
   customerName: string;
-  customerPhone: string; // sale del canal (Telegram: userId); no se pide por chat
+  customerContactPhone: string; // teléfono real de contacto, pedido por chat
+  channel: Channel;
+  channelUserId: string; // id del usuario en el canal; se guarda en booking.customerPhone para seguridad de cancelación
   now?: Date;
 };
 
@@ -113,6 +116,14 @@ export async function crearReservaBot(input: ReservaInput): Promise<ReservaResul
     );
   if (solapados.length > 0) return { ok: false, error: "SLOT_NO_DISPONIBLE" };
 
+  const customer = await findOrCreateBotCustomer({
+    clubId: input.clubId,
+    name: input.customerName,
+    phone: input.customerContactPhone,
+    channel: input.channel,
+    channelUserId: input.channelUserId,
+  });
+
   // ── Inserción protegida por la constraint EXCLUDE (CAPA A) ──
   for (let intento = 0; intento < MAX_CODE_RETRIES; intento++) {
     const bookingCode = generarBookingCode();
@@ -131,8 +142,9 @@ export async function crearReservaBot(input: ReservaInput): Promise<ReservaResul
           paymentStatus: "impago",
           heldUntil,
           price: amountToCharge > 0 ? amountToCharge : null,
+          customerId: customer.id,
           customerName: input.customerName,
-          customerPhone: input.customerPhone,
+          customerPhone: input.channelUserId,
           bookingCode,
         })
         .returning({ id: bookings.id, bookingCode: bookings.bookingCode });

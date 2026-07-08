@@ -12,6 +12,7 @@ interface Block {
   id: string; courtId: string; date: string;
   startTime: string; endTime: string; type: string;
   status: string; blockGroupId: string | null; notes: string | null; label: string | null;
+  customerPhone?: string | null;
 }
 interface Props {
   courts: Court[];
@@ -308,6 +309,11 @@ export function AgendaDayClient({ courts, blocks, date, clubName, timezone }: Pr
                 {detail.label && <span style={{ fontSize: 15, fontWeight: 700, color: "#221F1B" }}>{detail.label}</span>}
               </div>
               <div style={{ fontSize: 14, color: "#54504A" }}>{courtName} · {detail.startTime} – {detail.endTime}</div>
+              {detail.customerPhone && (
+                <div style={{ fontSize: 13.5, color: "#54504A", marginTop: 8 }}>
+                  Teléfono: <span style={{ fontWeight: 700, color: "#221F1B" }}>{detail.customerPhone}</span>
+                </div>
+              )}
               {detail.notes && <div style={{ fontSize: 13.5, color: "#6B6660", marginTop: 8 }}>{detail.notes}</div>}
               <Link href={`/agenda?week=${date}`} style={{
                 display: "inline-block", marginTop: 16, color: "#C96442", fontWeight: 600, fontSize: 13.5, textDecoration: "none",
