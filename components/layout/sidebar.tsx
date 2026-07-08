@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Calendar, CalendarRange, SlidersHorizontal, BarChart2, LogOut, Menu, X } from "lucide-react";
+import { Calendar, CalendarRange, SlidersHorizontal, BarChart2, LogOut, Menu, Users, X } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 
@@ -36,6 +36,7 @@ function ChecklistButton({ complete, onClick }: { complete?: boolean; onClick: (
 const NAV = [
   { href: "/dashboard", label: "Agenda del día", Icon: Calendar },
   { href: "/agenda", label: "Agenda semanal", Icon: CalendarRange },
+  { href: "/clientes", label: "Clientes", Icon: Users },
   { href: "/ajustes", label: "Ajustes", Icon: SlidersHorizontal },
   { href: "/estadisticas", label: "Estadísticas", Icon: BarChart2 },
 ];
@@ -96,6 +97,7 @@ export function Sidebar({ clubName, courtCount, initials, checklistComplete, onO
                 <span style={{ lineHeight: 1 }}>{
                   label === "Agenda del día" ? "Hoy"
                   : label === "Agenda semanal" ? "Semana"
+                  : label === "Clientes" ? "Clientes"
                   : label === "Estadísticas" ? "Stats"
                   : label
                 }</span>

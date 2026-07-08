@@ -1,6 +1,6 @@
-import { and, count, desc, eq, isNotNull, sql, lt, gt, gte, lte, inArray } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, isNull, sql, lt, gt, gte, lte, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { clubs, courts, sports, professors, credits, jobs, subscriptions, transactions, users, bookings, customers, clubMercadoPagoCredentials, adminInvitations, type JobType, type PaymentMode, type Role } from "@/lib/db/schema";
+import { clubs, courts, sports, professors, credits, jobs, subscriptions, transactions, users, bookings, customers, notifications, recurringRules, clubMercadoPagoCredentials, adminInvitations, type JobType, type PaymentMode, type Role } from "@/lib/db/schema";
 import { sendPurchaseConfirmationEmail, sendWelcomeEmail } from "@/lib/email/send";
 import type { User } from "@supabase/supabase-js";
 import { randomBytes, randomUUID } from "crypto";
@@ -576,6 +576,122 @@ export async function findOrCreateBotCustomer(input: {
     channelUserId: input.channelUserId,
   }).returning();
   return created;
+}
+
+function normalizeOptionalText(value: string | null | undefined) {
+  const cleaned = value?.trim();
+  return cleaned ? cleaned : null;
+}
+
+export class CustomerMutationError extends Error {
+  constructor(
+    public code: "CUSTOMER_NOT_FOUND" | "BOT_CUSTOMER_LOCKED",
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+export async function listClubCustomers(clubId: string) {
+  const rows = await getDb()
+    .select({
+      id: customers.id,
+      name: customers.name,
+      phone: customers.phone,
+      email: customers.email,
+      notes: customers.notes,
+      channel: customers.channel,
+      channelUserId: customers.channelUserId,
+      createdAt: customers.createdAt,
+      updatedAt: customers.updatedAt,
+    })
+    .from(customers)
+    .where(eq(customers.clubId, clubId))
+    .orderBy(desc(customers.updatedAt), desc(customers.createdAt));
+
+  return rows.map((customer) => ({
+    ...customer,
+    source: customer.channel && customer.channelUserId ? "bot" as const : "admin" as const,
+    editable: !(customer.channel && customer.channelUserId),
+  }));
+}
+
+export async function createManualCustomer(input: {
+  clubId: string;
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  notes?: string | null;
+}) {
+  const [created] = await getDb()
+    .insert(customers)
+    .values({
+      clubId: input.clubId,
+      name: input.name.trim(),
+      phone: normalizeOptionalText(input.phone),
+      email: normalizeOptionalText(input.email)?.toLowerCase() ?? null,
+      notes: normalizeOptionalText(input.notes),
+      channel: null,
+      channelUserId: null,
+      updatedAt: new Date(),
+    })
+    .returning();
+  return created;
+}
+
+export async function updateManualCustomer(input: {
+  clubId: string;
+  customerId: string;
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  notes?: string | null;
+}) {
+  const db = getDb();
+  const existing = await db.query.customers.findFirst({
+    where: and(eq(customers.id, input.customerId), eq(customers.clubId, input.clubId)),
+  });
+  if (!existing) throw new CustomerMutationError("CUSTOMER_NOT_FOUND", "El cliente no existe.");
+  if (existing.channel || existing.channelUserId) {
+    throw new CustomerMutationError("BOT_CUSTOMER_LOCKED", "Los clientes creados por el bot no se editan desde el panel.");
+  }
+
+  const [updated] = await db
+    .update(customers)
+    .set({
+      name: input.name.trim(),
+      phone: normalizeOptionalText(input.phone),
+      email: normalizeOptionalText(input.email)?.toLowerCase() ?? null,
+      notes: normalizeOptionalText(input.notes),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(customers.id, input.customerId), eq(customers.clubId, input.clubId), isNull(customers.channel), isNull(customers.channelUserId)))
+    .returning();
+
+  return updated;
+}
+
+export async function deleteManualCustomer(clubId: string, customerId: string) {
+  const db = getDb();
+  return db.transaction(async (tx) => {
+    const existing = await tx.query.customers.findFirst({
+      where: and(eq(customers.id, customerId), eq(customers.clubId, clubId)),
+    });
+    if (!existing) throw new CustomerMutationError("CUSTOMER_NOT_FOUND", "El cliente no existe.");
+    if (existing.channel || existing.channelUserId) {
+      throw new CustomerMutationError("BOT_CUSTOMER_LOCKED", "Los clientes creados por el bot no se borran desde el panel.");
+    }
+
+    await tx.update(bookings).set({ customerId: null }).where(and(eq(bookings.clubId, clubId), eq(bookings.customerId, customerId)));
+    await tx.update(recurringRules).set({ customerId: null }).where(and(eq(recurringRules.clubId, clubId), eq(recurringRules.customerId, customerId)));
+    await tx.delete(notifications).where(and(eq(notifications.clubId, clubId), eq(notifications.customerId, customerId)));
+    const [deleted] = await tx
+      .delete(customers)
+      .where(and(eq(customers.id, customerId), eq(customers.clubId, clubId), isNull(customers.channel), isNull(customers.channelUserId)))
+      .returning({ id: customers.id });
+
+    return deleted;
+  });
 }
 
 export async function createBooking(data: {

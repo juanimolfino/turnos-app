@@ -333,6 +333,7 @@ app/
   (app)/               panel del ADMIN (requiere club)
     dashboard/         "Agenda del día"
     agenda/            "Agenda semanal" (carga de bloques)
+    clientes/          clientes del club (bot + manuales)
     estadisticas/
     ajustes/           Mi Club, clases, fijos, eventos
   (superadmin)/        panel del SUPERADMIN (clubs, admins, resumen)
@@ -340,7 +341,7 @@ app/
 ```
 
 El layout `(app)` muestra el **Sidebar** (escritorio) o barra superior + nav inferior
-(mobile), con accesos: Agenda del día · Agenda semanal · Ajustes · Estadísticas.
+(mobile), con accesos: Agenda del día · Agenda semanal · Clientes · Ajustes · Estadísticas.
 
 ---
 
@@ -382,6 +383,16 @@ El layout `(app)` muestra el **Sidebar** (escritorio) o barra superior + nav inf
 
 > La fecha/hora se calculan en la **zona horaria del club** (`lib/tz.ts`,
 > `todayInTz`/`nowInTz`), no en UTC ni en el reloj del navegador.
+
+### Clientes (`/clientes`)
+- Lista los clientes del club guardados en `customers`.
+- Los clientes que llegan desde el bot se identifican por `channel + channel_user_id` y se
+  muestran como **solo lectura**: el dueño ve nombre/teléfono/notas, pero no los edita ni borra
+  desde el panel para no romper la identidad que usa el bot.
+- El dueño puede crear clientes manuales. Quedan sin `channel` / `channel_user_id`, figuran como
+  "Agregado por admin" y se pueden editar o borrar desde la misma solapa.
+- Al borrar un cliente manual, se desasocia de reservas/fijos existentes antes de eliminarlo. Las
+  reservas no se borran.
 
 ---
 
@@ -458,6 +469,8 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
 - Los datos que llegan desde el chat se tratan como entrada externa: se normaliza el teléfono y se
   sanea texto libre (sin tags/script, caracteres de control ni símbolos peligrosos) antes de
   persistirlo.
+- En `/clientes`, el admin puede crear clientes manuales (`channel/channel_user_id = null`) y
+  editarlos/borrarlos. Los clientes con identidad de canal quedan bloqueados como solo lectura.
 - La agenda semanal y la agenda del día muestran los datos de `customers` para que el club pueda
   contactar a quien reservó.
 
@@ -544,6 +557,8 @@ GET /api/public/availability?date=YYYY-MM-DD[&api_key=...][&city=...][&start=HH:
 - `GET/POST/PATCH /api/courts` — canchas
 - `POST/DELETE /api/agenda/block` — bloques de agenda
 - `GET/POST /api/clubs/settings` — datos del club, precio/modo de pago, política de refund, genera `api_key`
+- `GET/POST /api/customers` — lista clientes del club y crea clientes manuales del admin
+- `PATCH/DELETE /api/customers/[id]` — edita/borra solo clientes manuales; bloquea clientes del bot
 - `POST /api/mercadopago/oauth/disconnect` — desvincula MP del club y fuerza pago online apagado
 - `GET /api/superadmin/clubs` — listado para el panel
 
