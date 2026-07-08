@@ -16,7 +16,6 @@ interface ClubSettings {
   refundEnabled?: boolean;
   refundCutoffHours?: number;
   paymentDeadlineHours?: number;
-  apiKey?: string | null;
   courts?: { id: string; name: string; price: number }[];
   mercadoPago?: {
     connected: boolean;
@@ -66,10 +65,8 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
   const [refundCutoffHours, setRefundCutoffHours] = useState(String(initial.refundCutoffHours ?? 24));
   const [courtPrices, setCourtPrices] = useState(() => (initial.courts ?? []).map((court) => ({ ...court, price: String(court.price ?? 0) })));
   const [deadlineHours, setDeadlineHours] = useState(String(initial.paymentDeadlineHours ?? 24));
-  const [apiKey, setApiKey] = useState(initial.apiKey ?? "");
   const [mercadoPago, setMercadoPago] = useState(initial.mercadoPago ?? { connected: false });
   const [saving, setSaving] = useState(false);
-  const [genning, setGenning] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
   const [disconnectConfirm, setDisconnectConfirm] = useState("");
@@ -120,21 +117,6 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
       setTimeout(() => setSaved(false), 3000);
     } catch { setError("Error de conexión"); }
     finally { setDisconnecting(false); }
-  }
-
-  async function generateKey() {
-    setGenning(true); setError("");
-    try {
-      const res = await fetch("/api/clubs/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ generateApiKey: true }),
-      });
-      if (!res.ok) { const d = await res.json(); setError(d.error ?? "Error"); return; }
-      const { club } = await res.json();
-      setApiKey(club.apiKey ?? "");
-    } catch { setError("Error de conexión"); }
-    finally { setGenning(false); }
   }
 
   return (
@@ -320,33 +302,6 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
         </div>
       )}
 
-      <div style={{ background: "#FCFBF8", border: "1px solid #E7E1D6", borderRadius: 16, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#221F1B", letterSpacing: ".04em", textTransform: "uppercase" }}>API Key del bot</div>
-        <div style={{ fontSize: 13, color: "#6B6660" }}>Esta clave permite que el bot de WhatsApp consulte y cree reservas en tu club. Tratala como una contraseña.</div>
-
-        <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexDirection: isMobile ? "column" : "row" }}>
-          <div style={{ flex: 1, width: isMobile ? "100%" : "auto" }}>
-            <Field label="Clave actual" value={apiKey || "(sin clave generada)"} mono />
-          </div>
-          <button onClick={generateKey} disabled={genning} style={{
-            background: "#221F1B", color: "#fff", border: "none", borderRadius: 9,
-            padding: "10px 16px", fontWeight: 600, fontSize: 13, cursor: genning ? "not-allowed" : "pointer",
-            fontFamily: "inherit", whiteSpace: "nowrap", opacity: genning ? 0.6 : 1,
-            width: isMobile ? "100%" : "auto",
-          }}>
-            {genning ? "Generando…" : apiKey ? "Regenerar clave" : "Generar clave"}
-          </button>
-        </div>
-        {apiKey && (
-          <button onClick={() => navigator.clipboard.writeText(apiKey)} style={{
-            background: "#fff", border: "1px solid #E0DACE", borderRadius: 9, padding: "9px 14px",
-            fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", alignSelf: "flex-start",
-          }}>
-            Copiar clave
-          </button>
-        )}
-      </div>
-
       <button onClick={save} disabled={saving} style={{
         background: "#C96442", color: "#fff", border: "none", borderRadius: 11, padding: "13px 20px",
         fontWeight: 700, fontSize: 14.5, cursor: saving ? "not-allowed" : "pointer",
@@ -370,7 +325,7 @@ export function AjustesClient({ club = {} }: AjustesClientProps) {
         </div>
         {!isMobile && (
           <div style={{ fontSize: 14, color: "#6B6660", marginTop: 4 }}>
-            Configurá los datos del club, precios, pagos online, política de cancelación y clave del bot.
+            Configurá los datos del club, precios, pagos online y política de cancelación.
           </div>
         )}
       </div>

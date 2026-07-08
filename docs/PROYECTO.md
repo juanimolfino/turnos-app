@@ -337,7 +337,7 @@ app/
     agenda/            "Agenda semanal" (carga de bloques)
     clientes/          clientes del club (bot + manuales)
     estadisticas/
-    ajustes/           datos del club, pagos, Mercado Pago, política de cancelación y API key
+    ajustes/           datos del club, pagos, Mercado Pago y política de cancelación
   (superadmin)/        panel del SUPERADMIN (clubs, admins, resumen)
     superadmin/clientes/ clientes globales que usaron el bot + historial
   api/                 endpoints (ver sección 6 y 7)
@@ -417,7 +417,7 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
 `id` · `name` · `timezone` · `plan` · `address` · `city` · `neighborhood` (barrio/zona) ·
 `phone` · `requires_payment` (legacy/sync) · `payment_mode` (`none`/`partial`/`full`) ·
 `deposit_pct` · `refund_enabled` · `refund_cutoff_hours` · `payment_deadline_hours` ·
-`api_key` (auth del bot) · `created_at`
+`api_key` (legacy/API externa de disponibilidad; no se gestiona desde Ajustes) · `created_at`
 
 ### `club_mercadopago_credentials` — credenciales OAuth de MP por club
 `club_id` · `mercadopago_user_id` · `access_token` · `refresh_token` · `public_key` ·
@@ -535,10 +535,11 @@ Reinvitar un email revoca las invitaciones pendientes anteriores.
 
 ---
 
-## 6. API pública (lo que consume el bot)
+## 6. API pública de disponibilidad
 
-Autenticación: header `x-api-key: <club.api_key>` (o `?api_key=`). La disponibilidad
-también acepta búsqueda por ciudad o sin filtro.
+Autenticación opcional legacy: header `x-api-key: <club.api_key>` (o `?api_key=`) para
+filtrar por un club. La disponibilidad también acepta búsqueda por ciudad o sin filtro.
+El bot central actual no depende de una API key por club.
 
 ### Ver disponibilidad
 ```
@@ -577,7 +578,7 @@ GET /api/public/availability?date=YYYY-MM-DD[&api_key=...][&city=...][&start=HH:
 - `POST /api/auth/ensure-profile` — crea perfil para superadmin
 - `GET/POST/PATCH /api/courts` — canchas
 - `POST/DELETE /api/agenda/block` — bloques de agenda
-- `GET/POST /api/clubs/settings` — datos del club, precio/modo de pago, política de refund, genera `api_key`
+- `GET/POST /api/clubs/settings` — datos del club, precio/modo de pago y política de refund
 - `GET/POST /api/customers` — lista clientes del club y crea clientes manuales del admin
 - `PATCH/DELETE /api/customers/[id]` — edita/borra solo clientes manuales; bloquea clientes del bot
 - `POST /api/mercadopago/oauth/disconnect` — desvincula MP del club y fuerza pago online apagado

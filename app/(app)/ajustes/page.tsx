@@ -38,7 +38,6 @@ export default async function AjustesPage() {
     refundEnabled: club?.refundEnabled,
     refundCutoffHours: club?.refundCutoffHours,
     paymentDeadlineHours: club?.paymentDeadlineHours,
-    apiKey: club?.apiKey,
     courts: allCourts.map((court) => ({ id: court.id, name: court.name, price: court.price })),
     mercadoPago: mercadoPagoStatus,
   }} />;
