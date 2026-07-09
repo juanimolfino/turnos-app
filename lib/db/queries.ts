@@ -539,6 +539,32 @@ export async function getClubMercadoPagoConnectionStatus(clubId: string) {
     : { connected: false as const };
 }
 
+/**
+ * Datos crudos para el checklist de onboarding de un club (dirección, teléfono,
+ * modo de pago, conexión de MP y precios de canchas activas). Fuente única que
+ * consumen el layout (SSR) y el endpoint /api/onboarding/status (refresco vivo).
+ */
+export async function getOnboardingChecklistInput(clubId: string) {
+  const db = getDb();
+  const [club] = await db
+    .select({ address: clubs.address, phone: clubs.phone, paymentMode: clubs.paymentMode })
+    .from(clubs)
+    .where(eq(clubs.id, clubId));
+  const activeCourts = await db
+    .select({ price: courts.price })
+    .from(courts)
+    .where(and(eq(courts.clubId, clubId), eq(courts.active, true)));
+  const mpStatus = await getClubMercadoPagoConnectionStatus(clubId);
+
+  return {
+    address: club?.address ?? null,
+    phone: club?.phone ?? null,
+    paymentMode: club?.paymentMode ?? null,
+    mercadoPagoConnected: mpStatus.connected,
+    activeCourtPrices: activeCourts.map((c) => c.price ?? 0),
+  };
+}
+
 export async function getClubMercadoPagoCredentialsForServer(clubId: string) {
   return getDb().query.clubMercadoPagoCredentials.findFirst({
     where: eq(clubMercadoPagoCredentials.clubId, clubId),

@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { createSupabaseReadOnlyServerClient } from "@/lib/supabase/server";
-import { getUserByAuthId, getClubMercadoPagoConnectionStatus } from "@/lib/db/queries";
+import { getUserByAuthId, getOnboardingChecklistInput } from "@/lib/db/queries";
 import { getDb } from "@/lib/db";
 import { courts, clubs } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { AppShell } from "@/components/layout/app-shell";
 import { computeOnboardingChecklist } from "@/lib/onboarding/checklist";
 
@@ -32,19 +32,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const allCourts = await db.select({ id: courts.id }).from(courts).where(eq(courts.clubId, profile.clubId));
     courtCount = allCourts.length;
 
-    const activeCourts = await db
-      .select({ id: courts.id, price: courts.price })
-      .from(courts)
-      .where(and(eq(courts.clubId, profile.clubId), eq(courts.active, true)));
-    const mpStatus = await getClubMercadoPagoConnectionStatus(profile.clubId);
-
-    ({ clubInfoDone, courtsDone } = computeOnboardingChecklist({
-      address: club?.address,
-      phone: club?.phone,
-      paymentMode: club?.paymentMode,
-      mercadoPagoConnected: mpStatus.connected,
-      activeCourtPrices: activeCourts.map((c) => c.price),
-    }));
+    const checklistInput = await getOnboardingChecklistInput(profile.clubId);
+    ({ clubInfoDone, courtsDone } = computeOnboardingChecklist(checklistInput));
   }
 
   return (

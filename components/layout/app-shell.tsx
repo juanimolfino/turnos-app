@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
+import type { OnboardingItem } from "@/lib/onboarding/checklist";
 
 interface AppShellProps {
   clubId: string | null;
@@ -14,12 +15,32 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
+type Detail = {
+  clubInfoDone: boolean;
+  courtsDone: boolean;
+  clubInfoItems: OnboardingItem[];
+  courtsItems: OnboardingItem[];
+};
+
 export function AppShell({
   clubId, clubName, courtCount, initials, clubInfoDone, courtsDone, children,
 }: AppShellProps) {
   const [step3Done, setStep3Done] = useState(false);
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  // Estado en vivo del checklist: arranca con los valores del server (sin flash)
+  // y se refresca por fetch para reflejar lo que se completa sin recargar.
+  const [detail, setDetail] = useState<Detail>({
+    clubInfoDone, courtsDone, clubInfoItems: [], courtsItems: [],
+  });
+
+  const refetch = useCallback(async () => {
+    if (!clubId) return;
+    try {
+      const res = await fetch("/api/onboarding/status");
+      if (res.ok) setDetail(await res.json());
+    } catch { /* offline / transitorio: se reintenta al próximo foco */ }
+  }, [clubId]);
 
   useEffect(() => {
     // Lee localStorage/sessionStorage recién tras montar en el cliente: hacerlo
@@ -33,11 +54,26 @@ export function AppShell({
     const hidden = window.sessionStorage.getItem(`cancha_onboarding_hidden_${clubId}`) === "1";
     setOpen(!allDone && !hidden);
     setMounted(true);
-  }, [clubId, clubInfoDone, courtsDone]);
+    refetch();
+  }, [clubId, clubInfoDone, courtsDone, refetch]);
+
+  useEffect(() => {
+    // Al volver el foco a la pestaña (p. ej. tras guardar en Ajustes) refrescamos
+    // el estado para que el checklist se re-renderice ya completado.
+    if (!clubId) return;
+    const onFocus = () => refetch();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [clubId, refetch]);
 
   function close() {
     setOpen(false);
     if (clubId) window.sessionStorage.setItem(`cancha_onboarding_hidden_${clubId}`, "1");
+  }
+
+  function openChecklist() {
+    refetch();
+    setOpen(true);
   }
 
   function ackStep3() {
@@ -46,7 +82,7 @@ export function AppShell({
     setStep3Done(true);
   }
 
-  const allDone = clubInfoDone && courtsDone && step3Done;
+  const allDone = detail.clubInfoDone && detail.courtsDone && step3Done;
 
   return (
     <div className="app-layout" style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
@@ -55,7 +91,7 @@ export function AppShell({
         courtCount={courtCount}
         initials={initials}
         checklistComplete={clubId ? allDone : undefined}
-        onOpenChecklist={clubId ? () => setOpen(true) : undefined}
+        onOpenChecklist={clubId ? openChecklist : undefined}
       />
       <div className="main-content" style={{ flex: 1, minWidth: 0, height: "100vh", overflowY: "auto", background: "#F4F1EA" }}>
         {children}
@@ -65,8 +101,10 @@ export function AppShell({
           open={open}
           onClose={close}
           onNavigate={close}
-          clubInfoDone={clubInfoDone}
-          courtsDone={courtsDone}
+          clubInfoDone={detail.clubInfoDone}
+          courtsDone={detail.courtsDone}
+          clubInfoItems={detail.clubInfoItems}
+          courtsItems={detail.courtsItems}
           step3Done={step3Done}
           onAckStep3={ackStep3}
         />

@@ -1,20 +1,60 @@
 "use client";
 
+import { useState } from "react";
+import type { OnboardingItem } from "@/lib/onboarding/checklist";
+
 interface OnboardingChecklistProps {
   open: boolean;
   onClose: () => void;
   onNavigate: () => void;
   clubInfoDone: boolean;
   courtsDone: boolean;
+  clubInfoItems: OnboardingItem[];
+  courtsItems: OnboardingItem[];
   step3Done: boolean;
   onAckStep3: () => void;
 }
 
-function Step({ number, title, description, done, href, cta, onNavigate }: {
-  number: number; title: string; description: string; done: boolean; href: string; cta: string; onNavigate: () => void;
-}) {
+function Breakdown({ items }: { items: OnboardingItem[] }) {
   return (
-    <div style={{ display: "flex", gap: 12, padding: "14px 0", borderBottom: "1px solid #EFEAE0" }}>
+    <div style={{
+      marginTop: 10, background: "#fff", border: "1px solid #E7E1D6", borderRadius: 10,
+      padding: "10px 12px", display: "flex", flexDirection: "column", gap: 7,
+    }}>
+      {items.map((item) => (
+        <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
+          <span style={{
+            width: 16, height: 16, borderRadius: "50%", flexShrink: 0, fontSize: 10, fontWeight: 800,
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            background: item.done ? "#2F7D4E" : "#F1EDE4",
+            color: item.done ? "#fff" : "#A39C8F",
+            border: item.done ? "none" : "1px solid #E0D9CC",
+          }}>
+            {item.done ? "✓" : ""}
+          </span>
+          <span style={{ color: item.done ? "#6B6660" : "#221F1B", fontWeight: item.done ? 500 : 700 }}>
+            {item.label}
+          </span>
+          {!item.done && <span style={{ marginLeft: "auto", fontSize: 11, color: "#B0572C", fontWeight: 700 }}>falta</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Step({ number, title, description, done, href, cta, onNavigate, items }: {
+  number: number; title: string; description: string; done: boolean; href: string; cta: string;
+  onNavigate: () => void; items: OnboardingItem[];
+}) {
+  const [showDetail, setShowDetail] = useState(false);
+  const hasItems = items.length > 0;
+
+  return (
+    <div
+      style={{ display: "flex", gap: 12, padding: "14px 0", borderBottom: "1px solid #EFEAE0" }}
+      onMouseEnter={() => hasItems && setShowDetail(true)}
+      onMouseLeave={() => setShowDetail(false)}
+    >
       <div style={{
         width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
         display: "flex", alignItems: "center", justifyContent: "center",
@@ -25,8 +65,23 @@ function Step({ number, title, description, done, href, cta, onNavigate }: {
         {done ? "✓" : number}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14.5, fontWeight: 700, color: "#221F1B" }}>{title}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 14.5, fontWeight: 700, color: "#221F1B" }}>{title}</span>
+          {hasItems && (
+            <button
+              type="button"
+              onClick={() => setShowDetail((v) => !v)}
+              style={{
+                border: "none", background: "none", padding: 0, cursor: "pointer",
+                fontSize: 12, fontWeight: 700, color: "#928B7E", fontFamily: "inherit",
+              }}
+            >
+              {showDetail ? "Ocultar detalle" : "Ver detalle"}
+            </button>
+          )}
+        </div>
         <div style={{ fontSize: 13, color: "#6B6660", marginTop: 3, lineHeight: 1.45 }}>{description}</div>
+        {showDetail && hasItems && <Breakdown items={items} />}
         {!done && (
           <a href={href} onClick={onNavigate} style={{
             display: "inline-block", marginTop: 8, fontSize: 13, fontWeight: 700,
@@ -41,7 +96,7 @@ function Step({ number, title, description, done, href, cta, onNavigate }: {
 }
 
 export function OnboardingChecklist({
-  open, onClose, onNavigate, clubInfoDone, courtsDone, step3Done, onAckStep3,
+  open, onClose, onNavigate, clubInfoDone, courtsDone, clubInfoItems, courtsItems, step3Done, onAckStep3,
 }: OnboardingChecklistProps) {
   if (!open) return null;
 
@@ -68,7 +123,8 @@ export function OnboardingChecklist({
             </div>
             <div style={{ fontSize: 13.5, color: "#6B6660", marginTop: 6, lineHeight: 1.5 }}>
               El bot reserva turnos automáticamente a partir de tu agenda. Completá estos 3 pasos
-              para que la disponibilidad que ofrece sea siempre correcta.
+              para que la disponibilidad que ofrece sea siempre correcta. Pasá el mouse por cada paso
+              para ver qué campos faltan.
             </div>
           </div>
           <button
@@ -92,6 +148,7 @@ export function OnboardingChecklist({
             href="/ajustes"
             cta="Ir a Ajustes"
             onNavigate={onNavigate}
+            items={clubInfoItems}
           />
           <Step
             number={2}
@@ -101,6 +158,7 @@ export function OnboardingChecklist({
             href="/agenda"
             cta="Ir a Agenda semanal"
             onNavigate={onNavigate}
+            items={courtsItems}
           />
 
           <div style={{ display: "flex", gap: 12, padding: "14px 0" }}>
