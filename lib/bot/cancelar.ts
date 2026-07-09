@@ -200,6 +200,7 @@ export async function cancelarReservaBotPorCodigo(input: {
         mpRefundId: refund.refundId,
         refundStatus: "refunded",
         paymentReviewReason: null,
+        refundedAt: new Date(),
       })
       .where(eq(bookings.id, reserva.id));
     return {

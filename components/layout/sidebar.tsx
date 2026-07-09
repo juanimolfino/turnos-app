@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Calendar, CalendarRange, SlidersHorizontal, BarChart2, LogOut, Menu, Users, X } from "lucide-react";
+import { Calendar, CalendarRange, SlidersHorizontal, BarChart2, LogOut, Menu, Users, Wallet, X } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 
@@ -37,6 +37,7 @@ const NAV = [
   { href: "/dashboard", label: "Agenda del día", Icon: Calendar },
   { href: "/agenda", label: "Agenda semanal", Icon: CalendarRange },
   { href: "/clientes", label: "Clientes", Icon: Users },
+  { href: "/pagos", label: "Pagos", Icon: Wallet },
   { href: "/ajustes", label: "Ajustes", Icon: SlidersHorizontal },
   { href: "/estadisticas", label: "Estadísticas", Icon: BarChart2 },
 ];

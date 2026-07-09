@@ -176,6 +176,13 @@
       "when": 1783482417308,
       "tag": "0024_friendly_black_crow",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1783602509007,
+      "tag": "0025_regular_thena",
+      "breakpoints": true
     }
   ]
 }

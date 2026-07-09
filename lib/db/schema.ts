@@ -200,6 +200,12 @@ export const bookings = pgTable("bookings", {
   mpRefundId: text("mp_refund_id").unique(),
   refundStatus: text("refund_status"),
   paymentReviewReason: text("payment_review_reason"),
+  // Trazabilidad de dinero: cuándo se acreditó el pago y cuándo se procesó el
+  // refund (para responder quejas), y el monto real cobrado que devolvió MP
+  // (transaction_amount). Nullable: reservas sin pago no los usan.
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  refundedAt: timestamp("refunded_at", { withTimezone: true }),
+  paidAmount: integer("paid_amount"),
   notes: text("notes"),
   // Reservas del bot (sin login): nombre/teléfono se guardan en el propio booking
   // (la tabla customers global queda para una etapa posterior). Nullable porque

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNotNull, isNull, ne, sql, lt, gt, gte, lte, inArray } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, isNull, ne, or, sql, lt, gt, gte, lte, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { clubs, courts, sports, professors, credits, jobs, subscriptions, transactions, users, bookings, customers, notifications, recurringRules, playerIdentities, clubMercadoPagoCredentials, adminInvitations, type JobType, type PaymentMode, type Role } from "@/lib/db/schema";
 import { sendPurchaseConfirmationEmail, sendWelcomeEmail } from "@/lib/email/send";
@@ -1354,6 +1354,9 @@ export async function confirmBotHoldPayment(input: {
         paymentStatus: input.paymentStatus,
         mpPaymentId: input.mpPaymentId,
         paymentReviewReason: null,
+        // Trazabilidad: cuándo acreditó y monto real cobrado por MP.
+        paidAt: now,
+        paidAmount: input.paidAmount != null ? Math.round(input.paidAmount) : (current.price ?? null),
       })
       .where(eq(bookings.id, input.bookingId))
       .returning();
@@ -1363,6 +1366,99 @@ export async function confirmBotHoldPayment(input: {
       booking: { ...currentWithToken, ...updated, clubName: current.clubName, courtName: current.courtName },
     };
   });
+}
+
+export type PaymentRow = {
+  id: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  paymentStatus: string | null;
+  amount: number | null;
+  origin: string;
+  bookingCode: string | null;
+  clubName: string;
+  courtName: string;
+  customerName: string | null;
+  customerPhone: string | null;
+  paidAt: Date | null;
+  refundedAt: Date | null;
+  mpPaymentId: string | null;
+  mpRefundId: string | null;
+  refundStatus: string | null;
+  paymentReviewReason: string | null;
+};
+
+/**
+ * Movimientos de dinero para trazabilidad. Trae las reservas que TOCARON plata:
+ * pagadas/señadas, con id de pago o refund, o con estado de refund. Si se pasa
+ * `clubId`, filtra a ese club (vista del admin); sin él, es global (superadmin).
+ * Solo lectura. No expone tokens.
+ */
+export async function getPayments(clubId?: string | null, limit = 200): Promise<PaymentRow[]> {
+  const db = getDb();
+  const moneyActivity = or(
+    isNotNull(bookings.mpPaymentId),
+    isNotNull(bookings.mpRefundId),
+    isNotNull(bookings.refundStatus),
+    inArray(bookings.paymentStatus, ["pagado", "senado"]),
+  );
+  const where = clubId ? and(eq(bookings.clubId, clubId), moneyActivity) : moneyActivity;
+
+  const rows = await db
+    .select({
+      id: bookings.id,
+      date: bookings.date,
+      startTime: bookings.startTime,
+      endTime: bookings.endTime,
+      status: bookings.status,
+      paymentStatus: bookings.paymentStatus,
+      price: bookings.price,
+      paidAmount: bookings.paidAmount,
+      origin: bookings.origin,
+      bookingCode: bookings.bookingCode,
+      clubName: clubs.name,
+      courtName: courts.name,
+      custName: customers.name,
+      snapshotName: bookings.customerName,
+      customerPhone: customers.phone,
+      paidAt: bookings.paidAt,
+      refundedAt: bookings.refundedAt,
+      mpPaymentId: bookings.mpPaymentId,
+      mpRefundId: bookings.mpRefundId,
+      refundStatus: bookings.refundStatus,
+      paymentReviewReason: bookings.paymentReviewReason,
+    })
+    .from(bookings)
+    .innerJoin(clubs, eq(clubs.id, bookings.clubId))
+    .innerJoin(courts, eq(courts.id, bookings.courtId))
+    .leftJoin(customers, eq(customers.id, bookings.customerId))
+    .where(where)
+    .orderBy(desc(bookings.createdAt))
+    .limit(limit);
+
+  return rows.map((r) => ({
+    id: r.id,
+    date: r.date,
+    startTime: r.startTime,
+    endTime: r.endTime,
+    status: r.status,
+    paymentStatus: r.paymentStatus,
+    amount: r.paidAmount ?? r.price ?? null,
+    origin: r.origin,
+    bookingCode: r.bookingCode,
+    clubName: r.clubName,
+    courtName: r.courtName,
+    customerName: r.custName ?? r.snapshotName ?? null,
+    customerPhone: r.customerPhone ?? null,
+    paidAt: r.paidAt,
+    refundedAt: r.refundedAt,
+    mpPaymentId: r.mpPaymentId,
+    mpRefundId: r.mpRefundId,
+    refundStatus: r.refundStatus,
+    paymentReviewReason: r.paymentReviewReason,
+  }));
 }
 
 export async function saveBookingMercadoPagoPreference(bookingId: string, preferenceId: string) {

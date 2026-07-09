@@ -242,6 +242,7 @@ describe("cancelarReservaBotPorCodigo", () => {
       mpRefundId: "refund-1",
       refundStatus: "refunded",
       paymentReviewReason: null,
+      refundedAt: expect.any(Date),
     });
     expect(respuestaCancelacionTexto(result)).toContain("devolución de tu seña");
   });
