@@ -32,9 +32,27 @@ function joinNatural(items: string[]): string {
 
 export function formatearDisponibilidadTexto(intent: Intent, lugares: LugarDisponibilidad[]): string {
   const fecha = fechaHumana(intent.date);
-  if (lugares.length === 0) return `Para ${fecha} no encontré turnos disponibles. Si querés, busco otro día u otra franja.`;
+  const horaPedida = intent.time ? normHora(intent.time) : null;
+  const dondePedido = intent.club ? ` en ${intent.club}` : "";
 
-  const lines = [`Para ${fecha}, tenés estos turnos disponibles:`];
+  if (lugares.length === 0) {
+    if (horaPedida) {
+      return `Disculpá, no tengo un turno a las ${horaPedida} de ${fecha}${dondePedido}. ¿Querés que busque en otro horario o en otro día?`;
+    }
+    return `Para ${fecha} no encontré turnos disponibles. Si querés, busco otro día u otra franja.`;
+  }
+
+  // ¿Pidió una hora puntual que no coincide con ningún turno libre? Entonces
+  // avisamos que a esa hora no hay y ofrecemos las opciones reales que sí tenemos.
+  const hayHoraExacta = horaPedida
+    ? lugares.some((lugar) => lugar.slots.some((slot) => normHora(slot.start) === horaPedida))
+    : true;
+
+  const lines = [
+    horaPedida && !hayHoraExacta
+      ? `Disculpá, a las ${horaPedida} de ${fecha} no tengo un turno libre${dondePedido}, pero estas son las opciones que sí tengo:`
+      : `Para ${fecha}, tenés estos turnos disponibles:`,
+  ];
 
   for (const lugar of lugares) {
     lines.push("");

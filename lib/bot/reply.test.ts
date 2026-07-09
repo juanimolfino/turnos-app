@@ -68,8 +68,33 @@ describe("redactarRespuesta", () => {
 
 describe("formatearDisponibilidadTexto", () => {
   it("con lugares vacíos devuelve un no encontrado claro", () => {
-    const out = formatearDisponibilidadTexto(intent, []);
+    const out = formatearDisponibilidadTexto({ ...intent, time: null }, []);
     expect(out).toMatch(/no encontré turnos disponibles/i);
+  });
+
+  it("con lugares vacíos y hora puntual, se disculpa por ese horario y ofrece otro", () => {
+    const out = formatearDisponibilidadTexto({ ...intent, time: "15:00", club: "Pádel Central" }, []);
+    expect(out).toMatch(/disculpá/i);
+    expect(out).toContain("15:00");
+    expect(out).toContain("Pádel Central");
+    expect(out).toMatch(/otro horario o en otro día/i);
+  });
+
+  it("hora puntual sin turno a esa hora: se disculpa y muestra las opciones reales", () => {
+    const out = formatearDisponibilidadTexto({ ...intent, time: "15:00", club: "Pádel Central" }, setLugares);
+    expect(out).toMatch(/disculpá/i);
+    expect(out).toContain("15:00");
+    expect(out).toContain("Pádel Central");
+    expect(out).toContain("16:30"); // ofrece las opciones que sí hay
+    expect(out).toContain("20:00");
+    // No inventa horarios: solo la hora pedida (permitida) y los slots reales.
+    expect(horariosInventados(out, setLugares, "15:00")).toEqual([]);
+  });
+
+  it("hora puntual que sí tiene turno: usa el encabezado normal, sin disculpa", () => {
+    const out = formatearDisponibilidadTexto({ ...intent, time: "16:30" }, setLugares);
+    expect(out).not.toMatch(/disculpá/i);
+    expect(out).toMatch(/tenés estos turnos disponibles/i);
   });
 });
 
