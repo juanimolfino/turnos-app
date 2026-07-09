@@ -153,3 +153,25 @@ Revisar en el panel de Supabase, porque el código no lo puede garantizar:
 | **P2** | Hardening (rate-limit cancelación, refresh token MP, config Supabase) | Bajo/medio | Ver detalle arriba |
 
 **Prioridad de arreglo:** P0 primero (cierra la escalada y la mitad de P1), luego P1, luego P2.
+
+---
+
+## Pendientes de análisis (requieren credenciales / entorno con acceso)
+
+Esta auditoría fue estática (lectura de código). Lo siguiente **no se pudo verificar sin acceso** y
+queda para correr en local/producción con credenciales:
+
+- [ ] **Confirmar si los signups están habilitados** en Supabase (Authentication → Providers → "Allow
+      new users to sign up"). Es lo que define si P0 es explotable **hoy** o es bomba latente.
+- [ ] **Reproducir P0 end-to-end**: intentar `signUp({ options: { data: { invited_role: "superadmin" } } })`
+      con la anon key contra la API de Supabase real y ver si `ensureUserProfile` crea el perfil como
+      superadmin.
+- [ ] **Auditar las políticas RLS** de todas las tablas de `public` con acceso a la base (el código usa
+      service role, pero RLS es la última red si algo consulta con la anon key). Revisar `lib/db/rls.sql`
+      vs. el estado real en Supabase.
+- [ ] **Verificar la config de confirmación de email** obligatoria en Supabase.
+- [ ] **Probar el webhook de Mercado Pago con firmas reales** (payloads firmados de MP en sandbox) para
+      confirmar la validación HMAC end-to-end, no solo por lectura.
+- [ ] **Rotar cualquier secreto** que haya pasado por chat/logs durante el desarrollo
+      (`SUPABASE_SERVICE_ROLE_KEY`, tokens de MP, `MERCADOPAGO_WEBHOOK_SECRET`, `TELEGRAM_WEBHOOK_SECRET`).
+- [ ] **Pentest dinámico** del entorno productivo (fuera del alcance de esta revisión estática).
