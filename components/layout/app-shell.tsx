@@ -64,6 +64,7 @@ export function AppShell({
         <OnboardingChecklist
           open={open}
           onClose={close}
+          onNavigate={close}
           clubInfoDone={clubInfoDone}
           courtsDone={courtsDone}
           step3Done={step3Done}

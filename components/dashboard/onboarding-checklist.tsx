@@ -3,14 +3,15 @@
 interface OnboardingChecklistProps {
   open: boolean;
   onClose: () => void;
+  onNavigate: () => void;
   clubInfoDone: boolean;
   courtsDone: boolean;
   step3Done: boolean;
   onAckStep3: () => void;
 }
 
-function Step({ number, title, description, done, href, cta }: {
-  number: number; title: string; description: string; done: boolean; href: string; cta: string;
+function Step({ number, title, description, done, href, cta, onNavigate }: {
+  number: number; title: string; description: string; done: boolean; href: string; cta: string; onNavigate: () => void;
 }) {
   return (
     <div style={{ display: "flex", gap: 12, padding: "14px 0", borderBottom: "1px solid #EFEAE0" }}>
@@ -27,7 +28,7 @@ function Step({ number, title, description, done, href, cta }: {
         <div style={{ fontSize: 14.5, fontWeight: 700, color: "#221F1B" }}>{title}</div>
         <div style={{ fontSize: 13, color: "#6B6660", marginTop: 3, lineHeight: 1.45 }}>{description}</div>
         {!done && (
-          <a href={href} style={{
+          <a href={href} onClick={onNavigate} style={{
             display: "inline-block", marginTop: 8, fontSize: 13, fontWeight: 700,
             color: "#C96442", textDecoration: "none"
           }}>
@@ -40,7 +41,7 @@ function Step({ number, title, description, done, href, cta }: {
 }
 
 export function OnboardingChecklist({
-  open, onClose, clubInfoDone, courtsDone, step3Done, onAckStep3,
+  open, onClose, onNavigate, clubInfoDone, courtsDone, step3Done, onAckStep3,
 }: OnboardingChecklistProps) {
   if (!open) return null;
 
@@ -90,6 +91,7 @@ export function OnboardingChecklist({
             done={clubInfoDone}
             href="/ajustes"
             cta="Ir a Ajustes"
+            onNavigate={onNavigate}
           />
           <Step
             number={2}
@@ -98,6 +100,7 @@ export function OnboardingChecklist({
             done={courtsDone}
             href="/agenda"
             cta="Ir a Agenda semanal"
+            onNavigate={onNavigate}
           />
 
           <div style={{ display: "flex", gap: 12, padding: "14px 0" }}>
@@ -119,7 +122,7 @@ export function OnboardingChecklist({
                 horaria de una cancha no tiene nada cargado ahí, el bot la va a mostrar como
                 disponible para reservar.
               </div>
-              <a href="/agenda" style={{
+              <a href="/agenda" onClick={onNavigate} style={{
                 display: "inline-block", marginTop: 8, fontSize: 13, fontWeight: 700,
                 color: "#C96442", textDecoration: "none",
               }}>

@@ -10,6 +10,7 @@ describe("OnboardingChecklist", () => {
       <OnboardingChecklist
         open={false}
         onClose={noop}
+        onNavigate={noop}
         clubInfoDone={false}
         courtsDone={false}
         step3Done={false}
@@ -24,6 +25,7 @@ describe("OnboardingChecklist", () => {
       <OnboardingChecklist
         open={true}
         onClose={noop}
+        onNavigate={noop}
         clubInfoDone={false}
         courtsDone={false}
         step3Done={false}
@@ -43,6 +45,7 @@ describe("OnboardingChecklist", () => {
       <OnboardingChecklist
         open={true}
         onClose={noop}
+        onNavigate={noop}
         clubInfoDone={true}
         courtsDone={true}
         step3Done={true}
