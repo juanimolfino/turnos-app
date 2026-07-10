@@ -11,6 +11,18 @@ interface Club {
   createdAt: Date;
   courtCount: number;
   admins: { email: string | null; role: string | null }[];
+  mercadoPagoConnected: boolean;
+  mercadoPagoExpiresAt: Date | string | null;
+}
+
+// Estado del token de MP para avisar antes de que venza (vence a los 180 días).
+function mercadoPagoStatus(connected: boolean, expiresAt: Date | string | null) {
+  if (!connected) return { label: "No conectado", bg: "#F4F1EA", fg: "#928B7E", dot: "#C2BCAF" };
+  if (!expiresAt) return { label: "Conectado", bg: "#E9F3EA", fg: "#2F7D4E", dot: "#3E9B63" };
+  const days = Math.floor((new Date(expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+  if (days < 0) return { label: "Token vencido — reconectar", bg: "#FCEBE7", fg: "#B0492E", dot: "#C2887A" };
+  if (days <= 30) return { label: `Vence en ${days} día${days === 1 ? "" : "s"}`, bg: "#FBF1DD", fg: "#8A6415", dot: "#D9A93B" };
+  return { label: `Conectado · vence en ${days} días`, bg: "#E9F3EA", fg: "#2F7D4E", dot: "#3E9B63" };
 }
 
 export function ClubsClient({ clubs }: { clubs: Club[] }) {
@@ -101,6 +113,18 @@ function ClubCard({ club }: { club: Club }) {
           <div style={{ fontSize: 14, fontWeight: 700, color: "#2F7D4E", marginTop: 4 }}>{club.plan}</div>
         </div>
       </div>
+
+      {/* Estado de Mercado Pago (vencimiento del token) */}
+      {(() => {
+        const mp = mercadoPagoStatus(club.mercadoPagoConnected, club.mercadoPagoExpiresAt);
+        return (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: mp.bg, borderRadius: 10 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: mp.dot, flexShrink: 0 }} />
+            <span style={{ fontSize: 11, color: "#928B7E", fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase" }}>Mercado Pago</span>
+            <span style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 700, color: mp.fg }}>{mp.label}</span>
+          </div>
+        );
+      })()}
 
       {/* Admins */}
       <div>

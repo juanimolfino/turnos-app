@@ -468,12 +468,22 @@ export async function getAllClubs() {
     .select({ clubId: users.clubId, email: users.email, role: users.role })
     .from(users)
     .where(isNotNull(users.clubId));
+  // Estado de conexión de MP por club: conectado + cuándo vence el token (no
+  // exponemos el token en sí, solo el vencimiento para avisar antes de que caiga).
+  const mpRows = await db
+    .select({ clubId: clubMercadoPagoCredentials.clubId, expiresAt: clubMercadoPagoCredentials.expiresAt })
+    .from(clubMercadoPagoCredentials);
 
-  return allClubs.map((club) => ({
-    ...club,
-    courtCount: allCourts.filter((c) => c.clubId === club.id).length,
-    admins: allAdmins.filter((a) => a.clubId === club.id),
-  }));
+  return allClubs.map((club) => {
+    const mp = mpRows.find((m) => m.clubId === club.id);
+    return {
+      ...club,
+      courtCount: allCourts.filter((c) => c.clubId === club.id).length,
+      admins: allAdmins.filter((a) => a.clubId === club.id),
+      mercadoPagoConnected: Boolean(mp),
+      mercadoPagoExpiresAt: mp?.expiresAt ?? null,
+    };
+  });
 }
 
 export async function createClub(name: string) {
@@ -615,6 +625,49 @@ export async function upsertClubMercadoPagoCredentials(clubId: string, data: {
       updatedAt: clubMercadoPagoCredentials.updatedAt,
     });
 
+  return row;
+}
+
+/** Credenciales cuyo access_token vence antes de `before` (para renovarlas). Solo
+ * las que tienen expires_at y refresh_token. Devuelve el refresh_token porque es
+ * server-side (esta función solo se llama desde el job de refresh). */
+export async function getClubMercadoPagoCredentialsNeedingRefresh(before: Date) {
+  return getDb()
+    .select({
+      clubId: clubMercadoPagoCredentials.clubId,
+      refreshToken: clubMercadoPagoCredentials.refreshToken,
+      expiresAt: clubMercadoPagoCredentials.expiresAt,
+    })
+    .from(clubMercadoPagoCredentials)
+    .where(and(
+      isNotNull(clubMercadoPagoCredentials.expiresAt),
+      isNotNull(clubMercadoPagoCredentials.refreshToken),
+      lte(clubMercadoPagoCredentials.expiresAt, before),
+    ));
+}
+
+/** Actualiza SOLO los campos de token tras un refresh (no toca user_id ni connected_at). */
+export async function updateClubMercadoPagoCredentialsTokens(clubId: string, tokens: {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: Date | null;
+  publicKey?: string | null;
+  scope?: string | null;
+  liveMode?: boolean | null;
+}) {
+  const [row] = await getDb()
+    .update(clubMercadoPagoCredentials)
+    .set({
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresAt: tokens.expiresAt,
+      publicKey: tokens.publicKey ?? null,
+      scope: tokens.scope ?? null,
+      liveMode: tokens.liveMode ?? null,
+      updatedAt: new Date(),
+    })
+    .where(eq(clubMercadoPagoCredentials.clubId, clubId))
+    .returning({ clubId: clubMercadoPagoCredentials.clubId, expiresAt: clubMercadoPagoCredentials.expiresAt });
   return row;
 }
 

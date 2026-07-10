@@ -149,13 +149,16 @@ decidir si será global o por club antes de abrir pagos reales a escala.
 
 
 
-### Refresh automático del token de Mercado Pago
-El access_token de MP que se guarda al conectar un club vence a los 180 días (6 meses). Hoy NO hay
-lógica que lo renueve usando el refresh_token (que sí se guarda). Sin esto, los pagos de un club
-dejan de funcionar de golpe a los 6 meses de haberse conectado, sin aviso. Pendiente: implementar
-la renovación automática del token (usar el refresh_token para pedir uno nuevo antes/cuando vence,
-y actualizar club_mercadopago_credentials). Prioridad: media — no urgente (hay 6 meses), pero es
-una bomba de tiempo silenciosa si se olvida.
+### Refresh automático del token de Mercado Pago — ✅ HECHO (2026-07-09)
+El access_token de MP vence a los 180 días (6 meses). Ahora se renueva **automáticamente** por
+adelantado con el `refresh_token` guardado:
+- `refreshMercadoPagoAccessToken` (`lib/mercadopago/oauth.ts`) hace el `grant_type=refresh_token`.
+- `refreshExpiringMercadoPagoTokens` (`lib/mercadopago/refresh-tokens.ts`) renueva los que vencen
+  dentro de 30 días; procesa cada club aislado (uno que falle no frena a los demás) y loguea el fallo.
+- Cron de Inngest `refresh-mercadopago-tokens` (diario, `0 3 * * *`), registrado en `/api/inngest`.
+- El superadmin ve en `/superadmin/clubs` el estado de MP y **cuándo vence** cada token (amarillo si
+  faltan ≤30 días, rojo si venció).
+Requiere que Inngest esté activo en Vercel (ya lo está para expire-holds).
 
 ### Robustecer la asociación club↔cuenta de MP en el OAuth
 Hoy, al volver del OAuth de MP, el club se resuelve desde la sesión del admin logueado (no desde el

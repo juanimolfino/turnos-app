@@ -6,6 +6,7 @@ import { markJobDone, markJobProcessing, refundJobCredits } from "@/lib/db/queri
 import { sendJobReadyEmail } from "@/lib/email/send";
 import { releaseJobSlot } from "@/lib/redis/rate-limit";
 import { expireBotHolds } from "@/lib/bookings/expire-holds";
+import { refreshExpiringMercadoPagoTokens } from "@/lib/mercadopago/refresh-tokens";
 import { inngest } from "./client";
 import { eq } from "drizzle-orm";
 
@@ -58,6 +59,23 @@ export const expireBotHoldsJob = inngest.createFunction(
   { cron: "*/5 * * * *" },
   async ({ step }) => {
     const result = await step.run("release expired bot holds", async () => expireBotHolds());
+    return result;
+  }
+);
+
+// El access_token de MP de cada club vence a los 180 días. Este job corre una vez
+// por día y renueva por adelantado los que vencen dentro de los próximos 30 días,
+// para que ningún club deje de poder cobrar de sorpresa.
+export const refreshMercadoPagoTokensJob = inngest.createFunction(
+  {
+    id: "refresh-mercadopago-tokens",
+    retries: 2
+  },
+  { cron: "0 3 * * *" },
+  async ({ step }) => {
+    const result = await step.run("refresh expiring mercadopago tokens", async () =>
+      refreshExpiringMercadoPagoTokens({ withinDays: 30 }),
+    );
     return result;
   }
 );

@@ -89,3 +89,51 @@ export async function exchangeMercadoPagoAuthorizationCode(code: string): Promis
     liveMode: parsed.data.live_mode ?? null,
   };
 }
+
+// En el refresh, MP normalmente devuelve un refresh_token nuevo, pero por las
+// dudas lo hacemos opcional y caemos al anterior si no viene.
+const RefreshTokenResponseSchema = TokenResponseSchema.extend({
+  refresh_token: z.string().min(1).optional(),
+});
+
+/**
+ * Renueva el access_token de un club usando su refresh_token (grant_type=refresh_token).
+ * MP rota el refresh_token: si devuelve uno nuevo lo usamos, si no conservamos el viejo.
+ */
+export async function refreshMercadoPagoAccessToken(refreshToken: string): Promise<MercadoPagoOAuthTokens> {
+  const { clientId, clientSecret } = getMercadoPagoOAuthConfig();
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    client_id: clientId,
+    client_secret: clientSecret,
+    refresh_token: refreshToken,
+  });
+
+  const response = await fetch(TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      accept: "application/json",
+    },
+    body,
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Mercado Pago token refresh failed (HTTP ${response.status}): ${detail.slice(0, 500)}`);
+  }
+
+  const raw = await response.json();
+  const parsed = RefreshTokenResponseSchema.safeParse(raw);
+  if (!parsed.success) throw new Error("Mercado Pago token refresh response is invalid");
+
+  return {
+    accessToken: parsed.data.access_token,
+    refreshToken: parsed.data.refresh_token ?? refreshToken,
+    expiresAt: parsed.data.expires_in ? new Date(Date.now() + parsed.data.expires_in * 1000) : null,
+    scope: parsed.data.scope ?? null,
+    mercadoPagoUserId: parsed.data.user_id == null ? null : String(parsed.data.user_id),
+    publicKey: parsed.data.public_key ?? null,
+    liveMode: parsed.data.live_mode ?? null,
+  };
+}

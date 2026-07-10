@@ -1,9 +1,9 @@
 import { serve } from "inngest/next";
 import { inngest } from "@/lib/inngest/client";
-import { expireBotHoldsJob, runAiJob } from "@/lib/inngest/functions";
+import { expireBotHoldsJob, refreshMercadoPagoTokensJob, runAiJob } from "@/lib/inngest/functions";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [runAiJob, expireBotHoldsJob],
+  functions: [runAiJob, expireBotHoldsJob, refreshMercadoPagoTokensJob],
   signingKey: process.env.INNGEST_SIGNING_KEY
 });
