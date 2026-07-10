@@ -82,17 +82,20 @@ describe("DELETE /api/admin/[id]", () => {
     expect(mocks.deleteAuthUser).toHaveBeenCalledWith("auth-target");
   });
 
-  it("si falla el borrado en Supabase Auth, igual responde ok (la DB ya quedó limpia)", async () => {
+  it("si falla el borrado en Supabase Auth, devuelve estado parcial (502), no un ok engañoso", async () => {
     mocks.deleteAdminCascade.mockResolvedValue({
       authUserId: "auth-target", email: "a@x.com", clubId: null, clubDeleted: false,
     });
     mocks.deleteAuthUser.mockResolvedValue({ error: { message: "boom" } });
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const response = await callDelete("admin-1");
+    const body = await response.json();
 
-    expect(response.status).toBe(200);
-    warn.mockRestore();
+    expect(response.status).toBe(502);
+    expect(body.ok).toBe(false);
+    expect(body.partial).toBe(true);
+    err.mockRestore();
   });
 
   it("propaga 404 si el admin no existe", async () => {

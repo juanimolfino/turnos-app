@@ -15,6 +15,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const profile = await getUserByAuthId(user.id);
   if (!profile) redirect("/login");
   if (profile.role === "superadmin") redirect("/superadmin");
+  // SEGURIDAD: solo los admin acceden al panel. Un usuario auto-registrado (signup
+  // abierto) queda con role null y NO debe entrar. El rol admin solo lo asigna el
+  // flujo de invitación server-side. /login es estático, así que no hay loop.
+  if (profile.role !== "admin") redirect("/login");
 
   const db = getDb();
   let clubName = "Mi Club";

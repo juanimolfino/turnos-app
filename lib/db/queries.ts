@@ -125,10 +125,12 @@ export async function ensureUserProfile(authUser: User) {
 
   const signupCredits = Number(process.env.FREE_SIGNUP_CREDITS ?? 5);
 
-  const invitedRole = authUser.user_metadata?.invited_role as Role | undefined;
-  const invitedVenueName = authUser.user_metadata?.venue_name as string | undefined;
-  const invitedClubId = authUser.user_metadata?.club_id as string | undefined;
-
+  // SEGURIDAD: NUNCA derivar rol/club/venue del user_metadata. En Supabase, el
+  // user_metadata (raw_user_meta_data) lo puede escribir el propio usuario desde
+  // el cliente con la anon key pública (signUp/updateUser). Confiar en él permitía
+  // auto-asignarse role="superadmin". El rol legítimo se asigna SOLO server-side en
+  // el flujo de invitación (acceptAdminInvitation, que valida el token firmado).
+  // Este fallback crea siempre un perfil sin privilegios (role/clubId/venueName null).
   const { profile, createdProfile } = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(users)
@@ -136,9 +138,9 @@ export async function ensureUserProfile(authUser: User) {
         authUserId: authUser.id,
         email,
         fullName: authUser.user_metadata?.full_name ?? authUser.user_metadata?.name ?? null,
-        role: invitedRole ?? null,
-        venueName: invitedVenueName ?? null,
-        clubId: invitedClubId ?? null,
+        role: null,
+        venueName: null,
+        clubId: null,
       })
       .onConflictDoNothing({ target: users.authUserId })
       .returning();

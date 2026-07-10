@@ -20,8 +20,14 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Aseguramos que el perfil exista antes de actualizar el club
-    await ensureUserProfile(user);
+    // Aseguramos que el perfil exista antes de actualizar el club.
+    const profile = await ensureUserProfile(user);
+    // SEGURIDAD: solo un admin (rol asignado por el flujo de invitación) puede
+    // nombrar/crear su club. Sin esto, cualquier usuario auto-registrado (signup
+    // abierto) podría auto-proveerse un club y colarse al panel.
+    if (profile?.role !== "admin") {
+      return NextResponse.json({ error: "Sin permisos" }, { status: 403 });
+    }
     const { clubId } = await setOnboardingClubName(user.id, parsed.data.clubName);
     return NextResponse.json({ ok: true, clubId });
   } catch (err) {

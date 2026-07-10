@@ -9,9 +9,60 @@
 
 ---
 
+## ⚡ Actualización 2026-07-09 — segunda pasada (verificación + fixes aplicados)
+
+La primera pasada fue estática y dejó ítems sin verificar por falta de acceso. En esta segunda pasada
+se **confirmó la explotabilidad**, se **aplicaron los fixes de código** y se completó el barrido (DB,
+inyecciones, IDOR, pagos, headers). Resumen de cambios de esta pasada:
+
+**Confirmado explotable HOY (no era bomba latente):**
+- `GET {SUPABASE_URL}/auth/v1/settings` devuelve **`"disable_signup": false`** → **los signups están
+  ABIERTOS**. Combinado con P0 (rol desde `user_metadata`), la escalada a superadmin es explotable ya.
+  (`"mailer_autoconfirm": false` es lo único que hoy agrega fricción: exige confirmar el email.)
+
+**Hallazgo nuevo (CRÍTICO) — P0.2: cualquier usuario registrado podía entrar al panel de admin.**
+El layout `app/(app)/layout.tsx` solo redirigía a superadmin y a los sin-perfil; **no exigía
+`role === "admin"`**. Un usuario auto-registrado queda con `role: null` pero con perfil, así que
+accedía al panel. Peor: `POST /api/auth/onboarding` dejaba que **cualquier** usuario autenticado se
+**creara un club** (`setOnboardingClubName`), auto-proveyéndose como admin de hecho. Cadena completa:
+signup abierto → confirmar email → `POST /api/auth/onboarding {clubName}` → club propio + acceso al panel.
+
+**Fixes de código aplicados en esta pasada:**
+1. `lib/db/queries.ts` · `ensureUserProfile` → **ya no deriva `role`/`clubId`/`venueName` de
+   `user_metadata`**; crea siempre perfil sin privilegios (`null`). El rol legítimo lo asigna solo
+   `acceptAdminInvitation` (token firmado, server-side). **Cierra P0 y la auto-reversión de P1.**
+2. `app/(app)/layout.tsx` → **exige `role === "admin"`** para entrar al panel. **Cierra P0.2 (acceso).**
+3. `app/api/auth/onboarding/route.ts` → **exige `role === "admin"`** antes de crear/nombrar el club.
+   **Cierra P0.2 (auto-provisión de club).**
+4. `app/api/admin/[id]/route.ts` → si falla el borrado en Supabase Auth, **devuelve 502 con
+   `partial: true`** en vez de un `ok:true` engañoso. **Cierra P1 (fallo tragado).**
+5. `next.config.ts` → **headers de seguridad** (`frame-ancestors 'none'` + `X-Frame-Options: DENY`,
+   `nosniff`, HSTS, `Referrer-Policy`, `Permissions-Policy`). **Cierra el hardening de headers.**
+
+**Barrido adicional — sin hallazgos explotables (sano):**
+- **Inyección SQL:** todo pasa por Drizzle parametrizado. Los `sql\`...\`` y `db.execute(sql\`...\`)`
+  usan bindings (`${pattern}`, `${playerIdentityId}`, refs de columna), sin concatenar input crudo. Limpio.
+- **XSS / RCE:** sin `dangerouslySetInnerHTML`, `eval`, `new Function` ni `child_process`. React auto-escapa.
+- **IDOR:** las mutaciones scopean por dueño: `updateManualCustomer`/`deleteManualCustomer` filtran por
+  `and(id, clubId)`; `deleteAgendaBlock`/`deleteAgendaBlockGroup` por `clubId`; el endpoint nuevo
+  `GET /api/onboarding/status` y `/pagos` scopean por el `clubId` del perfil; `/superadmin/pagos` está
+  bajo el layout que exige `role === "superadmin"`. Sin IDOR.
+- **P2.1 (rate-limit cancelación) → DOWNGRADE a LOW:** el gate de cancelación exige que
+  `customer_phone` (snapshot) coincida con el **userId del canal** del que escribe. Ese userId **no es
+  atacante-controlable** (lo pone Telegram, no el mensaje). Así, adivinar `booking_code` solo permite
+  cancelar reservas hechas **bajo el propio userId** del atacante. El brute-force no sirve para cancelar
+  reservas ajenas → no se agrega rate-limit por ahora (evita tocar el flujo del bot por bajo beneficio).
+
+Verificación: `tsc` limpio y **284 tests en verde** (se actualizó el test de admin-delete que codificaba
+el `ok:true` vulnerable). Ver el detalle original de cada hallazgo abajo.
+
+---
+
 ## P0 — CRÍTICO · Escalada de privilegios a superadmin vía `user_metadata`
 
-**Estado:** preexistente (no lo introduce esta rama, pero la potencia — ver P1).
+**Estado:** ✅ **FIXEADO EN CÓDIGO** (2026-07-09). Confirmado **explotable** (signups abiertos).
+`ensureUserProfile` ya no lee el rol del `user_metadata`. **Falta la acción manual:** deshabilitar
+signups en Supabase (ver Pendientes). Preexistente; no lo introdujo la rama de borrado.
 **Archivos:** `lib/db/queries.ts` (`ensureUserProfile`, líneas ~120-145),
 `app/(auth)/callback/route.ts`, `app/api/auth/ensure-profile/route.ts`.
 
@@ -67,7 +118,8 @@ de crear una cuenta Auth sin perfil), es game over.
 
 ## P1 — ALTO · El borrado de admin puede quedar a medias y ser revertido por el propio admin
 
-**Estado:** introducido por esta rama.
+**Estado:** ✅ **FIXEADO EN CÓDIGO** (2026-07-09). El endpoint ahora devuelve 502/`partial` si falla el
+borrado de Auth, y el fix de P0 elimina la auto-reversión (ya no se reconstruye el rol desde metadata).
 **Archivos:** `app/api/admin/[id]/route.ts` (líneas 22-31), `lib/db/queries.ts` (`deleteAdminCascade`).
 
 ### Problema
@@ -146,32 +198,51 @@ Revisar en el panel de Supabase, porque el código no lo puede garantizar:
 
 ## Resumen ejecutivo
 
-| Prio | Problema | Riesgo | Acción |
+| Prio | Problema | Riesgo | Estado |
 |------|----------|--------|--------|
-| **P0** | Rol de superadmin asignable desde `user_metadata` (cliente) | Toma total: borrar clubs, ver/tocar todo, pagos | No leer rol de metadata + deshabilitar signups |
-| **P1** | Borrado de admin DB-first con fallo de Auth tragado + auto-reversión | Un admin echado recupera acceso | Fallar la operación si Auth no borra + fix P0 |
-| **P2** | Hardening (rate-limit cancelación, refresh token MP, config Supabase) | Bajo/medio | Ver detalle arriba |
+| **P0** | Rol de superadmin asignable desde `user_metadata` (cliente) | Toma total: borrar clubs, ver/tocar todo, pagos | ✅ Código fixeado · ⚠️ falta deshabilitar signups |
+| **P0.2** | El panel de admin no exigía `role==="admin"` + `/api/auth/onboarding` abierto → auto-provisión de club | Cualquier registrado entra al panel y se hace admin | ✅ Código fixeado (layout + endpoint) |
+| **P1** | Borrado de admin DB-first con fallo de Auth tragado + auto-reversión | Un admin echado recupera acceso | ✅ Código fixeado (502/partial + fix P0) |
+| **P2.2** | Refresh del `access_token` de MP (180 días) | Cobros de un club se cortan | 🟡 Follow-up |
+| **P2.1** | Rate-limit en cancelación por `booking_code` | Bajo (gate = userId del canal, no adivinable) | ⬇️ Downgrade a LOW, sin acción |
 
-**Prioridad de arreglo:** P0 primero (cierra la escalada y la mitad de P1), luego P1, luego P2.
+**Prioridad restante:** la única acción crítica pendiente es **manual** — deshabilitar signups y auditar
+RLS en Supabase (ver Pendientes). Todo el resto quedó fixeado en código en esta pasada.
 
 ---
 
-## Pendientes de análisis (requieren credenciales / entorno con acceso)
+## Pendientes de análisis — estado tras la segunda pasada
 
-Esta auditoría fue estática (lectura de código). Lo siguiente **no se pudo verificar sin acceso** y
-queda para correr en local/producción con credenciales:
+### ✅ Verificado / hecho en código
+- [x] **Signups habilitados en Supabase** → CONFIRMADO **abiertos** (`disable_signup: false`). P0 era
+      explotable hoy. (El código ya no confía en `user_metadata`; ver abajo la acción manual restante.)
+- [x] **Confirmación de email obligatoria** → CONFIRMADA activa (`mailer_autoconfirm: false`): es la
+      única fricción que hoy frena un signup automatizado. **No la desactives.**
+- [x] **Inyección SQL / IDOR / XSS** → barrido completo, sin hallazgos explotables (ver "segunda pasada").
+- [x] **Fixes de código P0, P0.2, P1 + headers** → aplicados.
 
-- [ ] **Confirmar si los signups están habilitados** en Supabase (Authentication → Providers → "Allow
-      new users to sign up"). Es lo que define si P0 es explotable **hoy** o es bomba latente.
-- [ ] **Reproducir P0 end-to-end**: intentar `signUp({ options: { data: { invited_role: "superadmin" } } })`
-      con la anon key contra la API de Supabase real y ver si `ensureUserProfile` crea el perfil como
-      superadmin.
-- [ ] **Auditar las políticas RLS** de todas las tablas de `public` con acceso a la base (el código usa
-      service role, pero RLS es la última red si algo consulta con la anon key). Revisar `lib/db/rls.sql`
-      vs. el estado real en Supabase.
-- [ ] **Verificar la config de confirmación de email** obligatoria en Supabase.
-- [ ] **Probar el webhook de Mercado Pago con firmas reales** (payloads firmados de MP en sandbox) para
-      confirmar la validación HMAC end-to-end, no solo por lectura.
-- [ ] **Rotar cualquier secreto** que haya pasado por chat/logs durante el desarrollo
-      (`SUPABASE_SERVICE_ROLE_KEY`, tokens de MP, `MERCADOPAGO_WEBHOOK_SECRET`, `TELEGRAM_WEBHOOK_SECRET`).
+### 🔴 Acciones manuales que TENÉS que hacer (el código no las puede hacer)
+- [ ] **CRÍTICO — Deshabilitar signups públicos** en Supabase: Authentication → Providers → "Allow new
+      users to sign up" **en OFF**. Todo el alta de admins es por invitación, no se pierde nada. Es la
+      barrera definitiva de P0 (el fix de código ya evita la escalada, pero cerrar signups reduce la
+      superficie: nadie ajeno debería poder crear una cuenta Auth).
+- [ ] **Auditar RLS** de todas las tablas de `public`. Correr en el SQL editor de Supabase:
+      ```sql
+      SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname='public';  -- todas en true
+      SELECT * FROM pg_policies WHERE schemaname='public';                       -- que existan políticas
+      ```
+      El runtime usa service role, pero la anon key es pública (`NEXT_PUBLIC_`); si RLS está off, esa key
+      lee/escribe las tablas directo. Es la última red.
+- [ ] **Rotar secretos** que hayan pasado por chat/logs/entornos durante el desarrollo:
+      `SUPABASE_SERVICE_ROLE_KEY`, `MERCADOPAGO_CLIENT_SECRET`, `MERCADOPAGO_ACCESS_TOKEN`,
+      `MERCADOPAGO_WEBHOOK_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, tokens de MP de clubs. Rotar la key
+      **invalida la vieja**; un secreto expuesto no se "borra" del historial.
+- [ ] **Revisar si hay un superadmin fantasma**: como los signups estaban abiertos y P0 era explotable,
+      correr `SELECT id, email, role, created_at FROM users WHERE role = 'superadmin';` y confirmar que
+      **todos** son cuentas tuyas conocidas. Si aparece una que no reconocés, es una intrusión: borrala.
+
+### 🟡 Follow-up (no bloqueante)
+- [ ] **P2.2 — Refresh del `access_token` de Mercado Pago** (vence a 180 días): usar el `refresh_token`
+      guardado para renovar antes del vencimiento. Operativo, no seguridad directa.
+- [ ] **Probar el webhook de MP con firmas reales** (sandbox) para validar el HMAC end-to-end.
 - [ ] **Pentest dinámico** del entorno productivo (fuera del alcance de esta revisión estática).

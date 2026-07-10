@@ -23,10 +23,23 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
 
     const { error: authErr } = await getSupabaseAdmin().auth.admin.deleteUser(result.authUserId);
     if (authErr) {
-      console.warn("[admin delete] no se pudo borrar el usuario de Supabase Auth", {
+      // SEGURIDAD: no tragar el fallo. El perfil/club ya se borraron, pero el usuario
+      // de Auth sigue vivo (conserva credenciales). Ya no puede recuperar acceso
+      // porque ensureUserProfile crea rol null y el layout exige admin, pero el
+      // superadmin DEBE saber que quedó un usuario de Auth para removerlo a mano.
+      console.error("[admin delete] no se pudo borrar el usuario de Supabase Auth", {
         authUserId: result.authUserId,
         error: authErr.message,
       });
+      return NextResponse.json(
+        {
+          ok: false,
+          partial: true,
+          clubDeleted: result.clubDeleted,
+          error: "Se borró el admin y su club, pero no se pudo eliminar su cuenta de acceso. Reintentá o borrala manualmente en Supabase.",
+        },
+        { status: 502 },
+      );
     }
 
     return NextResponse.json({ ok: true, clubDeleted: result.clubDeleted });
