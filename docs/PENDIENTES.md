@@ -54,6 +54,16 @@ consistente en toda la UI.
 
 ## Seguridad / robustez
 
+### Auditoría de seguridad — estado
+La auditoría completa vive en `docs/SECURITY_AUDIT.md`. Los hallazgos **críticos y altos ya están
+fixeados en código** (RLS en todas las tablas, escalada de rol vía `user_metadata`, acceso al panel,
+borrado de admin, endpoints legacy que gastaban plata, headers). **Quedan 2 acciones manuales** que el
+código no puede hacer:
+- [ ] **Deshabilitar signups** en Supabase (Authentication → Providers → "Allow new users to sign up" OFF).
+      Decisión de producto: solo los superadmins crean usuarios (por invitación).
+- [ ] **Rotar `SUPABASE_SERVICE_ROLE_KEY` y `TELEGRAM_WEBHOOK_SECRET`** por las dudas (pudieron pasar por
+      chat/logs durante el desarrollo). No bloquea nada, pero conviene.
+
 ### Rate limit anti-fuerza-bruta en el webhook
 El booking_code (3 letras + 3 números) es adivinable. Hoy la cancelación está protegida porque
 además exige que el teléfono coincida (casi imposible de adivinar + tener el teléfono de la
