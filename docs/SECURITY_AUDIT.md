@@ -264,24 +264,25 @@ RLS en Supabase (ver Pendientes). Todo el resto quedó fixeado en código en est
 - [x] **RLS de TODAS las tablas** → estaba OFF con acceso anon total (P-1); **fixeado en vivo** (RLS on +
       revoke). Verificado bloqueado (401). SQL reproducible en `lib/db/rls.sql`.
 - [x] **Superadmins en la base** → hay **2**: `juanymolfino@hotmail.com` (24/06) y
-      `kevinnkroll@gmail.com` (30/06). ⚠️ **CONFIRMAR que Kevin sos vos / tu socio.** Si no lo reconocés,
-      es intrusión (los signups estaban abiertos y P0 explotable): borralo y rotá todo.
+      `kevinnkroll@gmail.com` (30/06). ✅ **CONFIRMADO: Kevin es el socio.** No es intrusión.
+- [x] **Superadmin puede crear otros superadmins** → ✅ funciona intacto tras los fixes: el flujo de
+      invitación (`/api/admin/invite` con `role:"superadmin"`, solo para superadmins → `acceptAdminInvitation`
+      crea el perfil con el rol validado de la invitación). No depende de `user_metadata`.
 
 ### 🔴 Acciones manuales que TENÉS que hacer (el código no las puede hacer)
 - [ ] **CRÍTICO — Deshabilitar signups públicos** en Supabase: Authentication → Providers → "Allow new
-      users to sign up" **en OFF**. Todo el alta de admins es por invitación, no se pierde nada. Es la
-      barrera definitiva de P0 (el fix de código ya evita la escalada, pero cerrar signups reduce la
-      superficie: nadie ajeno debería poder crear una cuenta Auth).
-- [ ] **CRÍTICO — Confirmar el 2º superadmin** `kevinnkroll@gmail.com` (creado 30/06). Si es tu socio,
-      OK. Si NO lo reconocés → intrusión vía P0: borralo (`DELETE FROM users WHERE email='...'` + borrar
-      su usuario de Auth) y tratá TODO como comprometido.
-- [ ] **CRÍTICO — Rotar credenciales de Mercado Pago** y que cada club **reconecte MP**: como los tokens
-      de `club_mercadopago_credentials` fueron world-readable (P-1), asumir que pudieron leerse. Rotar
-      `MERCADOPAGO_CLIENT_SECRET`/`MERCADOPAGO_ACCESS_TOKEN`/`MERCADOPAGO_WEBHOOK_SECRET` y revisar el
-      dashboard de MP de cada club por movimientos/refunds no reconocidos.
-- [ ] **Rotar el resto de secretos** que hayan pasado por chat/logs/entornos: `SUPABASE_SERVICE_ROLE_KEY`,
-      `TELEGRAM_WEBHOOK_SECRET`. Rotar **invalida** la vieja; un secreto expuesto no se "borra".
-      (La anon key también estuvo sobreexpuesta, pero con RLS activa ya no da acceso; rotarla igual es opcional.)
+      users to sign up" **en OFF**. Es la decisión de producto acordada: **nadie se crea cuenta solo,
+      solo los superadmins crean usuarios (por invitación)**. El código ya bloquea el acceso de un
+      auto-registrado, pero cerrar signups es la barrera definitiva y elimina el spam de cuentas Auth.
+      No afecta la creación de admins/superadmins (siempre fue por invitación).
+- [x] **2º superadmin** (`kevinnkroll@gmail.com`) → ✅ CONFIRMADO: es el socio. Nada que hacer.
+- [~] **Rotar credenciales de Mercado Pago** → **DECISIÓN: no urgente.** Las credenciales de MP de hoy
+      son de **prueba** y viven en la DB; con RLS activa (P-1 fixeado) ya nadie ajeno puede leerlas. Al
+      pasar a credenciales productivas, activar el refresh y tratar los tokens como sensibles. Revisar el
+      dashboard de MP igualmente no cuesta nada.
+- [ ] **Rotar `SUPABASE_SERVICE_ROLE_KEY` y `TELEGRAM_WEBHOOK_SECRET`** por las dudas (pudieron pasar por
+      chat/logs/entornos durante el desarrollo). Rotar **invalida** la vieja; un secreto expuesto no se
+      "borra" del historial. No bloquea nada, pero conviene hacerlo. *(Pendiente anotado a pedido.)*
 - [x] **Auditar RLS** → HECHO en vivo (ver P-1). Ya no hace falta correrlo a mano, pero para re-verificar:
       `SELECT tablename FROM pg_tables WHERE schemaname='public' AND rowsecurity=false;` debe dar 0 filas.
 
