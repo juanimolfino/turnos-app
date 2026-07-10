@@ -183,6 +183,13 @@
       "when": 1783602509007,
       "tag": "0025_regular_thena",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1783721132528,
+      "tag": "0026_thankful_golden_guardian",
+      "breakpoints": true
     }
   ]
 }

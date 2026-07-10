@@ -324,6 +324,25 @@ pueda volver a loguearse.
 > Archivos clave: `lib/db/queries.ts` (`deleteAdminCascade`), `app/api/admin/[id]/route.ts`,
 > `components/superadmin/admins-client.tsx` (`DeleteAdminModal`).
 
+### Campana de notificaciones de reservas del bot (panel del admin)
+El admin tiene una **campana** en el panel con badge de reservas nuevas del bot sin ver. Al tocarla,
+un dropdown lista cada aviso: *de quién*, *qué cancha*, *cuándo juega* y *hace cuánto entró*, marcado
+"por bot". Al abrir se marcan como leídas (baja el badge).
+
+Enfoque **polling + tabla propia** (no Supabase Realtime): mantiene todo server-side y no amplía el
+acceso del cliente a la DB (importante con RLS deny-by-default). Una tabla `admin_notifications`
+(`club_id`, `booking_id`, `kind`, `created_at`, `read_at`) guarda un aviso por reserva del bot. Se
+escribe en el momento en que la reserva se vuelve **real** para el club: al crearse confirmada para
+clubes `payment_mode='none'` (`crearReservaBot`), y al acreditar el pago del hold para clubes con
+pago (`confirmBotHoldPayment`, dentro de la misma transacción que confirma). El insert es idempotente
+por `(booking_id, kind)`, así que un reintento del webhook no duplica el aviso. Los datos "de quién y
+cuándo" se **joinean desde `bookings`** al leer, no se duplican. La campana hace polling cada ~45s y
+al volver el foco a la pestaña. La tabla también tiene RLS deny-by-default como el resto.
+> Archivos clave: `lib/db/schema.ts` (`adminNotifications`),
+> `lib/db/queries.ts` (`createNewBookingNotification`, `getClubNotifications`, `markClubNotificationsRead`),
+> `app/api/notifications/route.ts`, `components/layout/notification-bell.tsx`,
+> `lib/notifications/format.ts`.
+
 ---
 
 ## 3. Estructura de rutas
@@ -581,6 +600,7 @@ GET /api/public/availability?date=YYYY-MM-DD[&api_key=...][&city=...][&start=HH:
 - `GET/POST/PATCH /api/courts` — canchas
 - `POST/DELETE /api/agenda/block` — bloques de agenda
 - `GET/POST /api/clubs/settings` — datos del club, precio/modo de pago y política de refund
+- `GET/POST /api/notifications` — feed de la campana del club (GET) y marcar todo leído (POST)
 - `GET/POST /api/customers` — lista clientes del club y crea clientes manuales del admin
 - `PATCH/DELETE /api/customers/[id]` — edita/borra solo clientes manuales; bloquea clientes del bot
 - `POST /api/mercadopago/oauth/disconnect` — desvincula MP del club y fuerza pago online apagado

@@ -1,6 +1,6 @@
 import { and, count, desc, eq, isNotNull, isNull, ne, or, sql, lt, gt, gte, lte, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { clubs, courts, sports, professors, credits, jobs, subscriptions, transactions, users, bookings, customers, notifications, recurringRules, playerIdentities, clubMercadoPagoCredentials, adminInvitations, type JobType, type PaymentMode, type Role } from "@/lib/db/schema";
+import { clubs, courts, sports, professors, credits, jobs, subscriptions, transactions, users, bookings, customers, notifications, adminNotifications, recurringRules, playerIdentities, clubMercadoPagoCredentials, adminInvitations, type JobType, type PaymentMode, type Role, type AdminNotificationKind } from "@/lib/db/schema";
 import { sendPurchaseConfirmationEmail, sendWelcomeEmail } from "@/lib/email/send";
 import type { User } from "@supabase/supabase-js";
 import { randomBytes, randomUUID } from "crypto";
@@ -1442,6 +1442,15 @@ export async function confirmBotHoldPayment(input: {
       .where(eq(bookings.id, input.bookingId))
       .returning();
 
+    // Campana del panel: el hold pagado recién ahora se vuelve una reserva real
+    // para el club. Idempotente (unique booking+kind) por si el webhook reintenta.
+    if (current.origin === "bot") {
+      await tx
+        .insert(adminNotifications)
+        .values({ clubId: current.clubId, bookingId: current.id, kind: "nueva_reserva" })
+        .onConflictDoNothing({ target: [adminNotifications.bookingId, adminNotifications.kind] });
+    }
+
     return {
       status: "confirmed",
       booking: { ...currentWithToken, ...updated, clubName: current.clubName, courtName: current.courtName },
@@ -1576,4 +1585,88 @@ export async function getAvailableSlots(clubId: string, date: string, requestedS
 
 export async function getClubByApiKey(apiKey: string) {
   return getDb().query.clubs.findFirst({ where: eq(clubs.apiKey, apiKey) });
+}
+
+// ── Campana del panel: notificaciones in-app de reservas nuevas del bot ──────────
+
+/**
+ * Registra un aviso in-app para el club cuando una reserva del bot se vuelve real
+ * (club sin pago: al crearse confirmada; club con pago: al acreditar el webhook).
+ * Idempotente por (booking, kind): reintentos no duplican. Best-effort desde el
+ * caller: una reserva NUNCA debe fallar porque falle su notificación.
+ */
+export async function createNewBookingNotification(clubId: string, bookingId: string) {
+  await getDb()
+    .insert(adminNotifications)
+    .values({ clubId, bookingId, kind: "nueva_reserva" })
+    .onConflictDoNothing({ target: [adminNotifications.bookingId, adminNotifications.kind] });
+}
+
+export type AdminNotificationRow = {
+  id: string;
+  bookingId: string;
+  kind: AdminNotificationKind;
+  createdAt: Date;
+  readAt: Date | null;
+  customerName: string | null;
+  courtName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  bookingStatus: string;
+  paymentStatus: string | null;
+};
+
+/**
+ * Feed de la campana para un club: últimas notificaciones (con los datos de la
+ * reserva joineados: quién y cuándo) + total sin leer. Solo lectura, server-side.
+ */
+export async function getClubNotifications(
+  clubId: string,
+  limit = 20,
+): Promise<{ items: AdminNotificationRow[]; unread: number }> {
+  const db = getDb();
+
+  const [items, [unreadRow]] = await Promise.all([
+    db
+      .select({
+        id: adminNotifications.id,
+        bookingId: adminNotifications.bookingId,
+        kind: adminNotifications.kind,
+        createdAt: adminNotifications.createdAt,
+        readAt: adminNotifications.readAt,
+        customerName: bookings.customerName,
+        courtName: courts.name,
+        date: bookings.date,
+        startTime: bookings.startTime,
+        endTime: bookings.endTime,
+        bookingStatus: bookings.status,
+        paymentStatus: bookings.paymentStatus,
+      })
+      .from(adminNotifications)
+      .innerJoin(bookings, eq(adminNotifications.bookingId, bookings.id))
+      .innerJoin(courts, eq(bookings.courtId, courts.id))
+      .where(eq(adminNotifications.clubId, clubId))
+      .orderBy(desc(adminNotifications.createdAt))
+      .limit(limit),
+    db
+      .select({ value: count() })
+      .from(adminNotifications)
+      .where(and(eq(adminNotifications.clubId, clubId), isNull(adminNotifications.readAt))),
+  ]);
+
+  return { items, unread: unreadRow?.value ?? 0 };
+}
+
+/**
+ * Marca como leídas todas las notificaciones sin leer del club (al abrir la campana).
+ * Devuelve cuántas se marcaron.
+ */
+export async function markClubNotificationsRead(clubId: string): Promise<number> {
+  const updated = await getDb()
+    .update(adminNotifications)
+    .set({ readAt: new Date() })
+    .where(and(eq(adminNotifications.clubId, clubId), isNull(adminNotifications.readAt)))
+    .returning({ id: adminNotifications.id });
+  return updated.length;
 }

@@ -38,6 +38,10 @@ export const notifChannelEnum = pgEnum("notif_channel", ["whatsapp", "email"]);
 export const notifKindEnum = pgEnum("notif_kind", ["cancelacion", "recordatorio", "confirmacion"]);
 export const notifStatusEnum = pgEnum("notif_status", ["pendiente", "enviado", "error"]);
 export const recurringTypeEnum = pgEnum("recurring_type", ["clase", "fijo"]);
+// Avisos IN-APP para el admin (campana del panel). Distinto de `notifications`,
+// que son avisos salientes a clientes por whatsapp/email. Hoy solo "nueva_reserva"
+// del bot; pensado para sumar tipos (cancelación, etc.) sin rehacer el modelo.
+export const adminNotificationKindEnum = pgEnum("admin_notification_kind", ["nueva_reserva"]);
 
 // ── Cancha core tables ─────────────────────────────────────────────────────────
 export const clubs = pgTable("clubs", {
@@ -229,6 +233,23 @@ export const notifications = pgTable("notifications", {
   sentAt: timestamp("sent_at", { withTimezone: true }),
 });
 
+// Campana del panel: un aviso in-app por cada reserva del bot que se confirma.
+// Se lee siempre server-side (Drizzle/owner, bypassea RLS); la data "de quién y
+// cuándo" se joinea desde `bookings` al leer, no se duplica acá.
+export const adminNotifications = pgTable("admin_notifications", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  clubId: uuid("club_id").references(() => clubs.id, { onDelete: "cascade" }).notNull(),
+  bookingId: uuid("booking_id").references(() => bookings.id, { onDelete: "cascade" }).notNull(),
+  kind: adminNotificationKindEnum("kind").default("nueva_reserva").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  readAt: timestamp("read_at", { withTimezone: true }),
+}, (table) => ({
+  clubCreatedIdx: index("admin_notifications_club_created_idx").on(table.clubId, table.createdAt),
+  // Idempotencia: una sola notificación por (reserva, tipo). Si el webhook de MP
+  // reintenta o el flujo corre dos veces, el insert cae en onConflictDoNothing.
+  bookingKindUnique: uniqueIndex("admin_notifications_booking_kind_unique").on(table.bookingId, table.kind),
+}));
+
 // ── Legacy SaaS tables ─────────────────────────────────────────────────────────
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -378,6 +399,11 @@ export const customerRelations = relations(customers, ({ one, many }) => ({
   notifications: many(notifications),
 }));
 
+export const adminNotificationRelations = relations(adminNotifications, ({ one }) => ({
+  club: one(clubs, { fields: [adminNotifications.clubId], references: [clubs.id] }),
+  booking: one(bookings, { fields: [adminNotifications.bookingId], references: [bookings.id] }),
+}));
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 export type User = typeof users.$inferSelect;
 export type AdminInvitation = typeof adminInvitations.$inferSelect;
@@ -398,3 +424,5 @@ export type PaymentMode = typeof paymentModeEnum.enumValues[number];
 export type Event = typeof events.$inferSelect;
 export type RecurringRule = typeof recurringRules.$inferSelect;
 export type BotConversation = typeof botConversations.$inferSelect;
+export type AdminNotification = typeof adminNotifications.$inferSelect;
+export type AdminNotificationKind = typeof adminNotificationKindEnum.enumValues[number];

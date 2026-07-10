@@ -58,6 +58,7 @@ vi.mock("@/lib/db/queries", () => ({
     return Promise.resolve({ id: bookingId, status: "cancelado" });
   },
   findOrCreateBotCustomer: vi.fn().mockResolvedValue({ id: "customer-1", name: "Juan Pérez", phone: "2314 555555" }),
+  createNewBookingNotification: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { crearReservaBot, generarBookingCode, resolverTurno, confirmarReservaTexto } from "@/lib/bot/reservar";

@@ -4,7 +4,7 @@ import { bookings, clubs, courts, type PaymentMode } from "@/lib/db/schema";
 import type { LugarDisponibilidad } from "@/lib/bot/search";
 import { calculateBookingPaymentAmount } from "@/lib/payments/amount";
 import { createBookingPaymentPreference } from "@/lib/payments/mercadopago-booking";
-import { cancelBotHoldAfterPaymentError, findOrCreateBotCustomer } from "@/lib/db/queries";
+import { cancelBotHoldAfterPaymentError, createNewBookingNotification, findOrCreateBotCustomer } from "@/lib/db/queries";
 import { cancellationPolicyText } from "@/lib/bot/cancellation-policy-text";
 import type { Channel } from "@/lib/bot/types";
 
@@ -148,6 +148,18 @@ export async function crearReservaBot(input: ReservaInput): Promise<ReservaResul
           bookingCode,
         })
         .returning({ id: bookings.id, bookingCode: bookings.bookingCode });
+
+      // Club sin pago: la reserva ya nace confirmada, así que avisamos al panel
+      // ahora. Los holds con pago se notifican al acreditar (confirmBotHoldPayment).
+      // Best-effort: la reserva no debe fallar si el aviso falla.
+      if (status === "confirmado") {
+        await createNewBookingNotification(input.clubId, booking.id).catch((err) => {
+          console.error("[bot] no se pudo crear la notificación de nueva reserva", {
+            bookingId: booking.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
 
       const result: Extract<ReservaResult, { ok: true }> = {
         ok: true,

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
+import { NotificationBell } from "@/components/layout/notification-bell";
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
 import type { OnboardingItem } from "@/lib/onboarding/checklist";
 
@@ -96,6 +97,7 @@ export function AppShell({
       <div className="main-content" style={{ flex: 1, minWidth: 0, height: "100vh", overflowY: "auto", background: "#F4F1EA" }}>
         {children}
       </div>
+      {clubId && <NotificationBell />}
       {mounted && clubId && (
         <OnboardingChecklist
           open={open}

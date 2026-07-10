@@ -169,9 +169,10 @@ segura en el flujo en vez de depender solo de la sesión. Prioridad: baja para e
 vez), revisar antes de escalar.
 
 
-### Notificación de nueva reserva en el panel del admin
-Cuando entra una reserva nueva (del bot) mientras el admin tiene la agenda abierta, hoy no se
-entera hasta que refresca. Idea: un aviso/toast tipo "Cayó una nueva reserva, actualizá para verla"
-(o que se actualice sola). Aplica a reservas confirmadas y a holds que se confirman. Evaluar
-implementación: polling simple cada X segundos, o realtime (Supabase Realtime). Prioridad: media —
-mejora de UX para el dueño, no bloquea el circuito de pagos. Va después de cerrar pagos.
+### Notificación de nueva reserva en el panel del admin — HECHO
+Resuelto con una **campana de notificaciones** en el panel (enfoque polling + tabla `admin_notifications`).
+Cuando el bot confirma una reserva, se escribe un aviso in-app (al crearse para clubes sin pago; al
+acreditar el webhook para holds con pago) y la campana lo muestra con badge de no leídas: de quién,
+qué cancha, cuándo juega, hace cuánto y "por bot". Ver la sección en `docs/PROYECTO.md`.
+Pendiente futuro (no MVP): migrar a Supabase Realtime para push instantáneo (requiere abrir RLS al
+cliente, evaluar tras cerrar la seguridad); y sumar un toast que salte solo estando el panel abierto.
