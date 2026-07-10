@@ -57,99 +57,22 @@ function signedPaymentRequest(url: string, body: Record<string, unknown> = { typ
   });
 }
 
-describe("Mercado Pago checkout route", () => {
+describe("Mercado Pago checkout route (LEGACY — deshabilitado)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.NEXT_PUBLIC_APP_URL = "https://example.com";
-    process.env.MERCADOPAGO_ACCESS_TOKEN = "APP_USR-production-token";
-    process.env.MERCADOPAGO_CURRENCY = "ARS";
-    mocks.getUser.mockResolvedValue({ data: { user: { id: "auth_user", email: "buyer@example.com" } } });
-    mocks.ensureUserProfile.mockResolvedValue({ id: "user_123", email: "buyer@example.com" });
-    mocks.createPreference.mockResolvedValue({ init_point: "https://mp.example/checkout" });
+    delete process.env.ENABLE_LEGACY_SAAS;
   });
 
-  it("creates a credit pack preference and redirects to Checkout Pro", async () => {
+  // El checkout de créditos es boilerplate SaaS que Cancha no usa. Queda cerrado
+  // (404) para no exponer la cuenta central de MP ni una superficie de gasto.
+  it("está deshabilitado: devuelve 404 y no crea ninguna preferencia", async () => {
     const { POST } = await import("./checkout/route");
-    const request = new Request("https://example.com/api/mercadopago/checkout", {
+    const response = await POST(new Request("https://example.com/api/mercadopago/checkout", {
       method: "POST",
-      body: new URLSearchParams({ packId: "credits_50" })
-    });
+      body: new URLSearchParams({ packId: "credits_50" }),
+    }));
 
-    const response = await POST(request);
-
-    expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("https://mp.example/checkout");
-    expect(mocks.createPreference).toHaveBeenCalledWith({
-      body: expect.objectContaining({
-        external_reference: "credits:user_123:credits_50",
-        notification_url: "https://example.com/api/mercadopago/webhook?source_news=webhooks",
-        items: [
-          expect.objectContaining({
-            id: "credits_50",
-            currency_id: "ARS",
-            unit_price: 200
-          })
-        ],
-        metadata: expect.objectContaining({
-          provider: "mercadopago",
-          user_id: "user_123",
-          pack_id: "credits_50",
-          credits: 50
-        })
-      })
-    });
-    expect(mocks.createPreference).toHaveBeenCalledWith({
-      body: expect.not.objectContaining({
-        payer: expect.anything()
-      })
-    });
-  });
-
-  it("uses the sandbox checkout URL for test credentials", async () => {
-    process.env.MERCADOPAGO_ACCESS_TOKEN = "TEST-access-token";
-    mocks.createPreference.mockResolvedValue({
-      init_point: "https://mp.example/checkout",
-      sandbox_init_point: "https://sandbox.mp.example/checkout"
-    });
-    const { POST } = await import("./checkout/route");
-    const request = new Request("https://example.com/api/mercadopago/checkout", {
-      method: "POST",
-      body: new URLSearchParams({ packId: "credits_10" })
-    });
-
-    const response = await POST(request);
-
-    expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("https://sandbox.mp.example/checkout");
-    expect(mocks.createPreference).toHaveBeenCalledWith({
-      body: expect.not.objectContaining({
-        payer: expect.anything()
-      })
-    });
-  });
-
-  it("redirects anonymous users to login", async () => {
-    mocks.getUser.mockResolvedValue({ data: { user: null } });
-    const { POST } = await import("./checkout/route");
-
-    const response = await POST(new Request("https://example.com/api/mercadopago/checkout", { method: "POST" }));
-
-    expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("https://example.com/login");
-    expect(mocks.createPreference).not.toHaveBeenCalled();
-  });
-
-  it("rejects unknown credit packs", async () => {
-    const { POST } = await import("./checkout/route");
-    const request = new Request("https://example.com/api/mercadopago/checkout", {
-      method: "POST",
-      body: new URLSearchParams({ packId: "missing" })
-    });
-
-    const response = await POST(request);
-
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: "Invalid credit pack" });
+    expect(response.status).toBe(404);
     expect(mocks.createPreference).not.toHaveBeenCalled();
   });
 });

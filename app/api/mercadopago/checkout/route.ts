@@ -4,7 +4,10 @@ import { getMercadoPagoPreference } from "@/lib/mercadopago/client";
 import { getCreditPack, getMercadoPagoCreditPackPrice } from "@/lib/stripe/pricing";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+import { LEGACY_SAAS_ENABLED, legacyDisabledResponse } from "@/lib/http/legacy";
+
 export async function POST(request: Request) {
+  if (!LEGACY_SAAS_ENABLED) return legacyDisabledResponse();
   const supabase = await createSupabaseServerClient();
   const {
     data: { user }

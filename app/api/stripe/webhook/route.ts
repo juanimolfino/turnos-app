@@ -6,7 +6,10 @@ import { addCredits } from "@/lib/db/queries";
 import { subscriptions, users } from "@/lib/db/schema";
 import { getStripe } from "@/lib/stripe/client";
 
+import { LEGACY_SAAS_ENABLED, legacyDisabledResponse } from "@/lib/http/legacy";
+
 export async function POST(request: Request) {
+  if (!LEGACY_SAAS_ENABLED) return legacyDisabledResponse();
   const payload = await request.text();
   const signature = request.headers.get("stripe-signature");
   if (!signature) return NextResponse.json({ error: "Missing signature" }, { status: 400 });

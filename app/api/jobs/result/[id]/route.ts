@@ -3,7 +3,10 @@ import { createSignedResultUrl } from "@/lib/ai/storage";
 import { ensureUserProfile, getJobForUser } from "@/lib/db/queries";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+import { LEGACY_SAAS_ENABLED, legacyDisabledResponse } from "@/lib/http/legacy";
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!LEGACY_SAAS_ENABLED) return legacyDisabledResponse();
   const supabase = await createSupabaseServerClient();
   const {
     data: { user }

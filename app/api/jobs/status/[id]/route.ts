@@ -2,7 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { ensureUserProfile, getJobForUser } from "@/lib/db/queries";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+import { LEGACY_SAAS_ENABLED, legacyDisabledResponse } from "@/lib/http/legacy";
+
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!LEGACY_SAAS_ENABLED) return legacyDisabledResponse();
   const supabase = await createSupabaseServerClient();
   const {
     data: { user }
