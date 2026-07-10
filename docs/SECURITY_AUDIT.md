@@ -9,6 +9,39 @@
 
 ---
 
+## 🔴🔴 P-1 — CRÍTICO MÁXIMO · Base de datos entera LEÍBLE Y ESCRIBIBLE con la anon key pública
+
+**Estado:** ✅ **FIXEADO EN VIVO (2026-07-09).** Era una **fuga activa**, no teórica.
+
+### Problema
+**RLS estaba OFF en las 19 tablas** de `public` y los roles `anon`/`authenticated` tenían grants. La
+anon key (`NEXT_PUBLIC_SUPABASE_ANON_KEY`) es **pública** (va en el bundle JS de todo browser). Se
+confirmó por REST (`/rest/v1/<tabla>`) que **cualquiera** con esa key podía:
+- **LEER** todo: `club_mercadopago_credentials` (**access_token + refresh_token de MP de cada club**),
+  `customers` (PII: nombre/tel/email), `bookings`, `users` (emails y roles), `admin_invitations`.
+- **ESCRIBIR/BORRAR** todo: `PATCH`/`DELETE` sobre `bookings`, `customers`, etc. devolvían **HTTP 204**.
+
+Impacto: robo de los tokens de Mercado Pago (cobrar/reembolsar a nombre de los clubs), robo masivo de
+PII, y manipulación/borrado de cualquier reserva o credencial. Es el peor hallazgo posible.
+
+### Causa
+`lib/db/rls.sql` (histórico) solo activaba RLS en 5 tablas legacy y **nunca se corrió** en producción;
+las tablas de Cancha se crearon por migraciones Drizzle, que **no activan RLS** por defecto, y Supabase
+concede grants a `anon`/`authenticated` en el esquema `public`.
+
+### Fix aplicado
+Se activó **RLS en las 19 tablas** + `REVOKE ALL ... FROM anon, authenticated` (deny-by-default). La app
+no se rompe: el runtime usa Drizzle (rol owner `postgres`, **bypassea RLS**) y el service_role también.
+Verificado post-fix: la app sigue leyendo (`clubs=5`, `mp_creds=2`) y la anon key ahora recibe
+**HTTP 401 permission denied** en lectura y escritura. El SQL reproducible quedó en `lib/db/rls.sql`.
+
+### Pendiente asociado (manual)
+- Como esto estuvo abierto un tiempo, **asumir los tokens de MP y toda credencial como potencialmente
+  comprometidos**: rotar `MERCADOPAGO_*`, y que cada club reconecte MP (nuevo token) por las dudas.
+- Revisar en el dashboard de MP de cada club si hubo movimientos/refunds no reconocidos.
+
+---
+
 ## ⚡ Actualización 2026-07-09 — segunda pasada (verificación + fixes aplicados)
 
 La primera pasada fue estática y dejó ítems sin verificar por falta de acceso. En esta segunda pasada
@@ -200,6 +233,7 @@ Revisar en el panel de Supabase, porque el código no lo puede garantizar:
 
 | Prio | Problema | Riesgo | Estado |
 |------|----------|--------|--------|
+| **P-1** | RLS OFF en las 19 tablas → anon key pública lee/escribe TODA la base (incl. tokens MP, PII) | Robo de tokens de pago + PII + manipulación total | ✅ **Fixeado en vivo** (RLS + revoke) · ⚠️ rotar tokens MP |
 | **P0** | Rol de superadmin asignable desde `user_metadata` (cliente) | Toma total: borrar clubs, ver/tocar todo, pagos | ✅ Código fixeado · ⚠️ falta deshabilitar signups |
 | **P0.2** | El panel de admin no exigía `role==="admin"` + `/api/auth/onboarding` abierto → auto-provisión de club | Cualquier registrado entra al panel y se hace admin | ✅ Código fixeado (layout + endpoint) |
 | **P1** | Borrado de admin DB-first con fallo de Auth tragado + auto-reversión | Un admin echado recupera acceso | ✅ Código fixeado (502/partial + fix P0) |
@@ -220,26 +254,29 @@ RLS en Supabase (ver Pendientes). Todo el resto quedó fixeado en código en est
       única fricción que hoy frena un signup automatizado. **No la desactives.**
 - [x] **Inyección SQL / IDOR / XSS** → barrido completo, sin hallazgos explotables (ver "segunda pasada").
 - [x] **Fixes de código P0, P0.2, P1 + headers** → aplicados.
+- [x] **RLS de TODAS las tablas** → estaba OFF con acceso anon total (P-1); **fixeado en vivo** (RLS on +
+      revoke). Verificado bloqueado (401). SQL reproducible en `lib/db/rls.sql`.
+- [x] **Superadmins en la base** → hay **2**: `juanymolfino@hotmail.com` (24/06) y
+      `kevinnkroll@gmail.com` (30/06). ⚠️ **CONFIRMAR que Kevin sos vos / tu socio.** Si no lo reconocés,
+      es intrusión (los signups estaban abiertos y P0 explotable): borralo y rotá todo.
 
 ### 🔴 Acciones manuales que TENÉS que hacer (el código no las puede hacer)
 - [ ] **CRÍTICO — Deshabilitar signups públicos** en Supabase: Authentication → Providers → "Allow new
       users to sign up" **en OFF**. Todo el alta de admins es por invitación, no se pierde nada. Es la
       barrera definitiva de P0 (el fix de código ya evita la escalada, pero cerrar signups reduce la
       superficie: nadie ajeno debería poder crear una cuenta Auth).
-- [ ] **Auditar RLS** de todas las tablas de `public`. Correr en el SQL editor de Supabase:
-      ```sql
-      SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname='public';  -- todas en true
-      SELECT * FROM pg_policies WHERE schemaname='public';                       -- que existan políticas
-      ```
-      El runtime usa service role, pero la anon key es pública (`NEXT_PUBLIC_`); si RLS está off, esa key
-      lee/escribe las tablas directo. Es la última red.
-- [ ] **Rotar secretos** que hayan pasado por chat/logs/entornos durante el desarrollo:
-      `SUPABASE_SERVICE_ROLE_KEY`, `MERCADOPAGO_CLIENT_SECRET`, `MERCADOPAGO_ACCESS_TOKEN`,
-      `MERCADOPAGO_WEBHOOK_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, tokens de MP de clubs. Rotar la key
-      **invalida la vieja**; un secreto expuesto no se "borra" del historial.
-- [ ] **Revisar si hay un superadmin fantasma**: como los signups estaban abiertos y P0 era explotable,
-      correr `SELECT id, email, role, created_at FROM users WHERE role = 'superadmin';` y confirmar que
-      **todos** son cuentas tuyas conocidas. Si aparece una que no reconocés, es una intrusión: borrala.
+- [ ] **CRÍTICO — Confirmar el 2º superadmin** `kevinnkroll@gmail.com` (creado 30/06). Si es tu socio,
+      OK. Si NO lo reconocés → intrusión vía P0: borralo (`DELETE FROM users WHERE email='...'` + borrar
+      su usuario de Auth) y tratá TODO como comprometido.
+- [ ] **CRÍTICO — Rotar credenciales de Mercado Pago** y que cada club **reconecte MP**: como los tokens
+      de `club_mercadopago_credentials` fueron world-readable (P-1), asumir que pudieron leerse. Rotar
+      `MERCADOPAGO_CLIENT_SECRET`/`MERCADOPAGO_ACCESS_TOKEN`/`MERCADOPAGO_WEBHOOK_SECRET` y revisar el
+      dashboard de MP de cada club por movimientos/refunds no reconocidos.
+- [ ] **Rotar el resto de secretos** que hayan pasado por chat/logs/entornos: `SUPABASE_SERVICE_ROLE_KEY`,
+      `TELEGRAM_WEBHOOK_SECRET`. Rotar **invalida** la vieja; un secreto expuesto no se "borra".
+      (La anon key también estuvo sobreexpuesta, pero con RLS activa ya no da acceso; rotarla igual es opcional.)
+- [x] **Auditar RLS** → HECHO en vivo (ver P-1). Ya no hace falta correrlo a mano, pero para re-verificar:
+      `SELECT tablename FROM pg_tables WHERE schemaname='public' AND rowsecurity=false;` debe dar 0 filas.
 
 ### 🟡 Follow-up (no bloqueante)
 - [ ] **P2.2 — Refresh del `access_token` de Mercado Pago** (vence a 180 días): usar el `refresh_token`
