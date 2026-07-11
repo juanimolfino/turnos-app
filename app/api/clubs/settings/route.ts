@@ -5,10 +5,13 @@ import {
   generateApiKey,
   getClubById,
   getClubMercadoPagoConnectionStatus,
+  getClubOpeningWindow,
   getUserByAuthId,
+  setClubOpeningWindow,
   updateClub,
   updateClubCourtPrices,
 } from "@/lib/db/queries";
+import { validateOpeningWindow } from "@/lib/agenda/opening-hours";
 
 const schema = z.object({
   address: z.string().nullable().optional(),
@@ -21,6 +24,8 @@ const schema = z.object({
   refundEnabled: z.boolean().optional(),
   refundCutoffHours: z.number().int().min(1).max(720).optional(),
   paymentDeadlineHours: z.number().int().min(1).max(168).optional(),
+  openTime: z.string().optional(),
+  closeTime: z.string().optional(),
   courtPrices: z.array(z.object({
     courtId: z.string().uuid(),
     price: z.number().int().min(0).max(10_000_000),
@@ -55,8 +60,11 @@ export async function GET() {
   const profile = await getUserByAuthId(user.id);
   if (!profile?.clubId) return NextResponse.json({ error: "Sin club" }, { status: 403 });
 
-  const club = await getClubById(profile.clubId);
-  return NextResponse.json({ club: publicClubSettings(club) });
+  const [club, openingWindow] = await Promise.all([
+    getClubById(profile.clubId),
+    getClubOpeningWindow(profile.clubId),
+  ]);
+  return NextResponse.json({ club: { ...publicClubSettings(club), openingWindow } });
 }
 
 export async function POST(request: NextRequest) {
@@ -74,7 +82,19 @@ export async function POST(request: NextRequest) {
   const existingClub = await getClubById(profile.clubId);
   if (!existingClub) return NextResponse.json({ error: "Sin club" }, { status: 403 });
 
-  const { generateApiKey: genKey, courtPrices, ...updateData } = parsed.data;
+  const { generateApiKey: genKey, courtPrices, openTime, closeTime, ...updateData } = parsed.data;
+
+  // Horario de atención: si vino open/close, validar y guardar (7 filas de opening_hours).
+  if (openTime !== undefined || closeTime !== undefined) {
+    const current = await getClubOpeningWindow(profile.clubId);
+    const validated = validateOpeningWindow({
+      open: openTime ?? current.open,
+      close: closeTime ?? current.close,
+    });
+    if (!validated.ok) return NextResponse.json({ error: validated.error }, { status: 400 });
+    await setClubOpeningWindow(profile.clubId, validated.value.open, validated.value.close);
+  }
+
   const nextPaymentMode =
     updateData.paymentMode ??
     (updateData.requiresPayment === true ? "full" : updateData.requiresPayment === false ? "none" : existingClub.paymentMode);
@@ -107,5 +127,6 @@ export async function POST(request: NextRequest) {
     apiKey = await generateApiKey(profile.clubId);
   }
 
-  return NextResponse.json({ club: { ...publicClubSettings(club), apiKey } });
+  const openingWindow = await getClubOpeningWindow(profile.clubId);
+  return NextResponse.json({ club: { ...publicClubSettings(club), apiKey, openingWindow } });
 }

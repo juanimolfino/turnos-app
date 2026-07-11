@@ -29,6 +29,7 @@ interface Props {
   blocks: Block[];
   weekStart: string; // lunes YYYY-MM-DD
   today: string;
+  openingWindow: { open: string; close: string };
 }
 
 // Las labels salen de lib/bookings/labels (fuente única). 'simple' = "Reservado".
@@ -86,7 +87,7 @@ function fmtRange(start: string, end: string) {
 const TIME_OPTIONS: string[] = [];
 for (let m = 6 * 60; m <= 24 * 60; m += 30) TIME_OPTIONS.push(toTime(m));
 
-export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
+export function AgendaWeekClient({ courts, blocks, weekStart, today, openingWindow }: Props) {
   const router = useRouter();
   const isMobile = useIsMobile();
 
@@ -111,10 +112,11 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
 
   const [viewBlock, setViewBlock] = useState<Block | null>(null);
 
-  // rango horario de la grilla
+  // rango horario de la grilla: parte del horario de atención del club y se
+  // extiende si algún bloque cae fuera (ej. un turno que arranca antes de abrir).
   const { gridStart, gridEnd } = useMemo(() => {
-    let minM = toMin("08:00");
-    let maxM = toMin("23:30");
+    let minM = toMin(openingWindow.open);
+    let maxM = toMin(openingWindow.close);
     for (const b of blocks) {
       minM = Math.min(minM, toMin(b.startTime));
       maxM = Math.max(maxM, toMin(b.endTime));
@@ -122,7 +124,7 @@ export function AgendaWeekClient({ courts, blocks, weekStart, today }: Props) {
     minM = Math.floor(minM / 30) * 30;
     maxM = Math.ceil(maxM / 30) * 30;
     return { gridStart: minM, gridEnd: maxM };
-  }, [blocks]);
+  }, [blocks, openingWindow.open, openingWindow.close]);
 
   const slots = useMemo(() => {
     const arr: { start: string; end: string }[] = [];

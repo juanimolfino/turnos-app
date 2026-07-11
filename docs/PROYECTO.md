@@ -525,10 +525,13 @@ Marcadas con 🤖 las que consume/escribe el **bot**.
 ### `sports` — deporte (hoy solo Pádel)
 `id` · `name` · `slug`
 
-### `opening_hours` — horario de apertura por día (opcional)
+### `opening_hours` — horario de atención del club
 `id` · `club_id` · `weekday` (0=Lun…6=Dom) · `open_time` · `close_time` · `slot_minutes`
-> Hoy casi no se usa. La disponibilidad del bot usa esto **si existe**, si no un default
-> (08:00–23:00, slots de 90 min).
+> El admin lo edita en `/ajustes` → "Horario de atención" (abre/cierra). Se guarda como 7 filas
+> (una por día, mismo horario: modelo de ventana única). La disponibilidad del bot, la agenda del
+> día y la agenda semanal lo leen por día; si no hay filas, cae al default (08:00–23:00, slot 90).
+> Escritura/validación: `setClubOpeningWindow` (queries) + `lib/agenda/opening-hours.ts`
+> (valida cierre > apertura, normaliza 24:00 → 23:59). Per-día distinto = mejora futura.
 
 ### `recurring_rules` — reglas recurrentes (clase/fijo)
 `id` · `club_id` · `type` · `court_id` · `customer_id` · `professor_id` · `weekday` ·
@@ -645,7 +648,8 @@ Clubs DEMO que crea el seed (api_key entre paréntesis):
   server-side; el bot ya usa esos tokens para crear links de pago de holds y el webhook
   confirma pagos aprobados de holds vigentes. Los holds vencidos expiran por Inngest y la
   cancelación por código procesa refunds según la política del club. Falta prueba E2E completa.
-- **`opening_hours`**: darle UI por club (hoy se usa un default).
+- **`opening_hours`**: horario por club HECHO (ventana única en `/ajustes`); falta permitir horario
+  distinto por día de la semana.
 
 ---
 

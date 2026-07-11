@@ -1,6 +1,7 @@
 import { and, count, desc, eq, isNotNull, isNull, ne, or, sql, lt, gt, gte, lte, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { clubs, courts, sports, professors, credits, jobs, subscriptions, transactions, users, bookings, customers, notifications, adminNotifications, recurringRules, playerIdentities, clubMercadoPagoCredentials, adminInvitations, type JobType, type PaymentMode, type Role, type AdminNotificationKind } from "@/lib/db/schema";
+import { clubs, courts, sports, professors, credits, jobs, subscriptions, transactions, users, bookings, customers, notifications, adminNotifications, openingHours, recurringRules, playerIdentities, clubMercadoPagoCredentials, adminInvitations, type JobType, type PaymentMode, type Role, type AdminNotificationKind } from "@/lib/db/schema";
+import { DEFAULT_OPENING_WINDOW } from "@/lib/agenda/opening-hours";
 import { sendPurchaseConfirmationEmail, sendWelcomeEmail } from "@/lib/email/send";
 import type { User } from "@supabase/supabase-js";
 import { randomBytes, randomUUID } from "crypto";
@@ -494,6 +495,45 @@ export async function createClub(name: string) {
 
 export async function getClubById(id: string) {
   return getDb().query.clubs.findFirst({ where: eq(clubs.id, id) });
+}
+
+// ── Horario de atención del club (opening_hours) ─────────────────────────────────
+// Modelo simple: una sola ventana para todos los días. Se guarda como 7 filas
+// (weekday 0..6) para que la agenda del día y la disponibilidad del bot —que ya
+// leen opening_hours POR día de la semana— la tomen sin cambios. Per-día queda
+// para una etapa futura (override por fila).
+
+/**
+ * Ventana de atención del club. Lee cualquier fila de opening_hours (en el modelo
+ * de ventana única todas son iguales); si no hay ninguna, devuelve el default.
+ */
+export async function getClubOpeningWindow(clubId: string): Promise<{ open: string; close: string }> {
+  const [row] = await getDb()
+    .select({ open: openingHours.openTime, close: openingHours.closeTime })
+    .from(openingHours)
+    .where(eq(openingHours.clubId, clubId))
+    .limit(1);
+  return row ?? { ...DEFAULT_OPENING_WINDOW };
+}
+
+/**
+ * Guarda la ventana de atención del club: reemplaza las filas de opening_hours por
+ * 7 (una por día) con el mismo open/close. Atómico. El slot queda en 90 (pádel).
+ */
+export async function setClubOpeningWindow(clubId: string, open: string, close: string) {
+  const db = getDb();
+  await db.transaction(async (tx) => {
+    await tx.delete(openingHours).where(eq(openingHours.clubId, clubId));
+    await tx.insert(openingHours).values(
+      Array.from({ length: 7 }, (_, weekday) => ({
+        clubId,
+        weekday,
+        openTime: open,
+        closeTime: close,
+        slotMinutes: 90,
+      })),
+    );
+  });
 }
 
 export async function updateClub(id: string, data: {

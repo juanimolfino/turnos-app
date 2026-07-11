@@ -40,6 +40,7 @@ interface ClubSettings {
   refundEnabled?: boolean;
   refundCutoffHours?: number;
   paymentDeadlineHours?: number;
+  openingWindow?: { open: string; close: string };
   courts?: { id: string; name: string; price: number }[];
   mercadoPago?: {
     connected: boolean;
@@ -54,6 +55,18 @@ interface ClubSettings {
 interface AjustesClientProps {
   club?: ClubSettings;
 }
+
+function timeOptions(startMin: number, endMin: number, extra: string[] = []): string[] {
+  const opts: string[] = [];
+  for (let m = startMin; m <= endMin; m += 30) {
+    opts.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
+  }
+  return [...opts, ...extra];
+}
+// Apertura: cada 30 min de 06:00 a 23:00. Cierre: de 07:00 a 23:30, más 23:59
+// (para clubes que operan "hasta medianoche").
+const OPEN_OPTIONS = timeOptions(6 * 60, 23 * 60);
+const CLOSE_OPTIONS = timeOptions(7 * 60, 23 * 60 + 30, ["23:59"]);
 
 function Field({ label, value, onChange, placeholder, type = "text", mono }: {
   label: string; value: string; onChange?: (v: string) => void; placeholder?: string; type?: string; mono?: boolean;
@@ -88,6 +101,8 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
   const [refundEnabled, setRefundEnabled] = useState(Boolean(initial.refundEnabled));
   const [refundCutoffHours, setRefundCutoffHours] = useState(String(initial.refundCutoffHours ?? 24));
   const [courtPrices, setCourtPrices] = useState(() => (initial.courts ?? []).map((court) => ({ ...court, price: String(court.price ?? 0) })));
+  const [openTime, setOpenTime] = useState(initial.openingWindow?.open ?? "08:00");
+  const [closeTime, setCloseTime] = useState(initial.openingWindow?.close ?? "23:00");
   const [deadlineHours, setDeadlineHours] = useState(String(initial.paymentDeadlineHours ?? 24));
   const [mercadoPago, setMercadoPago] = useState(initial.mercadoPago ?? { connected: false });
   const [saving, setSaving] = useState(false);
@@ -115,6 +130,8 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
           refundEnabled,
           refundCutoffHours: parseInt(refundCutoffHours) || 24,
           paymentDeadlineHours: parseInt(deadlineHours) || 24,
+          openTime,
+          closeTime,
           courtPrices: courtPrices.map((court) => ({
             courtId: court.id,
             price: parseInt(court.price) || 0,
@@ -163,6 +180,38 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
           <div style={{ flex: 1 }}><Field label="Barrio" value={neighborhood} onChange={setNeighborhood} placeholder="Palermo" /></div>
         </div>
         <Field label="Teléfono de contacto" value={phone} onChange={setPhone} placeholder="+54 11 4567-8901" type="tel" />
+      </div>
+
+      <div style={{ background: "#FCFBF8", border: "1px solid #E7E1D6", borderRadius: 16, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#221F1B", letterSpacing: ".04em", textTransform: "uppercase" }}>Horario de atención</div>
+          <div style={{ fontSize: 12.5, color: "#928B7E", marginTop: 4 }}>
+            Define desde y hasta qué hora opera tu club. La agenda y el bot usan este horario para
+            mostrar la disponibilidad; fuera de él, no se ofrecen turnos.
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 12, flexDirection: isMobile ? "column" : "row" }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#6B6660", letterSpacing: ".04em" }}>ABRE</label>
+            <select
+              value={openTime}
+              onChange={(e) => setOpenTime(e.target.value)}
+              style={{ padding: "10px 12px", borderRadius: 9, border: "1px solid #E0DACE", fontSize: 13.5, background: "#FCFBF8", color: "#221F1B", outline: "none", fontFamily: "inherit" }}
+            >
+              {OPEN_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#6B6660", letterSpacing: ".04em" }}>CIERRA</label>
+            <select
+              value={closeTime}
+              onChange={(e) => setCloseTime(e.target.value)}
+              style={{ padding: "10px 12px", borderRadius: 9, border: "1px solid #E0DACE", fontSize: 13.5, background: "#FCFBF8", color: "#221F1B", outline: "none", fontFamily: "inherit" }}
+            >
+              {CLOSE_OPTIONS.map((t) => <option key={t} value={t}>{t === "23:59" ? "23:59 (medianoche)" : t}</option>)}
+            </select>
+          </div>
+        </div>
       </div>
 
       <div style={{ background: "#FCFBF8", border: "1px solid #E7E1D6", borderRadius: 16, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>

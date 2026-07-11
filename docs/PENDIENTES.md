@@ -37,12 +37,13 @@ selección de cancha y en la redacción. Es una mejora, no MVP.
 
 ## Panel del admin
 
-### UI para editar opening_hours desde el panel
-Hoy el horario de apertura de cada club (`opening_hours`) NO se puede editar desde el panel;
-si no hay filas, la disponibilidad cae a un default (08:00–23:00, slot 90). Es información que
-el dueño tiene que poder cargar, porque define cuándo su cancha está disponible. Pendiente:
-construir la UI en el panel para editar opening_hours por club/día. Importante para que el dato
-que lee el bot sea correcto cuando un club no abre 08–23.
+### UI para editar opening_hours desde el panel — HECHO (ventana única)
+Resuelto: en `/ajustes` → "Horario de atención" el admin elige **abre / cierra** del club. Se guarda
+como 7 filas de `opening_hours` (una por día, mismo horario) para que la agenda del día, la agenda
+semanal y la disponibilidad del bot —que ya leen `opening_hours` por día— lo tomen sin cambios de
+lógica. Valida cierre > apertura y normaliza 24:00 → 23:59 (`lib/agenda/opening-hours.ts`).
+Pendiente FUTURO (no MVP): permitir **horario distinto por día** (override por fila), hoy es una
+sola ventana para toda la semana.
 
 ### Normalizar horas de cierre en el panel
 El selector de horario del panel ofrecía "24:00" como fin (medianoche), que no es una hora

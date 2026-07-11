@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createSupabaseReadOnlyServerClient } from "@/lib/supabase/server";
-import { getUserByAuthId, getClubCourts, getWeekAgenda } from "@/lib/db/queries";
+import { getUserByAuthId, getClubCourts, getWeekAgenda, getClubOpeningWindow } from "@/lib/db/queries";
 import { getDb } from "@/lib/db";
 import { clubs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -62,9 +62,10 @@ export default async function AgendaPage({
   const weekStart = mondayOf(week ?? today);
   const weekEnd = addDays(weekStart, 6);
 
-  const [courts, blocks] = await Promise.all([
+  const [courts, blocks, openingWindow] = await Promise.all([
     getClubCourts(profile.clubId),
     getWeekAgenda(profile.clubId, weekStart, weekEnd),
+    getClubOpeningWindow(profile.clubId),
   ]);
 
   return (
@@ -73,6 +74,7 @@ export default async function AgendaPage({
       blocks={blocks}
       weekStart={weekStart}
       today={today}
+      openingWindow={openingWindow}
     />
   );
 }

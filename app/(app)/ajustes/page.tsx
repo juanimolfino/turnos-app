@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createSupabaseReadOnlyServerClient } from "@/lib/supabase/server";
-import { getClubMercadoPagoConnectionStatus, getUserByAuthId } from "@/lib/db/queries";
+import { getClubMercadoPagoConnectionStatus, getClubOpeningWindow, getUserByAuthId } from "@/lib/db/queries";
 import { getDb } from "@/lib/db";
 import { courts, clubs } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -19,10 +19,11 @@ export default async function AjustesPage() {
   const db = getDb();
   const clubId = profile.clubId;
 
-  const [allCourts, clubRow, mercadoPagoStatus] = await Promise.all([
+  const [allCourts, clubRow, mercadoPagoStatus, openingWindow] = await Promise.all([
     db.select().from(courts).where(and(eq(courts.clubId, clubId), eq(courts.active, true))),
     db.select().from(clubs).where(eq(clubs.id, clubId)),
     getClubMercadoPagoConnectionStatus(clubId),
+    getClubOpeningWindow(clubId),
   ]);
 
   const club = clubRow[0];
@@ -40,5 +41,6 @@ export default async function AjustesPage() {
     paymentDeadlineHours: club?.paymentDeadlineHours,
     courts: allCourts.map((court) => ({ id: court.id, name: court.name, price: court.price })),
     mercadoPago: mercadoPagoStatus,
+    openingWindow,
   }} />;
 }

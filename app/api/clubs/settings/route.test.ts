@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   generateApiKey: vi.fn(),
   getClubById: vi.fn(),
   getClubMercadoPagoConnectionStatus: vi.fn(),
+  getClubOpeningWindow: vi.fn(),
+  setClubOpeningWindow: vi.fn(),
   getUser: vi.fn(),
   getUserByAuthId: vi.fn(),
   updateClub: vi.fn(),
@@ -21,6 +23,8 @@ vi.mock("@/lib/db/queries", () => ({
   generateApiKey: mocks.generateApiKey,
   getClubById: mocks.getClubById,
   getClubMercadoPagoConnectionStatus: mocks.getClubMercadoPagoConnectionStatus,
+  getClubOpeningWindow: mocks.getClubOpeningWindow,
+  setClubOpeningWindow: mocks.setClubOpeningWindow,
   getUserByAuthId: mocks.getUserByAuthId,
   updateClub: mocks.updateClub,
   updateClubCourtPrices: mocks.updateClubCourtPrices,
@@ -49,6 +53,8 @@ describe("club settings API", () => {
     mocks.getUserByAuthId.mockResolvedValue({ id: "admin_1", clubId: "club_123" });
     mocks.getClubById.mockResolvedValue(clubRow);
     mocks.getClubMercadoPagoConnectionStatus.mockResolvedValue({ connected: false });
+    mocks.getClubOpeningWindow.mockResolvedValue({ open: "08:00", close: "23:00" });
+    mocks.setClubOpeningWindow.mockResolvedValue(undefined);
     mocks.updateClub.mockResolvedValue(clubRow);
   });
 
@@ -146,5 +152,35 @@ describe("club settings API", () => {
     });
     expect(body.club.refundEnabled).toBe(true);
     expect(body.club.refundCutoffHours).toBe(48);
+  });
+
+  it("guarda el horario de atención del club (open/close válidos)", async () => {
+    const { POST } = await import("./route");
+    const request = new NextRequest("https://example.com/api/clubs/settings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ openTime: "07:00", closeTime: "23:59" }),
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.setClubOpeningWindow).toHaveBeenCalledWith("club_123", "07:00", "23:59");
+    expect(body.club.openingWindow).toEqual({ open: "08:00", close: "23:00" }); // del mock de get
+  });
+
+  it("rechaza un horario inválido (cierre antes de la apertura) sin guardar", async () => {
+    const { POST } = await import("./route");
+    const request = new NextRequest("https://example.com/api/clubs/settings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ openTime: "22:00", closeTime: "10:00" }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(400);
+    expect(mocks.setClubOpeningWindow).not.toHaveBeenCalled();
   });
 });
