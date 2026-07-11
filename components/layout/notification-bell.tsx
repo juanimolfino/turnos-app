@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell } from "lucide-react";
+import { Bell, X } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-is-mobile";
-import { formatRelativeTime, formatBookingWhen } from "@/lib/notifications/format";
+import { formatBookingWhen, formatRelativeTime } from "@/lib/notifications/format";
 
 const POLL_MS = 45_000;
+const TOAST_MS = 10_000;
 
 type NotificationItem = {
   id: string;
@@ -27,19 +28,44 @@ export function NotificationBell() {
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
+  const [toasts, setToasts] = useState<NotificationItem[]>([]);
   const rootRef = useRef<HTMLDivElement>(null);
+  // Ids ya vistos + flag de "primer load listo": el toast solo salta para
+  // reservas que llegan DESPUÉS de la carga inicial, no para las viejas al abrir
+  // el panel. Refs (no estado) porque no deben disparar re-render.
+  const seenIds = useRef<Set<string>>(new Set());
+  const primed = useRef(false);
+  const toastTimers = useRef<number[]>([]);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/notifications");
       if (!res.ok) return;
       const data = await res.json();
-      setItems(data.items ?? []);
+      const nextItems: NotificationItem[] = data.items ?? [];
+      setItems(nextItems);
       setUnread(data.unread ?? 0);
+
+      // Detección de novedades: ids que no habíamos visto. En la primera carga
+      // solo sembramos el set (sin toast); a partir de ahí, cada id nuevo saltará.
+      const fresh = nextItems.filter((n) => !seenIds.current.has(n.id));
+      nextItems.forEach((n) => seenIds.current.add(n.id));
+      if (primed.current && fresh.length > 0) {
+        setToasts((prev) => [...fresh, ...prev].slice(0, 3));
+        for (const n of fresh) {
+          const timer = window.setTimeout(() => dismissToast(n.id), TOAST_MS);
+          toastTimers.current.push(timer);
+        }
+      }
+      primed.current = true;
     } catch {
       /* offline / transitorio: reintenta en el próximo tick o foco */
     }
-  }, []);
+  }, [dismissToast]);
 
   useEffect(() => {
     // load() es async: el setState ocurre tras el await (microtask), no de forma
@@ -49,9 +75,11 @@ export function NotificationBell() {
     const interval = window.setInterval(load, POLL_MS);
     const onFocus = () => load();
     window.addEventListener("focus", onFocus);
+    const timers = toastTimers.current;
     return () => {
       window.clearInterval(interval);
       window.removeEventListener("focus", onFocus);
+      timers.forEach((t) => window.clearTimeout(t));
     };
   }, [load]);
 
@@ -87,7 +115,44 @@ export function NotificationBell() {
     ? { position: "fixed", top: 10, right: 62, zIndex: 150 }
     : { position: "fixed", top: 14, right: 20, zIndex: 150 };
 
+  const toastWrapStyle: React.CSSProperties = isMobile
+    ? { position: "fixed", top: 56, right: 12, left: 12, zIndex: 160, display: "flex", flexDirection: "column", gap: 8 }
+    : { position: "fixed", top: 58, right: 20, width: 320, zIndex: 160, display: "flex", flexDirection: "column", gap: 8 };
+
   return (
+    <>
+    {toasts.length > 0 && (
+      <div style={toastWrapStyle}>
+        {toasts.map((n) => (
+          <div key={n.id} style={{
+            display: "flex", gap: 10, padding: "12px 14px",
+            background: "#FCFBF8", border: "1px solid #E7E1D6", borderRadius: 12,
+            boxShadow: "0 12px 32px -12px rgba(0,0,0,.4)",
+          }}>
+            <div style={{ fontSize: 18, lineHeight: 1.1, flexShrink: 0 }}>🎾</div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: "#221F1B" }}>
+                Nueva reserva{n.customerName ? ` — ${n.customerName}` : ""}
+              </div>
+              <div style={{ fontSize: 12.5, color: "#6B6660", marginTop: 2 }}>
+                {n.courtName} · {formatBookingWhen(n.date, n.startTime)} · por bot
+              </div>
+            </div>
+            <button
+              onClick={() => dismissToast(n.id)}
+              aria-label="Cerrar aviso"
+              style={{
+                width: 24, height: 24, borderRadius: 6, flexShrink: 0, alignSelf: "flex-start",
+                border: "1px solid #E7E1D6", background: "#fff", color: "#928B7E", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <X size={13} />
+            </button>
+          </div>
+        ))}
+      </div>
+    )}
     <div ref={rootRef} style={wrapStyle}>
       <button
         onClick={toggle}
@@ -157,5 +222,6 @@ export function NotificationBell() {
         </div>
       )}
     </div>
+    </>
   );
 }

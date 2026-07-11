@@ -338,6 +338,9 @@ pago (`confirmBotHoldPayment`, dentro de la misma transacción que confirma). El
 por `(booking_id, kind)`, así que un reintento del webhook no duplica el aviso. Los datos "de quién y
 cuándo" se **joinean desde `bookings`** al leer, no se duplican. La campana hace polling cada ~45s y
 al volver el foco a la pestaña. La tabla también tiene RLS deny-by-default como el resto.
+Además, cuando llega una reserva **nueva mientras el panel está abierto** salta un **toast** (arriba
+a la derecha) que se autocierra a los 10s. El toast solo aparece para avisos que llegan DESPUÉS de la
+carga inicial (no re-muestra los viejos al entrar): se detectan comparando ids contra los ya vistos.
 > Archivos clave: `lib/db/schema.ts` (`adminNotifications`),
 > `lib/db/queries.ts` (`createNewBookingNotification`, `getClubNotifications`, `markClubNotificationsRead`),
 > `app/api/notifications/route.ts`, `components/layout/notification-bell.tsx`,
