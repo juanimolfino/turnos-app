@@ -5,6 +5,30 @@ import { useIsMobile } from "@/hooks/use-is-mobile";
 
 type PaymentMode = "none" | "partial" | "full";
 
+// Aviso para el admin del club cuando su conexión con Mercado Pago está por vencer
+// (≤30 días) o ya venció. El token de MP dura 180 días; la renovación automática
+// (cron) cubre el caso normal, pero si esa renovación falla (refresh_token
+// inválido, permiso revocado) el único arreglo es que el club reconecte a mano.
+export function mpExpiryWarning(expiresAt: Date | string | null | undefined) {
+  if (!expiresAt) return null;
+  const days = Math.floor((new Date(expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+  if (days < 0) {
+    return {
+      title: "Tu conexión con Mercado Pago venció",
+      subtitle: "Mientras esté vencida, las reservas que requieren pago no se van a poder cobrar. Reconectala para reactivar los cobros.",
+      bg: "#FCEBE7", border: "#EDC7BC", fg: "#B0492E",
+    };
+  }
+  if (days <= 30) {
+    return {
+      title: `Tu conexión con Mercado Pago vence en ${days} día${days === 1 ? "" : "s"}`,
+      subtitle: "Reconectala antes de que venza para seguir cobrando sin cortes. Es rápido y no perdés ninguna configuración ni las reservas ya pagadas.",
+      bg: "#FBF1DD", border: "#EBDCB6", fg: "#8A6415",
+    };
+  }
+  return null;
+}
+
 interface ClubSettings {
   address?: string | null;
   city?: string | null;
@@ -240,6 +264,26 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
             </div>
           )}
         </div>
+
+        {(() => {
+          const warn = mercadoPago.connected ? mpExpiryWarning(mercadoPago.expiresAt) : null;
+          if (!warn) return null;
+          return (
+            <div style={{ border: `1px solid ${warn.border}`, background: warn.bg, borderRadius: 12, padding: 14, marginBottom: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: warn.fg }}>{warn.title}</div>
+              <div style={{ fontSize: 13, color: "#54504A", marginTop: 4, lineHeight: 1.5 }}>{warn.subtitle}</div>
+              <div style={{ fontSize: 13, color: "#54504A", marginTop: 10, fontWeight: 700 }}>Cómo reconectar (2 minutos):</div>
+              <ol style={{ margin: "6px 0 0", paddingLeft: 18, fontSize: 13, color: "#54504A", lineHeight: 1.6 }}>
+                <li>Tocá el botón <strong>“Reconectar Mercado Pago”</strong> acá abajo.</li>
+                <li>Te lleva a Mercado Pago: iniciá sesión con <strong>la misma cuenta del club</strong> y tocá <strong>“Autorizar”</strong>.</li>
+                <li>Volvés solo a esta página. Listo: queda renovada por otros 6 meses.</li>
+              </ol>
+              <div style={{ fontSize: 12.5, color: "#8A8377", marginTop: 10, lineHeight: 1.5 }}>
+                <strong>No toques “Desvincular”.</strong> Desvincular apaga los cobros del club; con <strong>Reconectar</strong> alcanza para renovar la conexión sin perder nada.
+              </div>
+            </div>
+          );
+        })()}
 
         <div style={{ border: "1px solid #E0DACE", background: "#FFFFFF", borderRadius: 12, padding: 14, display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", gap: 12, alignItems: isMobile ? "stretch" : "center" }}>
           <div>
