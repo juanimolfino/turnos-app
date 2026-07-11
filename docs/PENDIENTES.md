@@ -50,6 +50,13 @@ válida. Ya se parcheó normalizando 24:00 → 23:59 al guardar. Pendiente menor
 selector no ofrezca valores fuera de rango y que la representación de "hasta medianoche" sea
 consistente en toda la UI.
 
+> Relacionado (RESUELTO): en la "Agenda del día", un turno que cruzaba la hora de cierre del club
+> (ej. turno fijo 22:00–23:30 con cierre por defecto 23:00) aparecía **partido en dos filas** porque
+> el borde de cierre se inyectaba como límite de franja. Se arregló en `lib/agenda/segments.ts`
+> (`computeAgendaBounds`): la apertura/cierre solo generan tramos libres antes/después de los
+> bloques, nunca parten un bloque que los cruza. Igual conviene sumar la UI de `opening_hours` por
+> club para que el cierre real (no el default 23:00) sea el correcto.
+
 ---
 
 ## Seguridad / robustez

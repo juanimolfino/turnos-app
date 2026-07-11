@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { bookingPanelLabel } from "@/lib/bookings/labels";
+import { computeAgendaBounds } from "@/lib/agenda/segments";
 import { nowInTz } from "@/lib/tz";
 
 interface Court { id: string; name: string; }
@@ -100,11 +101,10 @@ export function AgendaDayClient({ courts, blocks, date, clubName, timezone, open
   const visibleCourts = courtFilter === "all" ? courts : courts.filter((c) => c.id === courtFilter);
 
   // Construye franjas a partir de apertura/cierre del club y bordes de bloques.
+  // La lógica de bordes vive en lib/agenda/segments (testeada): el cierre/apertura
+  // no parte un bloque que lo cruza (ej. turno fijo 22:00–23:30 con cierre 23:00).
   const segments = useMemo<Segment[]>(() => {
-    const blockBounds = blocks.flatMap((b) => [b.startTime, b.endTime]);
-    const minBound = blockBounds.reduce((min, value) => value < min ? value : min, openingWindow.open);
-    const maxBound = blockBounds.reduce((max, value) => value > max ? value : max, openingWindow.close);
-    const bounds = Array.from(new Set([minBound, maxBound, openingWindow.open, openingWindow.close, ...blockBounds])).sort();
+    const bounds = computeAgendaBounds(blocks, openingWindow);
     const segs: Segment[] = [];
     for (let i = 0; i < bounds.length - 1; i++) {
       const start = bounds[i], end = bounds[i + 1];
@@ -125,7 +125,7 @@ export function AgendaDayClient({ courts, blocks, date, clubName, timezone, open
       });
     }
     return segs;
-  }, [blocks, courts, openingWindow.close, openingWindow.open]);
+  }, [blocks, courts, openingWindow]);
 
   const isToday = now?.date === date;
   const nowMin = now ? now.minutes : null;
