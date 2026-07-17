@@ -5,6 +5,57 @@ import { useIsMobile } from "@/hooks/use-is-mobile";
 
 type PaymentMode = "none" | "partial" | "full";
 
+type OpeningHour = {
+  weekday: number;
+  openTime: string;
+  closeTime: string;
+  slotMinutes: number;
+};
+
+const weekDays = [
+  "Lunes",
+  "Martes",
+  "Miércoles",
+  "Jueves",
+  "Viernes",
+  "Sábado",
+  "Domingo",
+];
+
+const defaultOpeningHours: OpeningHour[] = weekDays.map((_, weekday) => ({
+  weekday,
+  openTime: "08:00",
+  closeTime: "23:00",
+  slotMinutes: 90,
+}));
+
+function mergeOpeningHours(rows: OpeningHour[] | undefined): OpeningHour[] {
+  return defaultOpeningHours.map((fallback) => {
+    const existing = rows?.find((row) => row.weekday === fallback.weekday);
+    return existing ?? fallback;
+  });
+}
+
+function minutes(time: string) {
+  const [hours, mins] = time.split(":").map(Number);
+  return hours * 60 + mins;
+}
+
+function openingHoursError(rows: OpeningHour[]) {
+  for (const row of rows) {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(row.openTime) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(row.closeTime)) {
+      return `Revisá ${weekDays[row.weekday]}: usá formato HH:MM y cierre máximo 23:59.`;
+    }
+    if (minutes(row.closeTime) <= minutes(row.openTime)) {
+      return `Revisá ${weekDays[row.weekday]}: el cierre tiene que ser posterior a la apertura.`;
+    }
+    if (row.slotMinutes < 15 || row.slotMinutes > 240) {
+      return `Revisá ${weekDays[row.weekday]}: la duración del turno debe estar entre 15 y 240 minutos.`;
+    }
+  }
+  return null;
+}
+
 // Aviso para el admin del club cuando su conexión con Mercado Pago está por vencer
 // (≤30 días) o ya venció. El token de MP dura 180 días; la renovación automática
 // (cron) cubre el caso normal, pero si esa renovación falla (refresh_token
@@ -41,6 +92,7 @@ interface ClubSettings {
   refundCutoffHours?: number;
   paymentDeadlineHours?: number;
   courts?: { id: string; name: string; price: number }[];
+  openingHours?: OpeningHour[];
   mercadoPago?: {
     connected: boolean;
     mercadoPagoUserId?: string | null;
@@ -55,14 +107,17 @@ interface AjustesClientProps {
   club?: ClubSettings;
 }
 
-function Field({ label, value, onChange, placeholder, type = "text", mono }: {
-  label: string; value: string; onChange?: (v: string) => void; placeholder?: string; type?: string; mono?: boolean;
+function Field({ label, value, onChange, placeholder, type = "text", mono, min, max, step }: {
+  label: string; value: string; onChange?: (v: string) => void; placeholder?: string; type?: string; mono?: boolean; min?: string | number; max?: string | number; step?: string | number;
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
       <label style={{ fontSize: 12, fontWeight: 700, color: "#6B6660", letterSpacing: ".04em" }}>{label}</label>
       <input
         type={type}
+        min={min}
+        max={max}
+        step={step}
         value={value}
         onChange={onChange ? e => onChange(e.target.value) : undefined}
         readOnly={!onChange}
@@ -88,6 +143,7 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
   const [refundEnabled, setRefundEnabled] = useState(Boolean(initial.refundEnabled));
   const [refundCutoffHours, setRefundCutoffHours] = useState(String(initial.refundCutoffHours ?? 24));
   const [courtPrices, setCourtPrices] = useState(() => (initial.courts ?? []).map((court) => ({ ...court, price: String(court.price ?? 0) })));
+  const [openingHours, setOpeningHours] = useState(() => mergeOpeningHours(initial.openingHours));
   const [deadlineHours, setDeadlineHours] = useState(String(initial.paymentDeadlineHours ?? 24));
   const [mercadoPago, setMercadoPago] = useState(initial.mercadoPago ?? { connected: false });
   const [saving, setSaving] = useState(false);
@@ -101,6 +157,12 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
 
   async function save() {
     setSaving(true); setError(""); setSaved(false);
+    const scheduleError = openingHoursError(openingHours);
+    if (scheduleError) {
+      setError(scheduleError);
+      setSaving(false);
+      return;
+    }
     try {
       const res = await fetch("/api/clubs/settings", {
         method: "POST",
@@ -118,6 +180,12 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
           courtPrices: courtPrices.map((court) => ({
             courtId: court.id,
             price: parseInt(court.price) || 0,
+          })),
+          openingHours: openingHours.map((row) => ({
+            weekday: row.weekday,
+            openTime: row.openTime,
+            closeTime: row.closeTime,
+            slotMinutes: row.slotMinutes,
           })),
         }),
       });
@@ -163,6 +231,59 @@ function MiClubTab({ initial }: { initial: ClubSettings }) {
           <div style={{ flex: 1 }}><Field label="Barrio" value={neighborhood} onChange={setNeighborhood} placeholder="Palermo" /></div>
         </div>
         <Field label="Teléfono de contacto" value={phone} onChange={setPhone} placeholder="+54 11 4567-8901" type="tel" />
+      </div>
+
+      <div style={{ background: "#FCFBF8", border: "1px solid #E7E1D6", borderRadius: 16, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#221F1B", letterSpacing: ".04em", textTransform: "uppercase" }}>Horarios de apertura</div>
+          <div style={{ fontSize: 12.5, color: "#928B7E", marginTop: 4 }}>
+            El cierre máximo es 23:59 para representar medianoche sin guardar 24:00.
+          </div>
+        </div>
+        <div style={{ display: "grid", gap: 10 }}>
+          {openingHours.map((row) => (
+            <div
+              key={row.weekday}
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "1fr" : "minmax(100px, .8fr) minmax(120px, 1fr) minmax(120px, 1fr) minmax(150px, 1fr)",
+                gap: 10,
+                alignItems: "end",
+                padding: "10px 0",
+                borderTop: row.weekday === 0 ? "none" : "1px solid #EFEAE0",
+              }}
+            >
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: "#221F1B", paddingBottom: isMobile ? 0 : 11 }}>
+                {weekDays[row.weekday]}
+              </div>
+              <Field
+                label="ABRE"
+                value={row.openTime}
+                onChange={(value) => setOpeningHours((current) => current.map((item) => item.weekday === row.weekday ? { ...item, openTime: value } : item))}
+                type="time"
+                min="00:00"
+                max="23:58"
+              />
+              <Field
+                label="CIERRA"
+                value={row.closeTime}
+                onChange={(value) => setOpeningHours((current) => current.map((item) => item.weekday === row.weekday ? { ...item, closeTime: value } : item))}
+                type="time"
+                min="00:01"
+                max="23:59"
+              />
+              <Field
+                label="DURACIÓN TURNO (MIN)"
+                value={String(row.slotMinutes)}
+                onChange={(value) => setOpeningHours((current) => current.map((item) => item.weekday === row.weekday ? { ...item, slotMinutes: parseInt(value) || 90 } : item))}
+                type="number"
+                min={15}
+                max={240}
+                step={15}
+              />
+            </div>
+          ))}
+        </div>
       </div>
 
       <div style={{ background: "#FCFBF8", border: "1px solid #E7E1D6", borderRadius: 16, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>

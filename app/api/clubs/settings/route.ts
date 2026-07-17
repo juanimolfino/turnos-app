@@ -6,9 +6,17 @@ import {
   getClubById,
   getClubMercadoPagoConnectionStatus,
   getUserByAuthId,
+  replaceClubOpeningHours,
   updateClub,
   updateClubCourtPrices,
 } from "@/lib/db/queries";
+
+const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+
+function minutes(time: string) {
+  const [hours, mins] = time.split(":").map(Number);
+  return hours * 60 + mins;
+}
 
 const schema = z.object({
   address: z.string().nullable().optional(),
@@ -25,6 +33,15 @@ const schema = z.object({
     courtId: z.string().uuid(),
     price: z.number().int().min(0).max(10_000_000),
   })).optional(),
+  openingHours: z.array(z.object({
+    weekday: z.number().int().min(0).max(6),
+    openTime: timeSchema,
+    closeTime: timeSchema,
+    slotMinutes: z.number().int().min(15).max(240),
+  }).refine((row) => minutes(row.closeTime) > minutes(row.openTime), {
+    message: "closeTime must be after openTime",
+    path: ["closeTime"],
+  })).length(7).optional(),
   generateApiKey: z.boolean().optional(),
 });
 
@@ -74,7 +91,7 @@ export async function POST(request: NextRequest) {
   const existingClub = await getClubById(profile.clubId);
   if (!existingClub) return NextResponse.json({ error: "Sin club" }, { status: 403 });
 
-  const { generateApiKey: genKey, courtPrices, ...updateData } = parsed.data;
+  const { generateApiKey: genKey, courtPrices, openingHours, ...updateData } = parsed.data;
   const nextPaymentMode =
     updateData.paymentMode ??
     (updateData.requiresPayment === true ? "full" : updateData.requiresPayment === false ? "none" : existingClub.paymentMode);
@@ -100,6 +117,10 @@ export async function POST(request: NextRequest) {
 
   if (courtPrices?.length) {
     await updateClubCourtPrices(profile.clubId, courtPrices);
+  }
+
+  if (openingHours) {
+    await replaceClubOpeningHours(profile.clubId, openingHours);
   }
 
   let apiKey = club.apiKey;

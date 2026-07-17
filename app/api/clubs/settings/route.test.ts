@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getClubMercadoPagoConnectionStatus: vi.fn(),
   getUser: vi.fn(),
   getUserByAuthId: vi.fn(),
+  replaceClubOpeningHours: vi.fn(),
   updateClub: vi.fn(),
   updateClubCourtPrices: vi.fn(),
 }));
@@ -22,6 +23,7 @@ vi.mock("@/lib/db/queries", () => ({
   getClubById: mocks.getClubById,
   getClubMercadoPagoConnectionStatus: mocks.getClubMercadoPagoConnectionStatus,
   getUserByAuthId: mocks.getUserByAuthId,
+  replaceClubOpeningHours: mocks.replaceClubOpeningHours,
   updateClub: mocks.updateClub,
   updateClubCourtPrices: mocks.updateClubCourtPrices,
 }));
@@ -146,5 +148,65 @@ describe("club settings API", () => {
     });
     expect(body.club.refundEnabled).toBe(true);
     expect(body.club.refundCutoffHours).toBe(48);
+  });
+
+  it("guarda horarios de apertura del club", async () => {
+    const openingHours = Array.from({ length: 7 }, (_, weekday) => ({
+      weekday,
+      openTime: "08:00",
+      closeTime: weekday === 5 ? "23:59" : "23:00",
+      slotMinutes: 90,
+    }));
+    const { POST } = await import("./route");
+    const request = new NextRequest("https://example.com/api/clubs/settings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ openingHours }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(mocks.replaceClubOpeningHours).toHaveBeenCalledWith("club_123", openingHours);
+  });
+
+  it("rechaza horarios con 24:00 para evitar confusión con medianoche", async () => {
+    const openingHours = Array.from({ length: 7 }, (_, weekday) => ({
+      weekday,
+      openTime: "08:00",
+      closeTime: weekday === 0 ? "24:00" : "23:00",
+      slotMinutes: 90,
+    }));
+    const { POST } = await import("./route");
+    const request = new NextRequest("https://example.com/api/clubs/settings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ openingHours }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(400);
+    expect(mocks.replaceClubOpeningHours).not.toHaveBeenCalled();
+  });
+
+  it("rechaza horarios donde el cierre no es posterior a la apertura", async () => {
+    const openingHours = Array.from({ length: 7 }, (_, weekday) => ({
+      weekday,
+      openTime: "20:00",
+      closeTime: weekday === 0 ? "20:00" : "23:00",
+      slotMinutes: 90,
+    }));
+    const { POST } = await import("./route");
+    const request = new NextRequest("https://example.com/api/clubs/settings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ openingHours }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(400);
+    expect(mocks.replaceClubOpeningHours).not.toHaveBeenCalled();
   });
 });

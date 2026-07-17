@@ -233,7 +233,7 @@ function PlayerRow({ player, selected, q }: { player: SuperadminBotPlayer; selec
         textDecoration: "none",
         color: "#221F1B",
         borderBottom: "1px solid #EFEAE0",
-        background: selected ? "#FFFFFF" : "transparent",
+        background: selected ? "#F5F0FF" : "transparent",
         boxShadow: selected ? "inset 3px 0 0 #8A6BC4" : "none",
       }}
     >

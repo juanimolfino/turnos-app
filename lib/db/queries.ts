@@ -1,6 +1,6 @@
 import { and, count, desc, eq, isNotNull, isNull, ne, or, sql, lt, gt, gte, lte, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { clubs, courts, sports, professors, credits, jobs, subscriptions, transactions, users, bookings, customers, notifications, adminNotifications, recurringRules, playerIdentities, clubMercadoPagoCredentials, adminInvitations, type JobType, type PaymentMode, type Role, type AdminNotificationKind } from "@/lib/db/schema";
+import { clubs, courts, sports, professors, openingHours, credits, jobs, subscriptions, transactions, users, bookings, customers, notifications, adminNotifications, recurringRules, playerIdentities, clubMercadoPagoCredentials, adminInvitations, type JobType, type PaymentMode, type Role, type AdminNotificationKind } from "@/lib/db/schema";
 import { sendPurchaseConfirmationEmail, sendWelcomeEmail } from "@/lib/email/send";
 import type { User } from "@supabase/supabase-js";
 import { randomBytes, randomUUID } from "crypto";
@@ -523,6 +523,34 @@ export async function updateClubCourtPrices(clubId: string, courtPrices: { court
         .set({ price: courtPrice.price })
         .where(and(eq(courts.id, courtPrice.courtId), eq(courts.clubId, clubId)));
     }
+  });
+}
+
+export type ClubOpeningHourInput = {
+  weekday: number;
+  openTime: string;
+  closeTime: string;
+  slotMinutes: number;
+};
+
+export async function getClubOpeningHours(clubId: string) {
+  return getDb()
+    .select({
+      weekday: openingHours.weekday,
+      openTime: openingHours.openTime,
+      closeTime: openingHours.closeTime,
+      slotMinutes: openingHours.slotMinutes,
+    })
+    .from(openingHours)
+    .where(eq(openingHours.clubId, clubId));
+}
+
+export async function replaceClubOpeningHours(clubId: string, rows: ClubOpeningHourInput[]) {
+  const db = getDb();
+  return db.transaction(async (tx) => {
+    await tx.delete(openingHours).where(eq(openingHours.clubId, clubId));
+    if (!rows.length) return;
+    await tx.insert(openingHours).values(rows.map((row) => ({ clubId, ...row })));
   });
 }
 
