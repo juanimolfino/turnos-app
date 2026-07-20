@@ -1401,11 +1401,10 @@ export async function confirmBotHoldPayment(input: {
         mpRefundId: bookings.mpRefundId,
         refundStatus: bookings.refundStatus,
         paymentReviewReason: bookings.paymentReviewReason,
+        customerId: bookings.customerId,
         customerName: bookings.customerName,
         customerPhone: bookings.customerPhone,
         bookingCode: bookings.bookingCode,
-        customerChannel: customers.channel,
-        customerChannelUserId: customers.channelUserId,
         clubName: clubs.name,
         clubPaymentMode: clubs.paymentMode,
         refundEnabled: clubs.refundEnabled,
@@ -1415,12 +1414,24 @@ export async function confirmBotHoldPayment(input: {
       .from(bookings)
       .innerJoin(clubs, eq(bookings.clubId, clubs.id))
       .innerJoin(courts, eq(bookings.courtId, courts.id))
-      .leftJoin(customers, eq(bookings.customerId, customers.id))
       .where(eq(bookings.id, input.bookingId))
       .for("update");
 
     if (!current) return { status: "not_found" };
-    const currentWithToken = { ...current, mercadoPagoAccessToken: null };
+
+    const [customerIdentity] = current.customerId
+      ? await tx
+          .select({ channel: customers.channel, channelUserId: customers.channelUserId })
+          .from(customers)
+          .where(eq(customers.id, current.customerId))
+      : [];
+
+    const currentWithToken = {
+      ...current,
+      customerChannel: customerIdentity?.channel ?? null,
+      customerChannelUserId: customerIdentity?.channelUserId ?? null,
+      mercadoPagoAccessToken: null,
+    };
     if (current.mpPaymentId === input.mpPaymentId) return { status: "already_processed", booking: currentWithToken };
     if (current.mpPaymentId) return { status: "already_processed", booking: currentWithToken };
 
@@ -1439,8 +1450,8 @@ export async function confirmBotHoldPayment(input: {
           ...updated,
           clubName: current.clubName,
           courtName: current.courtName,
-          customerChannel: current.customerChannel,
-          customerChannelUserId: current.customerChannelUserId,
+          customerChannel: currentWithToken.customerChannel,
+          customerChannelUserId: currentWithToken.customerChannelUserId,
         },
       };
     }
@@ -1459,8 +1470,8 @@ export async function confirmBotHoldPayment(input: {
           ...updated,
           clubName: current.clubName,
           courtName: current.courtName,
-          customerChannel: current.customerChannel,
-          customerChannelUserId: current.customerChannelUserId,
+          customerChannel: currentWithToken.customerChannel,
+          customerChannelUserId: currentWithToken.customerChannelUserId,
         },
       };
     }
@@ -1479,8 +1490,8 @@ export async function confirmBotHoldPayment(input: {
           ...updated,
           clubName: current.clubName,
           courtName: current.courtName,
-          customerChannel: current.customerChannel,
-          customerChannelUserId: current.customerChannelUserId,
+          customerChannel: currentWithToken.customerChannel,
+          customerChannelUserId: currentWithToken.customerChannelUserId,
         },
       };
     }
@@ -1515,8 +1526,8 @@ export async function confirmBotHoldPayment(input: {
         ...updated,
         clubName: current.clubName,
         courtName: current.courtName,
-        customerChannel: current.customerChannel,
-        customerChannelUserId: current.customerChannelUserId,
+        customerChannel: currentWithToken.customerChannel,
+        customerChannelUserId: currentWithToken.customerChannelUserId,
       },
     };
   });

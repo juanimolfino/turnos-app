@@ -16,8 +16,11 @@ describe("confirmBotHoldPayment query shape", () => {
     const body = functionSource("confirmBotHoldPayment", "saveBookingMercadoPagoPreference");
 
     expect(body).toContain('.for("update")');
-    expect(body).not.toContain(".leftJoin(clubMercadoPagoCredentials");
-    expect(body).not.toContain("clubMercadoPagoCredentials.accessToken");
+    const lockedQuery = body.slice(0, body.indexOf('.for("update")'));
+
+    expect(lockedQuery).not.toContain(".leftJoin(clubMercadoPagoCredentials");
+    expect(lockedQuery).not.toContain("clubMercadoPagoCredentials.accessToken");
+    expect(lockedQuery).not.toContain(".leftJoin(customers");
   });
 
   it("lee el token de Mercado Pago en un lookup separado sin FOR UPDATE", () => {
