@@ -1,6 +1,24 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { secretMatches } from "@/lib/bot/verify";
+import { sendWhatsAppText } from "@/lib/whatsapp/client";
 import { verifyWhatsAppSignature } from "@/lib/whatsapp/webhook-signature";
+
+type WhatsAppWebhookPayload = {
+  entry?: Array<{
+    changes?: Array<{
+      field?: string;
+      value?: {
+        metadata?: { phone_number_id?: string };
+        messages?: Array<{
+          from?: string;
+          type?: string;
+          text?: { body?: string };
+        }>;
+        statuses?: unknown[];
+      };
+    }>;
+  }>;
+};
 
 export async function GET(request: NextRequest) {
   const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
@@ -30,11 +48,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  let update: WhatsAppWebhookPayload;
   try {
-    const update = JSON.parse(body) as unknown;
+    update = JSON.parse(body) as WhatsAppWebhookPayload;
     console.log("[whatsapp] webhook recibido", update);
   } catch {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
+  }
+
+  for (const entry of update.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      if (change.field !== "messages") continue;
+
+      const phoneNumberId = change.value?.metadata?.phone_number_id ?? null;
+      for (const message of change.value?.messages ?? []) {
+        if (message.type !== "text" || !message.from) continue;
+        await sendWhatsAppText({
+          to: message.from,
+          text: "Hola mundo",
+          phoneNumberId,
+        });
+      }
+    }
   }
 
   return NextResponse.json({ ok: true });
