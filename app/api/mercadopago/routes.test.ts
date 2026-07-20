@@ -29,7 +29,7 @@ vi.mock("@/lib/mercadopago/client", () => ({
 }));
 
 vi.mock("@/lib/bot/payment-confirmation", () => ({
-  avisarPagoAcreditadoPorTelegram: (...a: unknown[]) => mocks.avisarPagoAcreditado(...a),
+  avisarPagoAcreditadoPorCanal: (...a: unknown[]) => mocks.avisarPagoAcreditado(...a),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -97,6 +97,8 @@ describe("Mercado Pago webhook route", () => {
     paymentReviewReason: null,
     customerName: "Juan Pérez",
     customerPhone: "12345",
+    customerChannel: "telegram",
+    customerChannelUserId: "12345",
     bookingCode: "HYS324",
     clubName: "Pádel Central",
     clubPaymentMode: "partial",

@@ -1361,11 +1361,16 @@ export async function getBookingPaymentContext(bookingId: string) {
   return row ?? null;
 }
 
+type BookingPaymentConfirmationBooking = NonNullable<Awaited<ReturnType<typeof getBookingPaymentContext>>> & {
+  customerChannel?: string | null;
+  customerChannelUserId?: string | null;
+};
+
 export type BookingPaymentConfirmationResult =
-  | { status: "confirmed"; booking: NonNullable<Awaited<ReturnType<typeof getBookingPaymentContext>>> }
-  | { status: "already_processed"; booking: NonNullable<Awaited<ReturnType<typeof getBookingPaymentContext>>> }
+  | { status: "confirmed"; booking: BookingPaymentConfirmationBooking }
+  | { status: "already_processed"; booking: BookingPaymentConfirmationBooking }
   | { status: "not_found" }
-  | { status: "not_confirmed"; reason: "not_pending" | "hold_expired" | "amount_mismatch"; booking: NonNullable<Awaited<ReturnType<typeof getBookingPaymentContext>>> };
+  | { status: "not_confirmed"; reason: "not_pending" | "hold_expired" | "amount_mismatch"; booking: BookingPaymentConfirmationBooking };
 
 export async function confirmBotHoldPayment(input: {
   bookingId: string;
@@ -1399,6 +1404,8 @@ export async function confirmBotHoldPayment(input: {
         customerName: bookings.customerName,
         customerPhone: bookings.customerPhone,
         bookingCode: bookings.bookingCode,
+        customerChannel: customers.channel,
+        customerChannelUserId: customers.channelUserId,
         clubName: clubs.name,
         clubPaymentMode: clubs.paymentMode,
         refundEnabled: clubs.refundEnabled,
@@ -1408,6 +1415,7 @@ export async function confirmBotHoldPayment(input: {
       .from(bookings)
       .innerJoin(clubs, eq(bookings.clubId, clubs.id))
       .innerJoin(courts, eq(bookings.courtId, courts.id))
+      .leftJoin(customers, eq(bookings.customerId, customers.id))
       .where(eq(bookings.id, input.bookingId))
       .for("update");
 
@@ -1426,7 +1434,14 @@ export async function confirmBotHoldPayment(input: {
       return {
         status: "not_confirmed",
         reason: "amount_mismatch",
-        booking: { ...currentWithToken, ...updated, clubName: current.clubName, courtName: current.courtName },
+        booking: {
+          ...currentWithToken,
+          ...updated,
+          clubName: current.clubName,
+          courtName: current.courtName,
+          customerChannel: current.customerChannel,
+          customerChannelUserId: current.customerChannelUserId,
+        },
       };
     }
 
@@ -1439,7 +1454,14 @@ export async function confirmBotHoldPayment(input: {
       return {
         status: "not_confirmed",
         reason: "not_pending",
-        booking: { ...currentWithToken, ...updated, clubName: current.clubName, courtName: current.courtName },
+        booking: {
+          ...currentWithToken,
+          ...updated,
+          clubName: current.clubName,
+          courtName: current.courtName,
+          customerChannel: current.customerChannel,
+          customerChannelUserId: current.customerChannelUserId,
+        },
       };
     }
 
@@ -1452,7 +1474,14 @@ export async function confirmBotHoldPayment(input: {
       return {
         status: "not_confirmed",
         reason: "hold_expired",
-        booking: { ...currentWithToken, ...updated, clubName: current.clubName, courtName: current.courtName },
+        booking: {
+          ...currentWithToken,
+          ...updated,
+          clubName: current.clubName,
+          courtName: current.courtName,
+          customerChannel: current.customerChannel,
+          customerChannelUserId: current.customerChannelUserId,
+        },
       };
     }
 
@@ -1481,7 +1510,14 @@ export async function confirmBotHoldPayment(input: {
 
     return {
       status: "confirmed",
-      booking: { ...currentWithToken, ...updated, clubName: current.clubName, courtName: current.courtName },
+      booking: {
+        ...currentWithToken,
+        ...updated,
+        clubName: current.clubName,
+        courtName: current.courtName,
+        customerChannel: current.customerChannel,
+        customerChannelUserId: current.customerChannelUserId,
+      },
     };
   });
 }

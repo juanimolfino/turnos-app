@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { avisarPagoAcreditadoPorTelegram } from "@/lib/bot/payment-confirmation";
+import { avisarPagoAcreditadoPorCanal } from "@/lib/bot/payment-confirmation";
 import {
   addCredits,
   confirmBotHoldPayment,
@@ -138,7 +138,7 @@ export async function POST(request: Request) {
 
     if (result.status === "confirmed") {
       const { mercadoPagoAccessToken: _token, ...safeBooking } = result.booking;
-      await avisarPagoAcreditadoPorTelegram(safeBooking).catch((error) => {
+      await avisarPagoAcreditadoPorCanal(safeBooking).catch((error) => {
         console.error("[mp webhook] reserva confirmada pero falló el aviso al cliente", {
           bookingId: result.booking.id,
           paymentId: payment?.id ?? dataId,
