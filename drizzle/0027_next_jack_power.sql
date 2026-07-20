@@ -1,0 +1,1 @@
+ALTER TYPE "public"."admin_notification_kind" ADD VALUE 'cancelacion_reserva';

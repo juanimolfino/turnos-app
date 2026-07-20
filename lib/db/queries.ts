@@ -1670,11 +1670,23 @@ export async function getClubByApiKey(apiKey: string) {
  * Idempotente por (booking, kind): reintentos no duplican. Best-effort desde el
  * caller: una reserva NUNCA debe fallar porque falle su notificación.
  */
-export async function createNewBookingNotification(clubId: string, bookingId: string) {
+export async function createAdminBookingNotification(clubId: string, bookingId: string, kind: AdminNotificationKind) {
   await getDb()
     .insert(adminNotifications)
-    .values({ clubId, bookingId, kind: "nueva_reserva" })
+    .values({ clubId, bookingId, kind })
     .onConflictDoNothing({ target: [adminNotifications.bookingId, adminNotifications.kind] });
+}
+
+export async function createNewBookingNotification(clubId: string, bookingId: string) {
+  await createAdminBookingNotification(clubId, bookingId, "nueva_reserva");
+}
+
+export async function createBookingCancellationNotification(clubId: string, bookingId: string) {
+  await createAdminBookingNotification(clubId, bookingId, "cancelacion_reserva");
+}
+
+export async function createPaymentReviewNotification(clubId: string, bookingId: string) {
+  await createAdminBookingNotification(clubId, bookingId, "pago_requiere_revision");
 }
 
 export type AdminNotificationRow = {

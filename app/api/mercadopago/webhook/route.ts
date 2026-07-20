@@ -3,6 +3,7 @@ import { avisarPagoAcreditadoPorCanal } from "@/lib/bot/payment-confirmation";
 import {
   addCredits,
   confirmBotHoldPayment,
+  createPaymentReviewNotification,
   getBookingPaymentContext,
 } from "@/lib/db/queries";
 import { getMercadoPagoPayment, getMercadoPagoPaymentForAccessToken } from "@/lib/mercadopago/client";
@@ -138,11 +139,17 @@ export async function POST(request: Request) {
 
     if (result.status === "confirmed") {
       const { mercadoPagoAccessToken: _token, ...safeBooking } = result.booking;
-      await avisarPagoAcreditadoPorCanal(safeBooking).catch((error) => {
+      await avisarPagoAcreditadoPorCanal(safeBooking).catch(async (error) => {
         console.error("[mp webhook] reserva confirmada pero falló el aviso al cliente", {
           bookingId: result.booking.id,
           paymentId: payment?.id ?? dataId,
           error: error instanceof Error ? error.message : String(error),
+        });
+        await createPaymentReviewNotification(result.booking.clubId, result.booking.id).catch((notificationError) => {
+          console.error("[mp webhook] no se pudo crear alerta de pago para revisión", {
+            bookingId: result.booking.id,
+            error: notificationError instanceof Error ? notificationError.message : String(notificationError),
+          });
         });
       });
       return NextResponse.json({ received: true, kind: "booking", confirmed: true });
@@ -153,6 +160,12 @@ export async function POST(request: Request) {
         bookingId: result.booking.id,
         paymentId: payment.id ?? dataId,
         reason: result.reason,
+      });
+      await createPaymentReviewNotification(result.booking.clubId, result.booking.id).catch((notificationError) => {
+        console.error("[mp webhook] no se pudo crear alerta de pago para revisión", {
+          bookingId: result.booking.id,
+          error: notificationError instanceof Error ? notificationError.message : String(notificationError),
+        });
       });
       return NextResponse.json({ received: true, kind: "booking", confirmed: false, reason: result.reason });
     }

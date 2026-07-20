@@ -56,7 +56,7 @@ export const expireBotHoldsJob = inngest.createFunction(
     id: "expire-bot-holds",
     retries: 0
   },
-  { cron: "*/5 * * * *" },
+  { cron: "*/15 * * * *" },
   async ({ step }) => {
     const result = await step.run("release expired bot holds", async () => expireBotHolds());
     return result;

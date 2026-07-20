@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ db: null as unknown }));
 vi.mock("@/lib/db", () => ({ getDb: () => state.db }));
 
-import { createNewBookingNotification, markClubNotificationsRead } from "@/lib/db/queries";
+import { createBookingCancellationNotification, createNewBookingNotification, createPaymentReviewNotification, markClubNotificationsRead } from "@/lib/db/queries";
 
 describe("createNewBookingNotification", () => {
   it("inserta con onConflictDoNothing (idempotente por booking+kind)", async () => {
@@ -27,6 +27,50 @@ describe("createNewBookingNotification", () => {
     await createNewBookingNotification("club-1", "booking-1");
 
     expect(calls.values).toEqual({ clubId: "club-1", bookingId: "booking-1", kind: "nueva_reserva" });
+    expect(calls.conflict).toBe(true);
+  });
+
+  it("inserta cancelación con kind propio", async () => {
+    const calls = { values: null as unknown, conflict: false };
+    state.db = {
+      insert: () => ({
+        values: (v: unknown) => {
+          calls.values = v;
+          return {
+            onConflictDoNothing: () => {
+              calls.conflict = true;
+              return Promise.resolve();
+            },
+          };
+        },
+      }),
+    };
+
+    await createBookingCancellationNotification("club-1", "booking-1");
+
+    expect(calls.values).toEqual({ clubId: "club-1", bookingId: "booking-1", kind: "cancelacion_reserva" });
+    expect(calls.conflict).toBe(true);
+  });
+
+  it("inserta alerta de pago para revisión con kind propio", async () => {
+    const calls = { values: null as unknown, conflict: false };
+    state.db = {
+      insert: () => ({
+        values: (v: unknown) => {
+          calls.values = v;
+          return {
+            onConflictDoNothing: () => {
+              calls.conflict = true;
+              return Promise.resolve();
+            },
+          };
+        },
+      }),
+    };
+
+    await createPaymentReviewNotification("club-1", "booking-1");
+
+    expect(calls.values).toEqual({ clubId: "club-1", bookingId: "booking-1", kind: "pago_requiere_revision" });
     expect(calls.conflict).toBe(true);
   });
 });

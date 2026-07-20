@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   addCredits: vi.fn(),
   avisarPagoAcreditado: vi.fn(),
   confirmBotHoldPayment: vi.fn(),
+  createPaymentReviewNotification: vi.fn(),
   createPreference: vi.fn(),
   ensureUserProfile: vi.fn(),
   getBookingPaymentContext: vi.fn(),
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/db/queries", () => ({
   addCredits: mocks.addCredits,
   confirmBotHoldPayment: mocks.confirmBotHoldPayment,
+  createPaymentReviewNotification: mocks.createPaymentReviewNotification,
   getBookingPaymentContext: mocks.getBookingPaymentContext,
   ensureUserProfile: mocks.ensureUserProfile
 }));
@@ -132,6 +134,7 @@ describe("Mercado Pago webhook route", () => {
     mocks.getBookingPaymentContext.mockResolvedValue(bookingContext);
     mocks.confirmBotHoldPayment.mockResolvedValue({ status: "confirmed", booking: bookingContext });
     mocks.avisarPagoAcreditado.mockResolvedValue(true);
+    mocks.createPaymentReviewNotification.mockResolvedValue(undefined);
   });
 
   it("firma inválida → 401 y no procesa", async () => {
@@ -267,6 +270,21 @@ describe("Mercado Pago webhook route", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ received: true, kind: "booking", confirmed: false, reason: "hold_expired" });
     expect(mocks.avisarPagoAcreditado).not.toHaveBeenCalled();
+    expect(mocks.createPaymentReviewNotification).toHaveBeenCalledWith("club-1", "bk-1");
+  });
+
+  it("si confirma reserva pero falla el aviso al cliente, crea alerta para revisión", async () => {
+    mocks.avisarPagoAcreditado.mockRejectedValueOnce(new Error("WhatsApp down"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { POST } = await import("./webhook/route");
+    const request = signedPaymentRequest("https://example.com/api/mercadopago/webhook?data.id=123&booking_id=bk-1");
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ received: true, kind: "booking", confirmed: true });
+    expect(mocks.createPaymentReviewNotification).toHaveBeenCalledWith("club-1", "bk-1");
+    errorSpy.mockRestore();
   });
 
   it("pago pending/rejected → no confirma", async () => {

@@ -41,7 +41,7 @@ export const recurringTypeEnum = pgEnum("recurring_type", ["clase", "fijo"]);
 // Avisos IN-APP para el admin (campana del panel). Distinto de `notifications`,
 // que son avisos salientes a clientes por whatsapp/email. Hoy solo "nueva_reserva"
 // del bot; pensado para sumar tipos (cancelación, etc.) sin rehacer el modelo.
-export const adminNotificationKindEnum = pgEnum("admin_notification_kind", ["nueva_reserva"]);
+export const adminNotificationKindEnum = pgEnum("admin_notification_kind", ["nueva_reserva", "cancelacion_reserva", "pago_requiere_revision"]);
 
 // ── Cancha core tables ─────────────────────────────────────────────────────────
 export const clubs = pgTable("clubs", {

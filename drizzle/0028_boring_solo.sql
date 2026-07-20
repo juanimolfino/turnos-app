@@ -1,0 +1,1 @@
+ALTER TYPE "public"."admin_notification_kind" ADD VALUE 'pago_requiere_revision';

@@ -2,11 +2,24 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { formatBookingWhen, formatRelativeTime } from "@/lib/notifications/format";
 
-const POLL_MS = 45_000;
+const POLL_MS = 120_000;
 const TOAST_MS = 10_000;
+
+function notificationTitle(n: NotificationItem) {
+  if (n.kind === "cancelacion_reserva") return `Reserva cancelada${n.customerName ? ` — ${n.customerName}` : ""}`;
+  if (n.kind === "pago_requiere_revision") return `Pago requiere revisión${n.customerName ? ` — ${n.customerName}` : ""}`;
+  return `Nueva reserva${n.customerName ? ` — ${n.customerName}` : ""}`;
+}
+
+function notificationIcon(n: NotificationItem) {
+  if (n.kind === "cancelacion_reserva") return "❌";
+  if (n.kind === "pago_requiere_revision") return "⚠️";
+  return "🎾";
+}
 
 type NotificationItem = {
   id: string;
@@ -25,6 +38,7 @@ type NotificationItem = {
 
 export function NotificationBell() {
   const isMobile = useIsMobile();
+  const router = useRouter();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
@@ -55,6 +69,7 @@ export function NotificationBell() {
       const fresh = nextItems.filter((n) => !seenIds.current.has(n.id));
       nextItems.forEach((n) => seenIds.current.add(n.id));
       if (primed.current && fresh.length > 0) {
+        router.refresh();
         setToasts((prev) => [...fresh, ...prev].slice(0, 3));
         for (const n of fresh) {
           const timer = window.setTimeout(() => dismissToast(n.id), TOAST_MS);
@@ -65,7 +80,7 @@ export function NotificationBell() {
     } catch {
       /* offline / transitorio: reintenta en el próximo tick o foco */
     }
-  }, [dismissToast]);
+  }, [dismissToast, router]);
 
   useEffect(() => {
     // load() es async: el setState ocurre tras el await (microtask), no de forma
@@ -129,10 +144,10 @@ export function NotificationBell() {
             background: "#FCFBF8", border: "1px solid #E7E1D6", borderRadius: 12,
             boxShadow: "0 12px 32px -12px rgba(0,0,0,.4)",
           }}>
-            <div style={{ fontSize: 18, lineHeight: 1.1, flexShrink: 0 }}>🎾</div>
+            <div style={{ fontSize: 18, lineHeight: 1.1, flexShrink: 0 }}>{notificationIcon(n)}</div>
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ fontSize: 13.5, fontWeight: 700, color: "#221F1B" }}>
-                Nueva reserva{n.customerName ? ` — ${n.customerName}` : ""}
+                {notificationTitle(n)}
               </div>
               <div style={{ fontSize: 12.5, color: "#6B6660", marginTop: 2 }}>
                 {n.courtName} · {formatBookingWhen(n.date, n.startTime)} · por bot
@@ -190,7 +205,7 @@ export function NotificationBell() {
 
           {items.length === 0 ? (
             <div style={{ padding: "22px 16px", textAlign: "center", fontSize: 13, color: "#928B7E" }}>
-              Todavía no hay reservas del bot.
+              Todavía no hay notificaciones del bot.
             </div>
           ) : (
             items.map((n) => (
@@ -198,10 +213,10 @@ export function NotificationBell() {
                 display: "flex", gap: 10, padding: "12px 14px", borderBottom: "1px solid #EFEAE0",
                 background: n.readAt ? "transparent" : "#FBF3EE",
               }}>
-                <div style={{ fontSize: 18, lineHeight: 1.1, flexShrink: 0 }}>🎾</div>
+                <div style={{ fontSize: 18, lineHeight: 1.1, flexShrink: 0 }}>{notificationIcon(n)}</div>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 700, color: "#221F1B" }}>
-                    Nueva reserva{n.customerName ? ` — ${n.customerName}` : ""}
+                    {notificationTitle(n)}
                   </div>
                   <div style={{ fontSize: 12.5, color: "#6B6660", marginTop: 2 }}>
                     {n.courtName} · {formatBookingWhen(n.date, n.startTime)}

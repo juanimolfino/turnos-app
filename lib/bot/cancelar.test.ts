@@ -27,6 +27,7 @@ const state = vi.hoisted(() => ({
   updates: [] as Record<string, unknown>[],
   credentials: { accessToken: "club-token" } as { accessToken: string } | null,
   refundPayment: vi.fn(),
+  createCancellationNotification: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -55,6 +56,7 @@ vi.mock("@/lib/db", () => ({
 }));
 
 vi.mock("@/lib/db/queries", () => ({
+  createBookingCancellationNotification: (...a: unknown[]) => state.createCancellationNotification(...a),
   getClubMercadoPagoCredentialsForServer: () => Promise.resolve(state.credentials),
 }));
 
@@ -94,6 +96,7 @@ describe("cancelarReservaBotPorCodigo", () => {
     state.updates = [];
     state.credentials = { accessToken: "club-token" };
     state.refundPayment.mockReset().mockResolvedValue({ refundId: "refund-1", status: "approved" });
+    state.createCancellationNotification.mockReset().mockResolvedValue(undefined);
   });
 
   it("cancelación exitosa: código válido + teléfono coincide → status cancelado y turno liberado", async () => {
@@ -116,6 +119,7 @@ describe("cancelarReservaBotPorCodigo", () => {
     expect(result).toEqual({ ok: true, status: "cancelada", reserva: expect.objectContaining({ status: "cancelado" }) });
     expect(state.updates).toEqual([{ status: "cancelado" }]);
     expect(row.status).toBe("cancelado");
+    expect(state.createCancellationNotification).toHaveBeenCalledWith("club1", "bk1");
 
     const despues = computeAvailability({
       courts: [{ id: "ct1", name: "Cancha 1", sortOrder: 0, sportId: "padel" }],
@@ -269,6 +273,7 @@ describe("cancelarReservaBotPorCodigo", () => {
     expect(state.refundPayment).not.toHaveBeenCalled();
     expect(state.updates).toEqual([]);
     expect(respuestaCancelacionTexto(result)).toContain("no se realiza la devolución");
+    expect(respuestaCancelacionTexto(result)).toContain("respondé: confirmo HYS324");
   });
 
   it("reserva pagada + confirmación explícita sin refund → cancela sin reembolsar", async () => {

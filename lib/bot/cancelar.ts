@@ -1,7 +1,7 @@
 import { and, eq, isNull, ne, or } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { bookings, clubs, courts } from "@/lib/db/schema";
-import { getClubMercadoPagoCredentialsForServer } from "@/lib/db/queries";
+import { createBookingCancellationNotification, getClubMercadoPagoCredentialsForServer } from "@/lib/db/queries";
 import { decideBookingRefund } from "@/lib/payments/refund-policy";
 import { refundMercadoPagoPayment } from "@/lib/payments/mercadopago-refund";
 
@@ -75,6 +75,16 @@ export function bookingCodeValido(bookingCode: string): boolean {
   return BOOKING_CODE_RE.test(bookingCode);
 }
 
+async function notifyCancellation(reserva: ReservaCancelacion) {
+  await createBookingCancellationNotification(reserva.clubId, reserva.id).catch((err) => {
+    console.error("[bot] no se pudo crear la notificación de cancelación", {
+      bookingId: reserva.id,
+      clubId: reserva.clubId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
+}
+
 export async function cancelarReservaBotPorCodigo(input: {
   bookingCode: string;
   customerPhone: string;
@@ -123,6 +133,7 @@ export async function cancelarReservaBotPorCodigo(input: {
   const pagada = (reserva.paymentStatus === "senado" || reserva.paymentStatus === "pagado") && Boolean(reserva.mpPaymentId);
   if (!pagada) {
     await db.update(bookings).set({ status: "cancelado" }).where(eq(bookings.id, reserva.id));
+    await notifyCancellation(reserva);
     return { ok: true, status: "cancelada", reserva: { ...reserva, status: "cancelado" } };
   }
 
@@ -141,11 +152,13 @@ export async function cancelarReservaBotPorCodigo(input: {
     }
 
     await db.update(bookings).set({ status: "cancelado" }).where(eq(bookings.id, reserva.id));
+    await notifyCancellation(reserva);
     return { ok: true, status: "cancelada_sin_refund", reserva: { ...reserva, status: "cancelado" } };
   }
 
   if (reserva.mpRefundId || reserva.refundStatus === "refunded") {
     await db.update(bookings).set({ status: "cancelado" }).where(eq(bookings.id, reserva.id));
+    await notifyCancellation(reserva);
     return {
       ok: true,
       status: "cancelada_con_refund",
@@ -203,6 +216,7 @@ export async function cancelarReservaBotPorCodigo(input: {
         refundedAt: new Date(),
       })
       .where(eq(bookings.id, reserva.id));
+    await notifyCancellation(reserva);
     return {
       ok: true,
       status: "cancelada_con_refund",
