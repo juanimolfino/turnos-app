@@ -3,8 +3,12 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // Espiamos todas las dependencias del flujo: adaptador, memoria, intención,
 // búsqueda, redacción, charla, extractor de reserva y motor de reserva.
 const send = vi.fn();
+const whatsappSend = vi.fn();
 vi.mock("@/lib/bot/channels/telegram", () => ({
   telegramAdapter: { send: (...a: unknown[]) => send(...a) },
+}));
+vi.mock("@/lib/bot/channels/whatsapp", () => ({
+  whatsappAdapter: { send: (...a: unknown[]) => whatsappSend(...a) },
 }));
 
 const getHistory = vi.fn();
@@ -56,6 +60,7 @@ vi.mock("@/lib/db/queries", () => ({
 import { handleIncomingMessage } from "@/lib/bot/handle";
 
 const msg = (text: string) => ({ channel: "telegram" as const, userId: "123", text });
+const whatsappMsg = (text: string) => ({ channel: "whatsapp" as const, userId: "50672448449", text });
 const conIntencion = { date: "2026-06-27", time: "19:00", zone: "Bolívar", sport: "padel" };
 const lugares = [
   { clubId: "cl1", lugar: "Pádel Central", barrio: "Centro", slots: [{ start: "19:00", end: "20:30", canchas: [{ id: "ct1", name: "Cancha 1" }] }] },
@@ -67,6 +72,7 @@ const accionNinguna = { tipo: "ninguna", lugar: null, hora: null, cancha: null, 
 describe("handleIncomingMessage (Fase 6 — reservar)", () => {
   beforeEach(() => {
     send.mockReset();
+    whatsappSend.mockReset();
     getHistory.mockReset().mockResolvedValue([]);
     appendTurns.mockReset().mockResolvedValue(undefined);
     extraerIntencion.mockReset();
@@ -125,6 +131,54 @@ describe("handleIncomingMessage (Fase 6 — reservar)", () => {
     await handleIncomingMessage(msg("dale ese"));
     expect(crearReservaBot).not.toHaveBeenCalled();
     expect(send).toHaveBeenCalledWith("123", expect.stringContaining("nombre"));
+  });
+
+  it("WhatsApp eligió turno sin nombre → pide solo nombre y apellido", async () => {
+    extraerIntencion.mockResolvedValue(conIntencion);
+    extraerAccionReserva.mockResolvedValue({ tipo: "elegir", lugar: "Pádel Central", hora: "19:00", cancha: null, nombre: null });
+
+    await handleIncomingMessage(whatsappMsg("dale ese"));
+
+    expect(crearReservaBot).not.toHaveBeenCalled();
+    expect(whatsappSend).toHaveBeenCalledWith("50672448449", "¡Buenísimo! ¿A nombre de quién hago la reserva? Pasame nombre y apellido.");
+    expect(whatsappSend.mock.calls[0][1]).not.toMatch(/teléfono de contacto/i);
+  });
+
+  it("WhatsApp eligió turno + nombre → usa el número de WhatsApp como teléfono de contacto y canal", async () => {
+    extraerIntencion.mockResolvedValue(conIntencion);
+    extraerAccionReserva.mockResolvedValue({
+      tipo: "reservar",
+      lugar: "Pádel Central",
+      hora: "19:00",
+      cancha: null,
+      nombre: "Juan Pérez",
+      telefono: null,
+    });
+    const reservaOk = {
+      ok: true,
+      bookingId: "bk1",
+      bookingCode: "HYS324",
+      status: "confirmado",
+      paymentMode: "none",
+      amountToCharge: 0,
+      heldUntil: null,
+      paymentInitPoint: null,
+      mpPreferenceId: null,
+    };
+    crearReservaBot.mockResolvedValue(reservaOk);
+
+    await handleIncomingMessage(whatsappMsg("Juan Pérez"));
+
+    expect(crearReservaBot).toHaveBeenCalledWith({
+      clubId: "cl1", courtId: "ct1", date: "2026-06-27",
+      startTime: "19:00", endTime: "20:30",
+      customerName: "Juan Pérez",
+      customerContactPhone: "50672448449",
+      channel: "whatsapp",
+      channelUserId: "50672448449",
+    });
+    expect(confirmarReservaTexto).toHaveBeenCalledWith(turno, "Juan Pérez", reservaOk);
+    expect(whatsappSend).toHaveBeenCalledWith("50672448449", "CONFIRMADA HYS324");
   });
 
   it("eligió turno + nombre pero sin teléfono → pide teléfono y no reserva", async () => {

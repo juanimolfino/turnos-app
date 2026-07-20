@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { handleIncomingMessage } from "@/lib/bot/handle";
 import { secretMatches } from "@/lib/bot/verify";
-import { sendWhatsAppText } from "@/lib/whatsapp/client";
 import { verifyWhatsAppSignature } from "@/lib/whatsapp/webhook-signature";
 
 type WhatsAppWebhookPayload = {
@@ -60,14 +60,19 @@ export async function POST(request: NextRequest) {
     for (const change of entry.changes ?? []) {
       if (change.field !== "messages") continue;
 
-      const phoneNumberId = change.value?.metadata?.phone_number_id ?? null;
       for (const message of change.value?.messages ?? []) {
-        if (message.type !== "text" || !message.from) continue;
-        await sendWhatsAppText({
-          to: message.from,
-          text: "Hola mundo",
-          phoneNumberId,
-        });
+        const text = message.text?.body;
+        if (message.type !== "text" || !message.from || typeof text !== "string") continue;
+        try {
+          await handleIncomingMessage({
+            channel: "whatsapp",
+            userId: message.from,
+            text,
+          });
+        } catch (err) {
+          // No propagamos a Meta para evitar reintentos en loop.
+          console.error("[whatsapp] error procesando mensaje:", err);
+        }
       }
     }
   }

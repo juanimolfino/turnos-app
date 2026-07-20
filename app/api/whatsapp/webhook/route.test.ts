@@ -3,11 +3,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { GET, POST } from "./route";
 
-const sendMock = vi.hoisted(() => vi.fn());
+const handleMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/whatsapp/client", () => ({
-  sendWhatsAppText: (input: unknown) => sendMock(input),
+vi.mock("@/lib/bot/handle", () => ({
+  handleIncomingMessage: (input: unknown) => handleMock(input),
 }));
+
+function signedRequest(body: string) {
+  const signature = `sha256=${createHmac("sha256", "app-secret").update(body).digest("hex")}`;
+  return new NextRequest("https://example.com/api/whatsapp/webhook", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-hub-signature-256": signature,
+    },
+    body,
+  });
+}
 
 describe("WhatsApp webhook route", () => {
   beforeEach(() => {
@@ -37,7 +49,7 @@ describe("WhatsApp webhook route", () => {
     expect(response.status).toBe(403);
   });
 
-  it("responde hola mundo ante un mensaje de texto entrante", async () => {
+  it("normaliza un mensaje de texto entrante hacia el bot central", async () => {
     process.env.WHATSAPP_APP_SECRET = "app-secret";
     const body = JSON.stringify({
       object: "whatsapp_business_account",
@@ -52,28 +64,19 @@ describe("WhatsApp webhook route", () => {
         }],
       }],
     });
-    const signature = `sha256=${createHmac("sha256", "app-secret").update(body).digest("hex")}`;
-    const request = new NextRequest("https://example.com/api/whatsapp/webhook", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-hub-signature-256": signature,
-      },
-      body,
-    });
 
-    const response = await POST(request);
+    const response = await POST(signedRequest(body));
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true });
-    expect(sendMock).toHaveBeenCalledWith({
-      phoneNumberId: "123456789",
-      text: "Hola mundo",
-      to: "5491122334455",
+    expect(handleMock).toHaveBeenCalledWith({
+      channel: "whatsapp",
+      userId: "5491122334455",
+      text: "hola",
     });
   });
 
-  it("acepta status updates sin responder nada", async () => {
+  it("acepta status updates sin procesarlos como mensajes", async () => {
     process.env.WHATSAPP_APP_SECRET = "app-secret";
     const body = JSON.stringify({
       object: "whatsapp_business_account",
@@ -87,20 +90,32 @@ describe("WhatsApp webhook route", () => {
         }],
       }],
     });
-    const signature = `sha256=${createHmac("sha256", "app-secret").update(body).digest("hex")}`;
-    const request = new NextRequest("https://example.com/api/whatsapp/webhook", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-hub-signature-256": signature,
-      },
-      body,
-    });
 
-    const response = await POST(request);
+    const response = await POST(signedRequest(body));
 
     expect(response.status).toBe(200);
-    expect(sendMock).not.toHaveBeenCalled();
+    expect(handleMock).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 200 aunque falle el procesamiento para evitar reintentos en loop", async () => {
+    process.env.WHATSAPP_APP_SECRET = "app-secret";
+    handleMock.mockRejectedValueOnce(new Error("boom"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const body = JSON.stringify({
+      object: "whatsapp_business_account",
+      entry: [{
+        changes: [{
+          field: "messages",
+          value: { messages: [{ from: "5491122334455", type: "text", text: { body: "hola" } }] },
+        }],
+      }],
+    });
+
+    const response = await POST(signedRequest(body));
+
+    expect(response.status).toBe(200);
+    expect(errorSpy).toHaveBeenCalledWith("[whatsapp] error procesando mensaje:", expect.any(Error));
+    errorSpy.mockRestore();
   });
 
   it("rechaza POST sin firma válida", async () => {

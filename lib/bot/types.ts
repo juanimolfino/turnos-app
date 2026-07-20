@@ -1,11 +1,11 @@
 // Abstracción multi-canal del bot. La lógica de negocio (handle.ts) trabaja
 // solo con estos tipos y nunca conoce el canal concreto (Telegram, WhatsApp, etc.).
 
-export type Channel = "telegram";
+export type Channel = "telegram" | "whatsapp";
 
 export type IncomingMessage = {
   channel: Channel;
-  userId: string; // id del usuario en el canal (ej. chat.id en Telegram)
+  userId: string; // id del usuario en el canal (ej. chat.id en Telegram o teléfono en WhatsApp)
   text: string;
 };
 

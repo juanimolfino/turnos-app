@@ -1,6 +1,7 @@
 import type { Channel, ChannelAdapter, IncomingMessage } from "@/lib/bot/types";
 import type { ChatTurn } from "@/lib/bot/brain";
 import { telegramAdapter } from "@/lib/bot/channels/telegram";
+import { whatsappAdapter } from "@/lib/bot/channels/whatsapp";
 import { generarRespuesta } from "@/lib/bot/brain";
 import { getHistory, appendTurns } from "@/lib/bot/memory";
 import { extraerIntencion } from "@/lib/bot/intent";
@@ -16,6 +17,7 @@ import { getKnownBotCustomer } from "@/lib/db/queries";
 // se agrega su entrada acá y un value en el type Channel; handle no cambia.
 const adapters: Record<Channel, ChannelAdapter> = {
   telegram: telegramAdapter,
+  whatsapp: whatsappAdapter,
 };
 
 const BOOKING_CODE_RE = /\b([A-Z]{3}[0-9]{3})\b/i;
@@ -56,6 +58,27 @@ function normalizePhone(value: string | null | undefined) {
 
 function extractPhone(text: string, fallback?: string | null) {
   return normalizePhone(fallback ?? text.match(PHONE_RE)?.[0]);
+}
+
+function contactPhoneForMessage(msg: IncomingMessage, fallback?: string | null) {
+  if (msg.channel === "whatsapp") {
+    return normalizePhone(msg.userId) ?? msg.userId;
+  }
+  return extractPhone(msg.text, fallback);
+}
+
+function bookingIdentityPrompt(msg: IncomingMessage) {
+  if (msg.channel === "whatsapp") {
+    return "¡Buenísimo! ¿A nombre de quién hago la reserva? Pasame nombre y apellido.";
+  }
+  return "¡Buenísimo! ¿A nombre de quién hago la reserva? Pasame nombre y apellido, y un teléfono de contacto.";
+}
+
+function updatedIdentityPrompt(msg: IncomingMessage) {
+  if (msg.channel === "whatsapp") {
+    return "No hay problema. Pasame nombre y apellido actualizados.";
+  }
+  return "No hay problema. Pasame nombre y apellido, y un teléfono de contacto actualizados.";
 }
 
 function cleanName(name: string | null | undefined, phone: string | null) {
@@ -210,7 +233,7 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
 
     if (accion.tipo !== "ninguna" && turno) {
       const knownForThisClub = knownCustomer?.clubId === turno.clubId ? knownCustomer : null;
-      const phone = extractPhone(msg.text, accion.telefono);
+      const phone = contactPhoneForMessage(msg, accion.telefono);
       const name = cleanName(accion.nombre, phone);
       const confirmingKnownCustomer = isConfirmingKnownCustomer(history);
       const confirmedKnownCustomer = confirmingKnownCustomer && confirmsKnownCustomer(msg.text);
@@ -228,14 +251,14 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
           lugares,
         });
       } else if (knownForThisClub?.phone && rejectedKnownCustomer && (!name || !phone)) {
-        respuesta = "No hay problema. Pasame nombre y apellido, y un teléfono de contacto actualizados.";
+        respuesta = updatedIdentityPrompt(msg);
       } else if (knownForThisClub?.phone && !confirmingKnownCustomer && (accion.tipo === "elegir" || !name || !phone)) {
         respuesta = confirmKnownCustomerText({ name: sanitizeText(knownForThisClub.name), phone: knownForThisClub.phone }, turno);
       } else if (knownForThisClub && !knownForThisClub.phone && !phone) {
         respuesta = `Pasame un teléfono de contacto para la reserva de ${knownForThisClub.name}.`;
       } else if (accion.tipo === "elegir" || !name) {
         // Eligió un turno pero falta identificar al cliente.
-        respuesta = "¡Buenísimo! ¿A nombre de quién hago la reserva? Pasame nombre y apellido, y un teléfono de contacto.";
+        respuesta = bookingIdentityPrompt(msg);
       } else if (!phone) {
         respuesta = `Pasame un teléfono de contacto para la reserva de ${name}.`;
       } else {
