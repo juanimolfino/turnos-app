@@ -121,6 +121,25 @@ function freshStartText(customer: { name: string } | null | undefined) {
     : "Hola. ¿Cuándo te gustaría jugar?";
 }
 
+function isCompletedReservationMessage(text: string) {
+  const normalized = text.toLowerCase();
+  const paidConfirmation = /pago acreditado/i.test(normalized) && /qued[oó] confirmada/i.test(normalized);
+  const directConfirmation =
+    /te reserv[eé] en/i.test(normalized) &&
+    /c[oó]digo de reserva/i.test(normalized) &&
+    !/provisoriamente/i.test(normalized) &&
+    !/para confirmarla/i.test(normalized) &&
+    !/ten[eé]s que pagar/i.test(normalized);
+  return paidConfirmation || directConfirmation;
+}
+
+function historyAfterCompletedReservation(history: ChatTurn[]) {
+  const lastCompletedIndex = history.findLastIndex(
+    (turn) => turn.role === "assistant" && isCompletedReservationMessage(turn.content),
+  );
+  return lastCompletedIndex >= 0 ? history.slice(lastCompletedIndex + 1) : history;
+}
+
 function confirmKnownCustomerText(customer: { name: string; phone: string }, turno: { clubName: string; courtName: string; startTime: string }) {
   return (
     `Tengo estos datos para reservar en ${turno.clubName} (${turno.courtName}) a las ${turno.startTime}:\n` +
@@ -188,7 +207,8 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
   const history = await getHistory(key);
   const knownCustomer = await getKnownBotCustomer(msg.channel, msg.userId).catch(() => null);
   const userTurn: ChatTurn = { role: "user", content: msg.text };
-  const convo = [...history, userTurn];
+  const activeHistory = historyAfterCompletedReservation(history);
+  const convo = [...activeHistory, userTurn];
 
   const confirmacionSinRefund = extraerConfirmacionCancelacionSinRefund(history, msg.text);
   if (confirmacionSinRefund) {
@@ -204,8 +224,9 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
     return;
   }
 
-  // Un saludo puro inicia una conversación nueva. No debe reutilizar fecha/hora/cancha
-  // de mensajes anteriores porque eso puede crear holds o links de pago inesperados.
+  // Un saludo puro inicia una conversación nueva. Además, `activeHistory` empieza
+  // después de la última reserva confirmada para no reutilizar fecha/hora/cancha
+  // viejas y evitar holds o links de pago inesperados.
   if (isFreshStartMessage(msg.text)) {
     const respuesta = freshStartText(knownCustomer);
     const adapter = adapters[msg.channel];
@@ -242,11 +263,11 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
   if (!intent.date || !intent.sport) {
     // Falta info esencial para buscar → repreguntamos de forma natural.
     // Si ya nombró un club, preservamos esa preferencia en la repregunta.
-    respuesta = knownCustomer && history.length === 0
+    respuesta = knownCustomer && activeHistory.length === 0
       ? `Hola ${firstName(knownCustomer.name)}. ¿Cuándo te gustaría jugar?`
       : intent.club && !intent.date
       ? `¿Para qué día querés ver turnos en ${intent.club}?`
-      : await generarRespuesta(msg.text, history);
+      : await generarRespuesta(msg.text, activeHistory);
   } else {
     const lugares = await buscarDisponibilidad(intent, msg.text);
     const accion = await extraerAccionReserva(convo, lugares);
@@ -256,7 +277,7 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
       const knownForThisClub = knownCustomer?.clubId === turno.clubId ? knownCustomer : null;
       const phone = contactPhoneForMessage(msg, accion.telefono);
       const name = cleanName(accion.nombre, phone);
-      const confirmingKnownCustomer = isConfirmingKnownCustomer(history);
+      const confirmingKnownCustomer = isConfirmingKnownCustomer(activeHistory);
       const confirmedKnownCustomer = confirmingKnownCustomer && confirmsKnownCustomer(msg.text);
       const rejectedKnownCustomer = confirmingKnownCustomer && rejectsKnownCustomer(msg.text);
 
@@ -266,7 +287,7 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
           name: sanitizeText(knownForThisClub.name),
           phone: normalizePhone(knownForThisClub.phone) ?? knownForThisClub.phone,
           msg,
-          history,
+          history: activeHistory,
           userText: msg.text,
           intent,
           lugares,
@@ -284,11 +305,11 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
         respuesta = `Pasame un teléfono de contacto para la reserva de ${name}.`;
       } else {
         // Eligió + dio datos → reservar. El id del canal se conserva para seguridad de cancelación.
-        respuesta = await reservarTurno({ turno, name, phone, msg, history, userText: msg.text, intent, lugares });
+        respuesta = await reservarTurno({ turno, name, phone, msg, history: activeHistory, userText: msg.text, intent, lugares });
       }
     } else {
       // Sigue explorando → redactamos la oferta sobre los datos reales.
-      respuesta = await redactarRespuesta({ history, userText: msg.text, intent, lugares });
+      respuesta = await redactarRespuesta({ history: activeHistory, userText: msg.text, intent, lugares });
     }
   }
 

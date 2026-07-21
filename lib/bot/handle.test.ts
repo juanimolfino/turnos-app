@@ -133,6 +133,26 @@ describe("handleIncomingMessage (Fase 6 — reservar)", () => {
     expect(whatsappSend).toHaveBeenCalledWith("50672448449", "Hola Juan. ¿Cuándo te gustaría jugar?");
   });
 
+  it("después de una confirmación final, un nuevo pedido se interpreta sin datos viejos", async () => {
+    getHistory.mockResolvedValue([
+      { role: "user", content: "Si" },
+      { role: "assistant", content: "Pago acreditado. Tu reserva en Padel entro para el sábado, 25 de julio a las 21:30 quedó confirmada. Tu código de reserva es JXE389." },
+    ]);
+    extraerIntencion.mockResolvedValue(conIntencion);
+    extraerAccionReserva.mockResolvedValue(accionNinguna);
+
+    await handleIncomingMessage(whatsappMsg("quiero jugar mañana a las 20"));
+
+    expect(extraerIntencion).toHaveBeenCalledWith([
+      { role: "user", content: "quiero jugar mañana a las 20" },
+    ], expect.any(Date));
+    expect(buscarDisponibilidad).toHaveBeenCalled();
+    expect(extraerAccionReserva).toHaveBeenCalledWith([
+      { role: "user", content: "quiero jugar mañana a las 20" },
+    ], lugares);
+    expect(crearReservaBot).not.toHaveBeenCalled();
+  });
+
   it("si nombra un club pero falta día → pregunta el día conservando ese club", async () => {
     extraerIntencion.mockResolvedValue({ date: null, time: null, zone: null, club: "Pádel Central", sport: "padel" });
 
