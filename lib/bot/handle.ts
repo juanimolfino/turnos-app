@@ -110,6 +110,17 @@ function rejectsKnownCustomer(text: string) {
   return NEGATIVE_RE.test(text);
 }
 
+function isFreshStartMessage(text: string) {
+  const normalized = sanitizeText(text, 40).toLowerCase();
+  return /^(hola|buenas|buen dia|buen día|buenas tardes|buenas noches|hello|hi)$/.test(normalized);
+}
+
+function freshStartText(customer: { name: string } | null | undefined) {
+  return customer?.name
+    ? `Hola ${firstName(customer.name)}. ¿Cuándo te gustaría jugar?`
+    : "Hola. ¿Cuándo te gustaría jugar?";
+}
+
 function confirmKnownCustomerText(customer: { name: string; phone: string }, turno: { clubName: string; courtName: string; startTime: string }) {
   return (
     `Tengo estos datos para reservar en ${turno.clubName} (${turno.courtName}) a las ${turno.startTime}:\n` +
@@ -187,6 +198,16 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
       confirmCancelWithoutRefund: true,
     });
     const respuesta = respuestaCancelacionTexto(result);
+    const adapter = adapters[msg.channel];
+    await adapter.send(msg.userId, respuesta);
+    await appendTurns(key, [userTurn, { role: "assistant", content: respuesta }]);
+    return;
+  }
+
+  // Un saludo puro inicia una conversación nueva. No debe reutilizar fecha/hora/cancha
+  // de mensajes anteriores porque eso puede crear holds o links de pago inesperados.
+  if (isFreshStartMessage(msg.text)) {
+    const respuesta = freshStartText(knownCustomer);
     const adapter = adapters[msg.channel];
     await adapter.send(msg.userId, respuesta);
     await appendTurns(key, [userTurn, { role: "assistant", content: respuesta }]);
