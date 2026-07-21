@@ -250,6 +250,27 @@ export const adminNotifications = pgTable("admin_notifications", {
   bookingKindUnique: uniqueIndex("admin_notifications_booking_kind_unique").on(table.bookingId, table.kind),
 }));
 
+export const operationalIncidents = pgTable("operational_incidents", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  source: text("source").notNull(),
+  type: text("type").notNull(),
+  severity: text("severity").default("warning").notNull(),
+  status: text("status").default("open").notNull(),
+  clubId: uuid("club_id").references(() => clubs.id, { onDelete: "set null" }),
+  bookingId: uuid("booking_id").references(() => bookings.id, { onDelete: "set null" }),
+  customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
+  paymentId: text("payment_id"),
+  requestPath: text("request_path"),
+  message: text("message").notNull(),
+  details: jsonb("details"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+}, (table) => ({
+  createdIdx: index("operational_incidents_created_idx").on(table.createdAt),
+  statusCreatedIdx: index("operational_incidents_status_created_idx").on(table.status, table.createdAt),
+  bookingTypeUnique: uniqueIndex("operational_incidents_booking_type_unique").on(table.bookingId, table.type),
+}));
+
 // ── Legacy SaaS tables ─────────────────────────────────────────────────────────
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),

@@ -1,6 +1,6 @@
 import { and, count, desc, eq, isNotNull, isNull, ne, or, sql, lt, gt, gte, lte, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { clubs, courts, sports, professors, openingHours, credits, jobs, subscriptions, transactions, users, bookings, customers, notifications, adminNotifications, recurringRules, playerIdentities, clubMercadoPagoCredentials, adminInvitations, type JobType, type PaymentMode, type Role, type AdminNotificationKind } from "@/lib/db/schema";
+import { clubs, courts, sports, professors, openingHours, credits, jobs, subscriptions, transactions, users, bookings, customers, notifications, adminNotifications, recurringRules, playerIdentities, clubMercadoPagoCredentials, adminInvitations, operationalIncidents, type JobType, type PaymentMode, type Role, type AdminNotificationKind } from "@/lib/db/schema";
 import { sendPurchaseConfirmationEmail, sendWelcomeEmail } from "@/lib/email/send";
 import type { User } from "@supabase/supabase-js";
 import { randomBytes, randomUUID } from "crypto";
@@ -1342,6 +1342,7 @@ export async function getBookingPaymentContext(bookingId: string) {
       mpRefundId: bookings.mpRefundId,
       refundStatus: bookings.refundStatus,
       paymentReviewReason: bookings.paymentReviewReason,
+      customerId: bookings.customerId,
       customerName: bookings.customerName,
       customerPhone: bookings.customerPhone,
       bookingCode: bookings.bookingCode,
@@ -1756,4 +1757,150 @@ export async function markClubNotificationsRead(clubId: string): Promise<number>
     .where(and(eq(adminNotifications.clubId, clubId), isNull(adminNotifications.readAt)))
     .returning({ id: adminNotifications.id });
   return updated.length;
+}
+
+export type OperationalIncidentInput = {
+  source: string;
+  type: string;
+  severity?: "info" | "warning" | "critical";
+  status?: "open" | "resolved";
+  clubId?: string | null;
+  bookingId?: string | null;
+  customerId?: string | null;
+  paymentId?: string | number | null;
+  requestPath?: string | null;
+  message: string;
+  details?: Record<string, unknown> | null;
+};
+
+export async function createOperationalIncident(input: OperationalIncidentInput) {
+  const values = {
+    source: input.source,
+    type: input.type,
+    severity: input.severity ?? "warning",
+    status: input.status ?? "open",
+    clubId: input.clubId ?? null,
+    bookingId: input.bookingId ?? null,
+    customerId: input.customerId ?? null,
+    paymentId: input.paymentId == null ? null : String(input.paymentId),
+    requestPath: input.requestPath ?? null,
+    message: input.message,
+    details: input.details ?? null,
+  };
+
+  const insert = getDb().insert(operationalIncidents).values(values);
+  if (values.bookingId) {
+    await insert.onConflictDoNothing({ target: [operationalIncidents.bookingId, operationalIncidents.type] });
+    return;
+  }
+  await insert;
+}
+
+export type OperationalIncidentRow = {
+  id: string;
+  source: string;
+  type: string;
+  severity: string;
+  status: string;
+  message: string;
+  details: unknown;
+  paymentId: string | null;
+  requestPath: string | null;
+  createdAt: Date;
+  resolvedAt: Date | null;
+  clubName: string | null;
+  bookingCode: string | null;
+  bookingStatus: string | null;
+  paymentStatus: string | null;
+  paymentReviewReason: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  customerChannel: string | null;
+};
+
+export async function getOperationalIncidents(limit = 100): Promise<OperationalIncidentRow[]> {
+  const rows = await getDb()
+    .select({
+      id: operationalIncidents.id,
+      source: operationalIncidents.source,
+      type: operationalIncidents.type,
+      severity: operationalIncidents.severity,
+      status: operationalIncidents.status,
+      message: operationalIncidents.message,
+      details: operationalIncidents.details,
+      paymentId: operationalIncidents.paymentId,
+      requestPath: operationalIncidents.requestPath,
+      createdAt: operationalIncidents.createdAt,
+      resolvedAt: operationalIncidents.resolvedAt,
+      clubName: clubs.name,
+      bookingCode: bookings.bookingCode,
+      bookingStatus: bookings.status,
+      paymentStatus: bookings.paymentStatus,
+      paymentReviewReason: bookings.paymentReviewReason,
+      customerName: customers.name,
+      customerPhone: customers.phone,
+      customerChannel: customers.channel,
+    })
+    .from(operationalIncidents)
+    .leftJoin(clubs, eq(clubs.id, operationalIncidents.clubId))
+    .leftJoin(bookings, eq(bookings.id, operationalIncidents.bookingId))
+    .leftJoin(customers, eq(customers.id, operationalIncidents.customerId))
+    .orderBy(desc(operationalIncidents.createdAt))
+    .limit(limit);
+
+  return rows;
+}
+
+export async function auditPaymentOperationalIncidents(limit = 100) {
+  const rows = await getDb()
+    .select({
+      bookingId: bookings.id,
+      clubId: bookings.clubId,
+      customerId: bookings.customerId,
+      paymentId: bookings.mpPaymentId,
+      bookingCode: bookings.bookingCode,
+      status: bookings.status,
+      paymentStatus: bookings.paymentStatus,
+      paidAt: bookings.paidAt,
+      paymentReviewReason: bookings.paymentReviewReason,
+      customerChannel: customers.channel,
+    })
+    .from(bookings)
+    .leftJoin(customers, eq(customers.id, bookings.customerId))
+    .where(and(
+      eq(bookings.origin, "bot"),
+      isNotNull(bookings.mpPaymentId),
+      or(
+        ne(bookings.status, "confirmado"),
+        isNull(bookings.paidAt),
+        isNull(bookings.paymentStatus),
+        eq(bookings.paymentStatus, "impago"),
+        isNotNull(bookings.paymentReviewReason),
+      ),
+    ))
+    .orderBy(desc(bookings.createdAt))
+    .limit(limit);
+
+  for (const row of rows) {
+    await createOperationalIncident({
+      source: "audit",
+      type: "payment_inconsistency",
+      severity: "critical",
+      clubId: row.clubId,
+      bookingId: row.bookingId,
+      customerId: row.customerId,
+      paymentId: row.paymentId,
+      message: "Pago del bot requiere revision operativa",
+      details: {
+        bookingCode: row.bookingCode,
+        status: row.status,
+        paymentStatus: row.paymentStatus,
+        paidAt: row.paidAt?.toISOString?.() ?? null,
+        paymentReviewReason: row.paymentReviewReason,
+        customerChannel: row.customerChannel,
+      },
+    });
+  }
+
+  return { scanned: rows.length, createdOrExisting: rows.length };
 }

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Users, LayoutDashboard, LogOut, Menu, Wallet, X } from "lucide-react";
+import { AlertTriangle, Building2, Users, LayoutDashboard, LogOut, Menu, Wallet, X } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 
@@ -13,6 +13,7 @@ const NAV = [
   { href: "/superadmin/admins", label: "Admins", Icon: Users },
   { href: "/superadmin/clientes", label: "Clientes", Icon: Users },
   { href: "/superadmin/pagos", label: "Pagos", Icon: Wallet },
+  { href: "/superadmin/incidentes", label: "Incidentes", Icon: AlertTriangle },
 ];
 
 export function SuperadminSidebar({ adminEmail }: { adminEmail: string }) {

@@ -4,7 +4,7 @@
 
 Cancha es un sistema de gestión de turnos para canchas de pádel. Cada **club** (lugar)
 tiene un **admin** que gestiona su agenda; un **superadmin** administra los clubs y
-los admins. Un **bot conversacional** (hoy Telegram, WhatsApp después; con OpenAI)
+los admins. Un **bot conversacional** (hoy Telegram y WhatsApp; con OpenAI)
 usa la misma base para que los jugadores busquen y reserven turnos. Ver
 [§ Bot de reservas](#bot-de-reservas-asistente-de-pádel).
 
@@ -51,11 +51,11 @@ sirva a WhatsApp, a una app, o a lo que venga, sin reescribir nada. Por eso la
 arquitectura separa **canal** (Telegram/WhatsApp, adaptadores) de **cerebro** (la lógica,
 agnóstica al canal).
 
-#### Telegram primero, WhatsApp después
+#### Telegram y WhatsApp en paralelo
 WhatsApp (Meta Cloud API) requiere verificación de negocio, número provisionado, tokens
-permanentes y aprobación de plantillas: lento y burocrático. Telegram se configura en
-minutos. Como la lógica es agnóstica al canal, se construye y prueba todo sobre Telegram
-hoy, y sumar WhatsApp después es agregar un adaptador, sin tocar el cerebro ya probado.
+permanentes y aprobación de plantillas: lento y burocrático. Telegram se configuró
+primero porque era más rápido para probar el cerebro del bot, pero WhatsApp ya quedó
+integrado como segundo canal. Ambos conviven sobre la misma lógica agnóstica al canal.
 
 #### La IA es para que sea humano, no para que decida
 El bot usa un modelo de lenguaje para **conversar de forma natural** (entender "el
@@ -651,7 +651,7 @@ Clubs DEMO que crea el seed (api_key entre paréntesis):
 
 ## Bot de reservas (asistente de pádel)
 
-Bot conversacional del pueblo (MVP: Bolívar). Hoy **Telegram**; WhatsApp después.
+Bot conversacional del pueblo (MVP: Bolívar). Hoy **Telegram y WhatsApp** sobre el mismo cerebro.
 Agnóstico al canal: la lógica vive detrás de `handleIncomingMessage(IncomingMessage)`
 y los canales son adaptadores en `lib/bot/channels/`. La IA extrae intención
 conversacional; las respuestas de disponibilidad se formatean de manera determinística

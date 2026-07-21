@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   addCredits: vi.fn(),
   avisarPagoAcreditado: vi.fn(),
   confirmBotHoldPayment: vi.fn(),
+  createOperationalIncident: vi.fn(),
   createPaymentReviewNotification: vi.fn(),
   createPreference: vi.fn(),
   ensureUserProfile: vi.fn(),
@@ -17,6 +18,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/db/queries", () => ({
   addCredits: mocks.addCredits,
   confirmBotHoldPayment: mocks.confirmBotHoldPayment,
+  createOperationalIncident: mocks.createOperationalIncident,
   createPaymentReviewNotification: mocks.createPaymentReviewNotification,
   getBookingPaymentContext: mocks.getBookingPaymentContext,
   ensureUserProfile: mocks.ensureUserProfile
@@ -97,6 +99,7 @@ describe("Mercado Pago webhook route", () => {
     mpRefundId: null,
     refundStatus: null,
     paymentReviewReason: null,
+    customerId: "customer-1",
     customerName: "Juan Pérez",
     customerPhone: "12345",
     customerChannel: "telegram",
@@ -271,6 +274,15 @@ describe("Mercado Pago webhook route", () => {
     expect(await response.json()).toEqual({ received: true, kind: "booking", confirmed: false, reason: "hold_expired" });
     expect(mocks.avisarPagoAcreditado).not.toHaveBeenCalled();
     expect(mocks.createPaymentReviewNotification).toHaveBeenCalledWith("club-1", "bk-1");
+    expect(mocks.createOperationalIncident).toHaveBeenCalledWith(expect.objectContaining({
+      source: "mercadopago_webhook",
+      type: "approved_payment_not_confirmed",
+      severity: "critical",
+      bookingId: "bk-1",
+      clubId: "club-1",
+      customerId: "customer-1",
+      paymentId: 123,
+    }));
   });
 
   it("si confirma reserva pero falla el aviso al cliente, crea alerta para revisión", async () => {
@@ -284,6 +296,15 @@ describe("Mercado Pago webhook route", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ received: true, kind: "booking", confirmed: true });
     expect(mocks.createPaymentReviewNotification).toHaveBeenCalledWith("club-1", "bk-1");
+    expect(mocks.createOperationalIncident).toHaveBeenCalledWith(expect.objectContaining({
+      source: "mercadopago_webhook",
+      type: "customer_notification_failed",
+      severity: "critical",
+      bookingId: "bk-1",
+      clubId: "club-1",
+      customerId: "customer-1",
+      paymentId: 123,
+    }));
     errorSpy.mockRestore();
   });
 

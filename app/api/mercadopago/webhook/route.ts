@@ -3,6 +3,7 @@ import { avisarPagoAcreditadoPorCanal } from "@/lib/bot/payment-confirmation";
 import {
   addCredits,
   confirmBotHoldPayment,
+  createOperationalIncident,
   createPaymentReviewNotification,
   getBookingPaymentContext,
 } from "@/lib/db/queries";
@@ -38,6 +39,39 @@ function bookingPaymentStatus(paymentMode: unknown, fallbackMode: string) {
   return mode === "partial" ? "senado" : "pagado";
 }
 
+async function recordMpIncident(input: {
+  type: string;
+  message: string;
+  severity?: "warning" | "critical";
+  bookingId?: string | null;
+  clubId?: string | null;
+  customerId?: string | null;
+  paymentId?: string | number | null;
+  requestPath: string;
+  details?: Record<string, unknown>;
+}) {
+  try {
+    await createOperationalIncident({
+      source: "mercadopago_webhook",
+      type: input.type,
+      severity: input.severity ?? "warning",
+      bookingId: input.bookingId,
+      clubId: input.clubId,
+      customerId: input.customerId,
+      paymentId: input.paymentId,
+      requestPath: input.requestPath,
+      message: input.message,
+      details: input.details ?? null,
+    });
+  } catch (error) {
+    console.error("[mp webhook] no se pudo guardar incidente operativo", {
+      type: input.type,
+      bookingId: input.bookingId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 export async function POST(request: Request) {
   const url = new URL(request.url);
   const body = (await request.json().catch(() => ({}))) as MercadoPagoWebhookBody;
@@ -68,6 +102,7 @@ export async function POST(request: Request) {
 
   if (!isPaymentEvent(body)) return NextResponse.json({ received: true, ignored: true });
 
+  try {
   const bookingIdHint = url.searchParams.get("booking_id");
   let booking = bookingIdHint ? await getBookingPaymentContext(bookingIdHint) : null;
   let payment = null as Awaited<ReturnType<ReturnType<typeof getMercadoPagoPayment>["get"]>> | null;
@@ -75,10 +110,27 @@ export async function POST(request: Request) {
   if (bookingIdHint) {
     if (!booking) {
       console.warn("[mp webhook] booking_id de notification_url no existe", { bookingId: bookingIdHint, paymentId: dataId });
+      await recordMpIncident({
+        type: "booking_missing",
+        severity: "critical",
+        message: "Webhook de Mercado Pago llego con booking_id inexistente",
+        paymentId: dataId,
+        requestPath: url.pathname,
+        details: { missingBookingId: bookingIdHint },
+      });
       return NextResponse.json({ received: true, kind: "booking", missingBooking: true });
     }
     if (!booking.mercadoPagoAccessToken) {
       console.warn("[mp webhook] booking sin credencial de Mercado Pago", { bookingId: bookingIdHint, paymentId: dataId });
+      await recordMpIncident({
+        type: "missing_mercadopago_credentials",
+        severity: "critical",
+        message: "Webhook de Mercado Pago no pudo consultar el pago por falta de credenciales del club",
+        bookingId: booking.id,
+        clubId: booking.clubId,
+        paymentId: dataId,
+        requestPath: url.pathname,
+      });
       return NextResponse.json({ received: true, kind: "booking", missingCredentials: true });
     }
     payment = await getMercadoPagoPaymentForAccessToken(booking.mercadoPagoAccessToken).get({ id: dataId });
@@ -94,6 +146,16 @@ export async function POST(request: Request) {
         externalReference: payment.external_reference,
         paymentId: payment.id ?? dataId,
       });
+      await recordMpIncident({
+        type: "reference_mismatch",
+        severity: "critical",
+        message: "Webhook de Mercado Pago no coincide con la reserva esperada",
+        bookingId: booking.id,
+        clubId: booking.clubId,
+        paymentId: payment.id ?? dataId,
+        requestPath: url.pathname,
+        details: { externalReference: payment.external_reference },
+      });
       return NextResponse.json({ received: true, kind: "booking", referenceMismatch: true });
     }
 
@@ -104,12 +166,29 @@ export async function POST(request: Request) {
           bookingId: bookingReference.bookingId,
           paymentId: payment.id ?? dataId,
         });
+        await recordMpIncident({
+          type: "booking_missing",
+          severity: "critical",
+          message: "Pago de Mercado Pago apunta a una reserva inexistente",
+          paymentId: payment.id ?? dataId,
+          requestPath: url.pathname,
+          details: { missingBookingId: bookingReference.bookingId },
+        });
         return NextResponse.json({ received: true, kind: "booking", missingBooking: true });
       }
       if (!booking.mercadoPagoAccessToken) {
         console.warn("[mp webhook] reserva sin credencial de Mercado Pago", {
           bookingId: bookingReference.bookingId,
           paymentId: payment.id ?? dataId,
+        });
+        await recordMpIncident({
+          type: "missing_mercadopago_credentials",
+          severity: "critical",
+          message: "Pago de Mercado Pago apunta a una reserva sin credenciales del club",
+          bookingId: booking.id,
+          clubId: booking.clubId,
+          paymentId: payment.id ?? dataId,
+          requestPath: url.pathname,
         });
         return NextResponse.json({ received: true, kind: "booking", missingCredentials: true });
       }
@@ -121,6 +200,16 @@ export async function POST(request: Request) {
           bookingId: booking.id,
           externalReference: payment.external_reference,
           paymentId: payment.id ?? dataId,
+        });
+        await recordMpIncident({
+          type: "reference_mismatch",
+          severity: "critical",
+          message: "Pago verificado con token del club no coincide con la reserva",
+          bookingId: booking.id,
+          clubId: booking.clubId,
+          paymentId: payment.id ?? dataId,
+          requestPath: url.pathname,
+          details: { externalReference: payment.external_reference },
         });
         return NextResponse.json({ received: true, kind: "booking", referenceMismatch: true });
       }
@@ -145,6 +234,17 @@ export async function POST(request: Request) {
           paymentId: payment?.id ?? dataId,
           error: error instanceof Error ? error.message : String(error),
         });
+        await recordMpIncident({
+          type: "customer_notification_failed",
+          severity: "critical",
+          message: "Reserva confirmada pero fallo el aviso final al cliente",
+          bookingId: result.booking.id,
+          clubId: result.booking.clubId,
+          customerId: result.booking.customerId,
+          paymentId: payment?.id ?? dataId,
+          requestPath: url.pathname,
+          details: { error: error instanceof Error ? error.message : String(error) },
+        });
         await createPaymentReviewNotification(result.booking.clubId, result.booking.id).catch((notificationError) => {
           console.error("[mp webhook] no se pudo crear alerta de pago para revisión", {
             bookingId: result.booking.id,
@@ -160,6 +260,17 @@ export async function POST(request: Request) {
         bookingId: result.booking.id,
         paymentId: payment.id ?? dataId,
         reason: result.reason,
+      });
+      await recordMpIncident({
+        type: "approved_payment_not_confirmed",
+        severity: "critical",
+        message: "Pago aprobado no confirmo la reserva",
+        bookingId: result.booking.id,
+        clubId: result.booking.clubId,
+        customerId: result.booking.customerId,
+        paymentId: payment.id ?? dataId,
+        requestPath: url.pathname,
+        details: { reason: result.reason },
       });
       await createPaymentReviewNotification(result.booking.clubId, result.booking.id).catch((notificationError) => {
         console.error("[mp webhook] no se pudo crear alerta de pago para revisión", {
@@ -203,4 +314,15 @@ export async function POST(request: Request) {
   }, `mp_payment:${payment.id}`);
 
   return NextResponse.json({ received: true });
+  } catch (error) {
+    await recordMpIncident({
+      type: "webhook_processing_error",
+      severity: "critical",
+      message: "Error inesperado procesando webhook de Mercado Pago",
+      paymentId: dataId,
+      requestPath: url.pathname,
+      details: { error: error instanceof Error ? error.message : String(error) },
+    });
+    throw error;
+  }
 }
