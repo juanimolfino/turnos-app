@@ -464,6 +464,21 @@ describe("handleIncomingMessage (Fase 6 — reservar)", () => {
     expect(send).toHaveBeenCalledWith("123", "CANCELADA");
   });
 
+  it("si corrige un código de cancelación no encontrado, sigue cancelando y no ofrece turnos", async () => {
+    getHistory.mockResolvedValue([
+      { role: "assistant", content: "No encontré una reserva con ese código. Revisá que esté bien escrito y pasámelo de nuevo." },
+    ]);
+    extraerAccionCancelacion.mockReturnValue({ tipo: "cancelar", bookingCode: "DTX356" });
+    cancelarReservaBotPorCodigo.mockResolvedValue({ ok: true, status: "cancelada", reserva: { bookingCode: "DTX356" } });
+
+    await handleIncomingMessage(whatsappMsg("Perdón es dtx356"));
+
+    expect(cancelarReservaBotPorCodigo).toHaveBeenCalledWith({ bookingCode: "DTX356", customerPhone: "50672448449" });
+    expect(extraerIntencion).not.toHaveBeenCalled();
+    expect(buscarDisponibilidad).not.toHaveBeenCalled();
+    expect(whatsappSend).toHaveBeenCalledWith("50672448449", "CANCELADA");
+  });
+
   it("confirmación explícita de cancelación sin refund → cancela con flag explícito", async () => {
     getHistory.mockResolvedValue([
       {

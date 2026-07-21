@@ -51,19 +51,28 @@ describe("extraerAccionCancelacion", () => {
     });
   });
 
-  it("si estaba esperando código pero el usuario cambia a reservar, no insiste con cancelación", () => {
+  it("si no encontró el código anterior, sigue esperando cancelación y acepta la corrección", () => {
     const history = [
-      { role: "assistant" as const, content: "Pasame tu código de reserva y la cancelo." },
-      { role: "user" as const, content: "Nono, no quiero cancelar, quiero reservar" },
+      { role: "assistant" as const, content: "No encontré una reserva con ese código. Revisá que esté bien escrito y pasámelo de nuevo." },
+      { role: "user" as const, content: "Perdón es dtx356" },
     ];
 
-    expect(extraerAccionCancelacion(history)).toEqual({ tipo: "ninguna" });
+    expect(extraerAccionCancelacion(history)).toEqual({ tipo: "cancelar", bookingCode: "DTX356" });
   });
 
-  it("si estaba esperando código pero el usuario pregunta turnos, vuelve al flujo de búsqueda", () => {
+  it("si estaba esperando código y el usuario cambia a pedir turnos, sigue en cancelación", () => {
     const history = [
       { role: "assistant" as const, content: "Pasame tu código de reserva y la cancelo." },
       { role: "user" as const, content: "Me mostrás qué turnos hay para el lunes 29?" },
+    ];
+
+    expect(extraerAccionCancelacion(history)).toEqual({ tipo: "pedir_codigo" });
+  });
+
+  it("si estaba esperando código pero el usuario cancela explícitamente la operación, sale de cancelación", () => {
+    const history = [
+      { role: "assistant" as const, content: "Pasame tu código de reserva y la cancelo." },
+      { role: "user" as const, content: "Mejor no cancelo, quiero reservar" },
     ];
 
     expect(extraerAccionCancelacion(history)).toEqual({ tipo: "ninguna" });

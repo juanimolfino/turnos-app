@@ -28,7 +28,9 @@ function botPidioCodigo(history: ChatTurn[]): boolean {
   const lastAssistant = [...history].reverse().find((turn) => turn.role === "assistant");
   if (!lastAssistant) return false;
   const normalized = lastAssistant.content.toLowerCase();
-  return /pasame|pas[aá]melo|enviame|mandame/.test(normalized) && /c[oó]digo/.test(normalized) && /cancel/.test(normalized);
+  const askedForCancelCode = /pasame|pas[aá]melo|enviame|mandame/.test(normalized) && /c[oó]digo/.test(normalized) && /cancel/.test(normalized);
+  const retryAfterMissingBooking = /no encontr[eé]/.test(normalized) && /reserva/.test(normalized) && /pas[aá]melo de nuevo/.test(normalized);
+  return askedForCancelCode || retryAfterMissingBooking;
 }
 
 export function extraerAccionCancelacion(history: ChatTurn[]): AccionCancelacion {
@@ -38,7 +40,7 @@ export function extraerAccionCancelacion(history: ChatTurn[]): AccionCancelacion
   const text = lastUser.content.trim();
   const cancelIntent = quiereCancelar(text);
   const awaitingCode = botPidioCodigo(history.slice(0, -1));
-  if (rechazaCancelar(text) || (awaitingCode && !cancelIntent && cambiaATurnoOReserva(text))) {
+  if (rechazaCancelar(text)) {
     return { tipo: "ninguna" };
   }
   if (!cancelIntent && !awaitingCode) return { tipo: "ninguna" };
